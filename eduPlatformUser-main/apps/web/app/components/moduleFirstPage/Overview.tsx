@@ -96,6 +96,14 @@ const Overview: React.FC = () => {
                 dangerouslySetInnerHTML={{ __html: moduleData.description }}
               />
             )}
+
+            {/* Module Content - Fetched from backend with same formatting */}
+            {moduleData.content && (
+              <div
+                className="ai-content-wrapper"
+                dangerouslySetInnerHTML={{ __html: moduleData.content }}
+              />
+            )}
           </div>
         ) : (
           <div className="flex items-center justify-center py-20">
@@ -201,6 +209,97 @@ const Overview: React.FC = () => {
           list-style-type: disc;
           margin-left: 1.5rem;
           margin-top: 0.5rem;
+          margin-bottom: 0.75rem;
+        }
+
+        .ai-content-wrapper ul li {
+          font-size: 1.05rem;
+          line-height: 1.6;
+          margin-bottom: 0.5rem;
+        }
+
+        /* Ordered List Styles (1, 2, 3) */
+        .ai-content-wrapper ol {
+          list-style-type: decimal;
+          margin-left: 1.5rem;
+          margin-top: 0.5rem;
+          margin-bottom: 0.75rem;
+        }
+
+        .ai-content-wrapper ol li {
+          font-size: 1.05rem;
+          line-height: 1.6;
+          margin-bottom: 0.5rem;
+          padding-left: 0.25rem;
+        }
+
+        /* Link Styles */
+        .ai-content-wrapper a {
+          color: #9333ea;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+          transition: color 0.2s ease;
+        }
+
+        .ai-content-wrapper a:hover {
+          color: #7c22ce;
+        }
+
+        .ai-content-wrapper a:visited {
+          color: #6b21a8;
+        }
+
+        /* Inline Code Styles */
+        .ai-content-wrapper code {
+          background-color: #f3f4f6;
+          color: #1f2937;
+          padding: 0.15rem 0.4rem;
+          border-radius: 4px;
+          font-family: "Fira Code", "Consolas", "Monaco", monospace;
+          font-size: 0.9rem;
+        }
+
+        /* Code Block Styles (pre > code) */
+        .ai-content-wrapper pre {
+          background-color: #1f2937;
+          color: #e5e7eb;
+          padding: 1rem 1.25rem;
+          border-radius: 8px;
+          overflow-x: auto;
+          margin: 1rem 0;
+          border: 1px solid #374151;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .ai-content-wrapper pre code {
+          background-color: transparent;
+          color: #e5e7eb;
+          padding: 0;
+          border-radius: 0;
+          font-family: "Fira Code", "Consolas", "Monaco", monospace;
+          font-size: 0.875rem;
+          line-height: 1.7;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+
+        /* Scrollbar for code blocks */
+        .ai-content-wrapper pre::-webkit-scrollbar {
+          height: 8px;
+        }
+
+        .ai-content-wrapper pre::-webkit-scrollbar-track {
+          background: #374151;
+          border-radius: 4px;
+        }
+
+        .ai-content-wrapper pre::-webkit-scrollbar-thumb {
+          background: #6b7280;
+          border-radius: 4px;
+        }
+
+        .ai-content-wrapper pre::-webkit-scrollbar-thumb:hover {
+          background: #9ca3af;
         }
       `}</style>
     </div>
