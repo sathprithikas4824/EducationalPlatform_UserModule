@@ -1,0 +1,249 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================= */
+/* PLUS JAKARTA SANS (ALL WEIGHTS) */
+/* ============================= */
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: local("Plus Jakarta Sans ExtraLight"),
+       url("/fonts/PlusJakartaSans-ExtraLight.ttf") format("truetype");
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: local("Plus Jakarta Sans Light"),
+       url("/fonts/PlusJakartaSans-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: local("Plus Jakarta Sans Regular"),
+       url("/fonts/PlusJakartaSans-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: local("Plus Jakarta Sans Medium"),
+       url("/fonts/PlusJakartaSans-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: local("Plus Jakarta Sans SemiBold"),
+       url("/fonts/PlusJakartaSans-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: local("Plus Jakarta Sans Bold"),
+       url("/fonts/PlusJakartaSans-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: local("Plus Jakarta Sans ExtraBold"),
+       url("/fonts/PlusJakartaSans-ExtraBold.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ITALICS */
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: local("Plus Jakarta Sans Italic"),
+       url("/fonts/PlusJakartaSans-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================= */
+/* GRIFT FONT (COMMENTED OUT - NOT NEEDED) */
+/* ============================= */
+
+/* @font-face {
+  font-family: "Grift";
+  src: url("/fonts/Grift-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+} */
+
+/* ============================= */
+/* GEIST (COMMENTED OUT - NOT NEEDED) */
+/* ============================= */
+
+/* @font-face {
+  font-family: "Geist";
+  src: url("/fonts/GeistVF.woff") format("woff");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/GeistMonoVF.woff") format("woff");
+  font-weight: 100 900;
+  font-display: swap;
+} */
+
+/* ============================= */
+/* UTILITY CLASSES */
+/* ============================= */
+
+.jakarta-font {
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.grift-font {
+  font-family: "Grift", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.geist-font {
+  font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.geist-mono {
+  font-family: "Geist Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+
+@keyframes scrollText {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+/* Mobile & Tablet */
+@media (max-width: 768px) {
+  .animate-scroll-mobile {
+    animation: scrollText 10s linear infinite;
+    display: inline-block;
+  }
+}
+
+/* Desktop */
+@media (min-width: 769px) {
+  .animate-scroll-mobile {
+    animation: none;
+  }
+}
+
+/* ============================= */
+/* GRAIN TEXTURE RESPONSIVE OPACITY */
+/* ============================= */
+
+/* Mobile - Reduced opacity */
+@media (max-width: 640px) {
+  .grain-texture {
+    opacity: 0.5;
+  }
+}
+
+/* Tablet - Slightly reduced opacity */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .grain-texture {
+    opacity: 0.7;
+  }
+}
+
+/* Desktop - Increased opacity */
+@media (min-width: 1025px) {
+  .grain-texture {
+    opacity: 1  }
+}
+
+
+
+
+
+/* ========================= */
+/* NAVBAR PILL HOVER EFFECT */
+/* ========================= */
+
+.nav-pill {
+  color: #111827;
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+
+.nav-pill:hover {
+  background: rgba(122, 18, 250, 0.06);
+}
+
+/* ========================= */
+/* GRADIENT WAVE ANIMATION */
+/* ========================= */
+
+@keyframes gradientWave {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.gradient-wave {
+  background-size: 200% 100%;
+  background-position: 0% 50%;
+  transition: background-position 0.8s ease;
+}
+
+.gradient-wave:hover {
+  animation: gradientWave 2s ease infinite;
+  transition: none;
+}
