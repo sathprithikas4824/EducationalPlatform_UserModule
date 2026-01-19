@@ -82,7 +82,6 @@
 //   logger.info(`✅ Server running at http://localhost:${PORT}`);
 // });
 
-
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -96,12 +95,11 @@ import categoryRoutes from "./src/routes/categoryRoutes.js";
 import mainCategoryRoutes from "./src/routes/mainCategoryRoutes.js";
 import logger from "./src/config/logger.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
-import modulesRoutes from './src/routes/modulesRoutes.js';
-import submoduleRoutes from './src/routes/submoduleRoutes.js';
-import topicsRoutes from './src/routes/topicsRoutes.js';
-import seoAeoRoutes from './src/routes/seoAeoRoutes.js';
-import uploadRoutes from './src/routes/uploadRoutes.js';
-
+import modulesRoutes from "./src/routes/modulesRoutes.js";
+import submoduleRoutes from "./src/routes/submoduleRoutes.js";
+import topicsRoutes from "./src/routes/topicsRoutes.js";
+import seoAeoRoutes from "./src/routes/seoAeoRoutes.js";
+import uploadRoutes from "./src/routes/uploadRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -115,17 +113,23 @@ app.use(
     noSniff: true,
     frameguard: { action: "deny" },
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-  })
+  }),
 );
 
 // CORS
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174","http://localhost:3001","http://localhost:3000"],
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://localhost:3001",
+      "http://localhost:3000",
+      "https://educational-platform-user-module.vercel.app",
+    ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
-  })
+  }),
 );
 
 // Parsers
@@ -143,7 +147,7 @@ const {
   getSessionIdentifier: (req) => {
     // Return unique identifier per user/session (REQUIRED)
     // Use JWT user_id if available, otherwise fall back to IP or anonymous
-    return req.user?.user_id || req.ip || 'anonymous';
+    return req.user?.user_id || req.ip || "anonymous";
   },
   cookieName: "x-csrf-token",
   cookieOptions: {
@@ -170,13 +174,13 @@ app.use((req, res, next) => {
   }
 
   // Skip CSRF for refresh token endpoint (it's a POST but uses cookie auth)
-  if (req.path === '/auth/refresh') {
+  if (req.path === "/auth/refresh") {
     return next();
   }
 
   // Skip CSRF for file upload endpoint (multipart/form-data has issues with CSRF validation)
   // This is acceptable since upload requires authentication
-  if (req.path === '/api/upload/image') {
+  if (req.path === "/api/upload/image") {
     return next();
   }
 
@@ -187,15 +191,30 @@ app.use((req, res, next) => {
 // Request logging middleware (logs all incoming requests)
 app.use((req, res, next) => {
   // Skip logging for GET requests to reduce noise (optional)
-  if (req.method !== 'GET') {
-    console.log('\n========== INCOMING REQUEST ==========');
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('Method:', req.method);
-    console.log('Path:', req.originalUrl);
-    console.log('Body:', req.body && Object.keys(req.body).length > 0 ? JSON.stringify(req.body, null, 2) : '(empty or multipart)');
-    console.log('Params:', req.params && Object.keys(req.params).length > 0 ? JSON.stringify(req.params) : '(none)');
-    console.log('Query:', req.query && Object.keys(req.query).length > 0 ? JSON.stringify(req.query) : '(none)');
-    console.log('======================================\n');
+  if (req.method !== "GET") {
+    console.log("\n========== INCOMING REQUEST ==========");
+    console.log("Timestamp:", new Date().toISOString());
+    console.log("Method:", req.method);
+    console.log("Path:", req.originalUrl);
+    console.log(
+      "Body:",
+      req.body && Object.keys(req.body).length > 0
+        ? JSON.stringify(req.body, null, 2)
+        : "(empty or multipart)",
+    );
+    console.log(
+      "Params:",
+      req.params && Object.keys(req.params).length > 0
+        ? JSON.stringify(req.params)
+        : "(none)",
+    );
+    console.log(
+      "Query:",
+      req.query && Object.keys(req.query).length > 0
+        ? JSON.stringify(req.query)
+        : "(none)",
+    );
+    console.log("======================================\n");
   }
   next();
 });
@@ -212,11 +231,11 @@ app.use(generalLimiter);
 app.use("/auth", authRoutes);
 app.use("/main-categories", mainCategoryRoutes);
 app.use("/categories", categoryRoutes);
-app.use('/api/modules', modulesRoutes);
-app.use('/api/submodules', submoduleRoutes);
-app.use('/api/topics', topicsRoutes);
-app.use('/api/seo-aeo', seoAeoRoutes);
-app.use('/api/upload', uploadRoutes);
+app.use("/api/modules", modulesRoutes);
+app.use("/api/submodules", submoduleRoutes);
+app.use("/api/topics", topicsRoutes);
+app.use("/api/seo-aeo", seoAeoRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // Global error handler (last middleware)
 app.use(errorHandler);
@@ -224,5 +243,3 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   logger.info(`✅ Server running at http://localhost:${PORT}`);
 });
-
-
