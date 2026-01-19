@@ -24,7 +24,7 @@ interface Module {
   deleted_at: string | null;
 }
 
-const BACKEND_URL ="https://educationalplatform-usermodule-2.onrender.com";
+const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 const MODULE_ID = 19; // Module ID for AI content
 
 const Overview: React.FC = () => {
@@ -36,8 +36,6 @@ const Overview: React.FC = () => {
     const fetchModule = async () => {
       try {
         setLoading(true);
-
-        // Fetch module 17 directly
         const response = await fetch(
           `${BACKEND_URL}/api/modules/single/${MODULE_ID}`
         );
@@ -60,7 +58,10 @@ const Overview: React.FC = () => {
   if (loading) {
     return (
       <div className="w-full min-h-screen bg-white jakarta-font py-8 md:py-12 px-4 md:px-6 flex items-center justify-center">
-        <p className="text-xl text-gray-600">Loading...</p>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+          <p className="text-xl text-gray-600 font-medium">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -78,10 +79,8 @@ const Overview: React.FC = () => {
       className={`w-full min-h-screen bg-white jakarta-font py-8 md:py-12 px-4 md:px-6 ${fuzzyBubblesBoldFont.variable}`}
     >
       <div className="max-w-6xl ml-0 md:pl-16 lg:pl-32 space-y-10 md:space-y-12">
-        {/* Display Module Content */}
         {moduleData ? (
           <div className="space-y-4">
-            {/* Module Title - "What is AI ?" */}
             {moduleData.title && (
               <div
                 className="ai-content-wrapper"
@@ -89,7 +88,6 @@ const Overview: React.FC = () => {
               />
             )}
 
-            {/* Module Description - Contains all HTML content */}
             {moduleData.description && (
               <div
                 className="ai-content-wrapper"
@@ -97,7 +95,6 @@ const Overview: React.FC = () => {
               />
             )}
 
-            {/* Module Content - Fetched from backend with same formatting */}
             {moduleData.content && (
               <div
                 className="ai-content-wrapper"
@@ -117,7 +114,6 @@ const Overview: React.FC = () => {
           color: #374151;
         }
 
-        /* 1. THE OVAL / CIRCLED TEXT EFFECT */
         .ai-content-wrapper .circled-text {
           position: relative;
           display: inline-block;
@@ -132,14 +128,13 @@ const Overview: React.FC = () => {
           top: -2px;
           right: -2px;
           bottom: -2px;
-          border: 2px solid #9333ea; /* Purple color from your JSON */
-          border-radius: 50% 45% 55% 40% / 45% 55% 45% 55%; /* Irregular "hand-drawn" oval */
+          border: 2px solid #9333ea;
+          border-radius: 50% 45% 55% 40% / 45% 55% 45% 55%;
           pointer-events: none;
           z-index: -1;
           transform: rotate(-1deg);
         }
 
-        /* 2. THE HAND-DRAWN UNDERLINE EFFECT */
         .ai-content-wrapper u {
           text-decoration: none;
           position: relative;
@@ -154,9 +149,8 @@ const Overview: React.FC = () => {
           bottom: 2px;
           width: 100%;
           height: 3px;
-          background-color: currentColor; /* Matches the text color automatically */
+          background-color: currentColor;
           border-radius: 2px;
-          /* This makes the line look slightly wiggly/organic */
           clip-path: polygon(
             0% 20%,
             25% 0%,
@@ -171,7 +165,6 @@ const Overview: React.FC = () => {
           );
         }
 
-        /* Standard Styles */
         .ai-content-wrapper h1,
         .ai-content-wrapper h2 {
           font-weight: 800;
@@ -200,7 +193,7 @@ const Overview: React.FC = () => {
         }
 
         .ai-content-wrapper mark {
-          background-color: #fef08a; /* Soft yellow highlight */
+          background-color: #fef08a;
           color: inherit;
           padding: 0 2px;
         }
@@ -218,7 +211,6 @@ const Overview: React.FC = () => {
           margin-bottom: 0.5rem;
         }
 
-        /* Ordered List Styles (1, 2, 3) */
         .ai-content-wrapper ol {
           list-style-type: decimal;
           margin-left: 1.5rem;
@@ -233,7 +225,6 @@ const Overview: React.FC = () => {
           padding-left: 0.25rem;
         }
 
-        /* Link Styles */
         .ai-content-wrapper a {
           color: #9333ea;
           text-decoration: underline;
@@ -249,7 +240,6 @@ const Overview: React.FC = () => {
           color: #6b21a8;
         }
 
-        /* Inline Code Styles */
         .ai-content-wrapper code {
           background-color: #f3f4f6;
           color: #1f2937;
@@ -259,7 +249,6 @@ const Overview: React.FC = () => {
           font-size: 0.9rem;
         }
 
-        /* Code Block Styles (pre > code) */
         .ai-content-wrapper pre {
           background-color: #1f2937;
           color: #e5e7eb;
@@ -283,7 +272,6 @@ const Overview: React.FC = () => {
           word-break: break-word;
         }
 
-        /* Scrollbar for code blocks */
         .ai-content-wrapper pre::-webkit-scrollbar {
           height: 8px;
         }
