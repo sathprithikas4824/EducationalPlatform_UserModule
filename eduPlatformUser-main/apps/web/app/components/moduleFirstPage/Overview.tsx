@@ -24,7 +24,7 @@ interface Module {
   deleted_at: string | null;
 }
 
-const BACKEND_URL ="https://educationalplatform-usermodule-1.onrender.com";
+const BACKEND_URL ="https://educationalplatform-usermodule-2.onrender.com";
 const MODULE_ID = 19; // Module ID for AI content
 
 const Overview: React.FC = () => {
