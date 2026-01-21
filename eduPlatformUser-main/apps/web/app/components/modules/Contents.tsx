@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import localFont from "next/font/local";
 import { ArrowRight, ArrowDown } from "../common/icons";
+import { Highlightable } from "../common/Highlightable";
+import { UserProfileButton } from "../common/UserProfileButton";
 
 const fuzzyBubblesBoldFont = localFont({
   src: "../../fonts/FuzzyBubbles-Bold.ttf",
@@ -81,6 +83,13 @@ const Contents: React.FC = () => {
     <div
       className={`w-full min-h-screen bg-white jakarta-font ${fuzzyBubblesBoldFont.variable}`}
     >
+      {/* Header with Login Button */}
+      <div className="w-full bg-white px-4 sm:px-6 md:px-10 py-3 border-b border-gray-100">
+        <div className="max-w-6xl mx-auto flex justify-end">
+          <UserProfileButton />
+        </div>
+      </div>
+
       {/* Hero Section - Responsive */}
       <div className="w-full bg-white py-6 sm:py-8 md:py-12 px-4 sm:px-6 md:px-10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-6 md:gap-12 items-center">
@@ -209,83 +218,85 @@ const Contents: React.FC = () => {
         {/* Main Content Area - Responsive */}
         <div className="flex-1 py-6 sm:py-8 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 bg-white">
           <div className="max-w-2xl mx-auto lg:mx-0">
-            {/* Why Python Section */}
-            <section className="mb-6 sm:mb-8">
-              <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 mb-2 sm:mb-3">
-                Why Python ?
-              </h2>
-              <p className="text-gray-700 text-sm sm:text-[15px] leading-relaxed">
-                Python is the{" "}
-                <span className="circled-text text-purple-600 font-semibold">
-                  #1 Language
-                </span>{" "}
-                for AI development! It is Easy to Learn, It has Rich Libraries
-                and Fast Prototyping. Python handles the complex stuff so you
-                can focus on{" "}
-                <span className="text-purple-600 font-medium">
-                  building intelligent systems!
-                </span>
-              </p>
-            </section>
-
-            {/* Essential Python Basics Section */}
-            <section className="mb-6 sm:mb-8">
-              <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-3 sm:mb-4">
-                Essential Python Basics
-              </h2>
-
-              {/* Variables & Data Types */}
-              <div className="mb-4 sm:mb-6">
-                <h3 className="text-purple-600 font-bold text-sm sm:text-[15px] mb-2">
-                  Variables & Data Types :
-                </h3>
-                <div className="bg-gray-100 rounded-lg p-3 sm:p-4 border border-gray-200 overflow-x-auto">
-                  <pre className="text-gray-700 text-[10px] sm:text-xs font-mono leading-relaxed whitespace-pre-wrap">
-                    <code>{codeExample}</code>
-                  </pre>
-                </div>
-
-                {/* Handwritten Note */}
-                <p
-                  className={`mt-2 sm:mt-3 text-purple-600 text-xs sm:text-sm italic ${fuzzyBubblesBoldFont.className}`}
-                  style={{
-                    fontFamily: "var(--font-fuzzy-bubbles-bold), cursive",
-                    textDecoration: "underline",
-                    textDecorationStyle: "wavy",
-                    textDecorationColor: "#9333ea",
-                    textUnderlineOffset: "3px",
-                  }}
-                >
-                  Lists and dictionaries are SUPER important for AI data!
+            <Highlightable pageId="python-basics">
+              {/* Why Python Section */}
+              <section className="mb-6 sm:mb-8">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 mb-2 sm:mb-3">
+                  Why Python ?
+                </h2>
+                <p className="text-gray-700 text-sm sm:text-[15px] leading-relaxed">
+                  Python is the{" "}
+                  <span className="circled-text text-purple-600 font-semibold">
+                    #1 Language
+                  </span>{" "}
+                  for AI development! It is Easy to Learn, It has Rich Libraries
+                  and Fast Prototyping. Python handles the complex stuff so you
+                  can focus on{" "}
+                  <span className="text-purple-600 font-medium">
+                    building intelligent systems!
+                  </span>
                 </p>
-              </div>
+              </section>
 
-              {/* Functions - Reusable Code Blocks */}
-              <div className="mb-4 sm:mb-6">
-                <h3 className="text-purple-600 font-bold text-sm sm:text-[15px] mb-2">
-                  Functions - Reusable Code Blocks :
-                </h3>
-                <div className="bg-gray-100 rounded-lg p-3 sm:p-4 border border-gray-200 overflow-x-auto">
-                  <pre className="text-gray-700 text-[10px] sm:text-xs font-mono leading-relaxed whitespace-pre-wrap">
-                    <code>{codeExample}</code>
-                  </pre>
+              {/* Essential Python Basics Section */}
+              <section className="mb-6 sm:mb-8">
+                <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-3 sm:mb-4">
+                  Essential Python Basics
+                </h2>
+
+                {/* Variables & Data Types */}
+                <div className="mb-4 sm:mb-6">
+                  <h3 className="text-purple-600 font-bold text-sm sm:text-[15px] mb-2">
+                    Variables & Data Types :
+                  </h3>
+                  <div className="bg-gray-100 rounded-lg p-3 sm:p-4 border border-gray-200 overflow-x-auto">
+                    <pre className="text-gray-700 text-[10px] sm:text-xs font-mono leading-relaxed whitespace-pre-wrap">
+                      <code>{codeExample}</code>
+                    </pre>
+                  </div>
+
+                  {/* Handwritten Note */}
+                  <p
+                    className={`mt-2 sm:mt-3 text-purple-600 text-xs sm:text-sm italic ${fuzzyBubblesBoldFont.className}`}
+                    style={{
+                      fontFamily: "var(--font-fuzzy-bubbles-bold), cursive",
+                      textDecoration: "underline",
+                      textDecorationStyle: "wavy",
+                      textDecorationColor: "#9333ea",
+                      textUnderlineOffset: "3px",
+                    }}
+                  >
+                    Lists and dictionaries are SUPER important for AI data!
+                  </p>
                 </div>
-              </div>
-            </section>
 
-            {/* Next Steps Section */}
-            <section className="mb-6 sm:mb-8">
-              <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-2 sm:mb-3">
-                Next Steps :
-              </h2>
-              <ol className="list-decimal list-inside space-y-1 sm:space-y-1.5 text-gray-700 text-xs sm:text-sm">
-                <li>Install Python and these libraries</li>
-                <li>Work through small examples</li>
-                <li>Load a real dataset (try Kaggle!)</li>
-                <li>Build your first ML model</li>
-                <li>Experiment and break things (it&apos;s okay!)</li>
-              </ol>
-            </section>
+                {/* Functions - Reusable Code Blocks */}
+                <div className="mb-4 sm:mb-6">
+                  <h3 className="text-purple-600 font-bold text-sm sm:text-[15px] mb-2">
+                    Functions - Reusable Code Blocks :
+                  </h3>
+                  <div className="bg-gray-100 rounded-lg p-3 sm:p-4 border border-gray-200 overflow-x-auto">
+                    <pre className="text-gray-700 text-[10px] sm:text-xs font-mono leading-relaxed whitespace-pre-wrap">
+                      <code>{codeExample}</code>
+                    </pre>
+                  </div>
+                </div>
+              </section>
+
+              {/* Next Steps Section */}
+              <section className="mb-6 sm:mb-8">
+                <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-2 sm:mb-3">
+                  Next Steps :
+                </h2>
+                <ol className="list-decimal list-inside space-y-1 sm:space-y-1.5 text-gray-700 text-xs sm:text-sm">
+                  <li>Install Python and these libraries</li>
+                  <li>Work through small examples</li>
+                  <li>Load a real dataset (try Kaggle!)</li>
+                  <li>Build your first ML model</li>
+                  <li>Experiment and break things (it&apos;s okay!)</li>
+                </ol>
+              </section>
+            </Highlightable>
           </div>
         </div>
       </div>

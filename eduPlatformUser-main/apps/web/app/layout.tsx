@@ -1,6 +1,7 @@
 import "./globals.css";
 import { PropsWithChildren } from "react";
 import type { Metadata } from "next";
+import { AnnotationProvider } from "./components/common/AnnotationProvider";
 
 export const metadata: Metadata = {
   title: "Educational App",
@@ -16,7 +17,9 @@ export default function RootLayout({ children }: PropsWithChildren) {
         <link rel="preload" href="/fonts/PlusJakartaSans-SemiBold.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
         <link rel="preload" href="/fonts/PlusJakartaSans-Bold.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
       </head>
-      <body className="jakarta-font">{children}</body>
+      <body className="jakarta-font">
+        <AnnotationProvider>{children}</AnnotationProvider>
+      </body>
     </html>
   );
 }
