@@ -2,7 +2,8 @@ import TopBar from "./components/layout/TopBar";
 import MainNavbar from "./components/layout/MainNavBar";
 import HeroSection from "./components/layout/HeroSection";
 import ExploreTopics from "./components/layout/ExploreTopics";
-import Content from "./components/moduleFirstPage/Content";
+import Content from "./components/moduleFirstPage/Main";
+import Main from "./components/modules/Main";
 
 export default function Page() {
   return (
@@ -24,7 +25,7 @@ export default function Page() {
       {/* EXPLORE SECTION */}
       {/* <ExploreTopics/> */}
 
-      <Content/>
+      <Main/>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import Overview from "./Overview";
 
 
 
-export default function Content() {
+export default function Main() {
     return (
         <div>
             <TopBar/>
