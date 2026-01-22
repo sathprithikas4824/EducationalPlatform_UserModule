@@ -12,6 +12,9 @@ export interface Highlight {
   color: string;
   pageId: string;
   createdAt: string;
+  // Context for accurate positioning
+  prefixContext?: string; // Text before the highlight
+  suffixContext?: string; // Text after the highlight
 }
 
 interface User {
