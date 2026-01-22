@@ -17,53 +17,79 @@ const HIGHLIGHT_COLORS = [
   { name: "Orange", value: "#fed7aa" },
 ];
 
-// Function to highlight text in a string
-const highlightTextInContent = (
+// Function to highlight text at specific positions
+const highlightTextAtPositions = (
   text: string,
   highlights: Highlight[],
+  currentOffset: { value: number },
 ): React.ReactNode => {
-  if (!highlights.length) return text;
+  if (!highlights.length) {
+    const textLength = text.length;
+    currentOffset.value += textLength;
+    return text;
+  }
 
-  let result: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let textLower = text.toLowerCase();
+  const textStart = currentOffset.value;
+  const textEnd = textStart + text.length;
 
-  const sortedHighlights = [...highlights].sort((a, b) => {
-    const posA = textLower.indexOf(a.text.toLowerCase());
-    const posB = textLower.indexOf(b.text.toLowerCase());
-    return posA - posB;
+  // Find highlights that fall within this text segment
+  const relevantHighlights = highlights.filter((h) => {
+    const hStart = h.startOffset;
+    const hEnd = h.endOffset;
+    return hStart < textEnd && hEnd > textStart;
   });
+
+  if (relevantHighlights.length === 0) {
+    currentOffset.value += text.length;
+    return text;
+  }
+
+  // Sort by start position
+  const sortedHighlights = [...relevantHighlights].sort(
+    (a, b) => a.startOffset - b.startOffset
+  );
+
+  const result: React.ReactNode[] = [];
+  let lastIndex = 0;
 
   sortedHighlights.forEach((highlight) => {
-    const highlightTextLower = highlight.text.toLowerCase();
-    const index = textLower.indexOf(highlightTextLower, lastIndex);
+    // Calculate positions relative to this text segment
+    const highlightStartInText = Math.max(0, highlight.startOffset - textStart);
+    const highlightEndInText = Math.min(text.length, highlight.endOffset - textStart);
 
-    if (index !== -1) {
-      if (index > lastIndex) {
-        result.push(text.substring(lastIndex, index));
-      }
-
-      result.push(
-        <mark
-          key={highlight.id}
-          style={{
-            backgroundColor: highlight.color,
-            padding: "2px 4px",
-            borderRadius: "4px",
-          }}
-        >
-          {text.substring(index, index + highlight.text.length)}
-        </mark>,
-      );
-
-      lastIndex = index + highlight.text.length;
+    if (highlightStartInText >= text.length || highlightEndInText <= 0) {
+      return;
     }
+
+    // Add text before highlight
+    if (highlightStartInText > lastIndex) {
+      result.push(text.substring(lastIndex, highlightStartInText));
+    }
+
+    // Add highlighted text
+    result.push(
+      <mark
+        key={highlight.id}
+        data-highlight-id={highlight.id}
+        style={{
+          backgroundColor: highlight.color,
+          padding: "2px 4px",
+          borderRadius: "4px",
+        }}
+      >
+        {text.substring(highlightStartInText, highlightEndInText)}
+      </mark>
+    );
+
+    lastIndex = highlightEndInText;
   });
 
+  // Add remaining text
   if (lastIndex < text.length) {
     result.push(text.substring(lastIndex));
   }
 
+  currentOffset.value += text.length;
   return result.length > 0 ? result : text;
 };
 
@@ -71,11 +97,12 @@ const highlightTextInContent = (
 const processChildren = (
   children: React.ReactNode,
   highlights: Highlight[],
+  currentOffset: { value: number },
 ): React.ReactNode => {
   return React.Children.map(children, (child) => {
     // If plain text
     if (typeof child === "string") {
-      return highlightTextInContent(child, highlights);
+      return highlightTextAtPositions(child, highlights, currentOffset);
     }
 
     // If React element
@@ -84,7 +111,7 @@ const processChildren = (
 
       if (element.props?.children) {
         return React.cloneElement(element, {
-          children: processChildren(element.props.children, highlights),
+          children: processChildren(element.props.children, highlights, currentOffset),
         });
       }
 
@@ -93,6 +120,22 @@ const processChildren = (
 
     return child;
   });
+};
+
+// Helper function to get text content offset
+const getTextOffset = (container: Node, targetNode: Node, targetOffset: number): number => {
+  let offset = 0;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+
+  let node = walker.nextNode();
+  while (node) {
+    if (node === targetNode) {
+      return offset + targetOffset;
+    }
+    offset += node.textContent?.length || 0;
+    node = walker.nextNode();
+  }
+  return offset;
 };
 
 
@@ -115,12 +158,15 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   const [pickerPosition, setPickerPosition] = useState({ x: 0, y: 0 });
 
   const highlights = getHighlightsForPage(pageId);
+  const [selectedStartOffset, setSelectedStartOffset] = useState(0);
+  const [selectedEndOffset, setSelectedEndOffset] = useState(0);
 
   const highlightedContent = useMemo(() => {
     if (!isLoggedIn || highlights.length === 0) {
       return children;
     }
-    return processChildren(children, highlights);
+    const currentOffset = { value: 0 };
+    return processChildren(children, highlights, currentOffset);
   }, [children, highlights, isLoggedIn]);
 
   const handleTextSelection = () => {
@@ -143,10 +189,30 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       return;
     }
 
+    // Calculate the start and end offsets within the container's text content
+    const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
+    const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
+
+    // Check if clicking on an existing highlight (check if selection falls within any highlight)
+    const existingHighlight = highlights.find(
+      (h) => startOffset >= h.startOffset && endOffset <= h.endOffset
+    );
+
+    if (existingHighlight) {
+      // Remove the existing highlight
+      removeHighlight(existingHighlight.id);
+      window.getSelection()?.removeAllRanges();
+      setShowColorPicker(false);
+      setSelectedText("");
+      return;
+    }
+
     const rect = range.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
 
     setSelectedText(text);
+    setSelectedStartOffset(startOffset);
+    setSelectedEndOffset(endOffset);
     setPickerPosition({
       x: Math.max(100, rect.left - containerRect.left + rect.width / 2),
       y: Math.max(70, rect.top - containerRect.top),
@@ -159,8 +225,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
     addHighlight({
       text: selectedText,
-      startOffset: 0,
-      endOffset: selectedText.length,
+      startOffset: selectedStartOffset,
+      endOffset: selectedEndOffset,
       color,
       pageId,
     });
@@ -168,6 +234,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     window.getSelection()?.removeAllRanges();
     setShowColorPicker(false);
     setSelectedText("");
+    setSelectedStartOffset(0);
+    setSelectedEndOffset(0);
   };
 
   const closeColorPicker = () => {
@@ -184,47 +252,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       className={`relative ${className}`}
     >
       {highlightedContent}
-
-      {isLoggedIn && highlights.length > 0 && (
-        <div className="mt-6 border-t border-gray-200 pt-4">
-          <p className="text-xs font-medium text-gray-600 mb-3">
-            Your highlights ({highlights.length}):
-          </p>
-          <div className="space-y-2">
-            {highlights.map((highlight) => (
-              <div
-                key={highlight.id}
-                className="flex items-start gap-2 p-3 rounded-lg text-sm"
-                style={{ backgroundColor: highlight.color }}
-              >
-                <span className="flex-1 text-gray-800">
-                  &ldquo;{highlight.text}&rdquo;
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeHighlight(highlight.id)}
-                  className="text-gray-500 hover:text-red-600 flex-shrink-0 p-1"
-                  title="Remove highlight"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {showColorPicker && isLoggedIn && selectedText && (
         <>

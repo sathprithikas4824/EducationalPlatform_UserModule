@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight } from "../common/icons";
 
 interface Module {
@@ -11,6 +12,13 @@ interface Module {
 
 const ModulesSection: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  const handleModuleClick = (moduleId: string) => {
+    if (moduleId === '2') {
+      router.push(`/modules/${moduleId}`);
+    }
+  };
 
   const modules: Module[] = [
     { id: '1', title: 'Overview of AI', completionPercentage: 78 },
@@ -75,13 +83,14 @@ const ModulesSection: React.FC = () => {
             {modules.map((module) => (
               <div
                 key={module.id}
-                className="flex-shrink-0 group flex items-center gap-3 snap-start rounded-2xl border backdrop-blur-md cursor-pointer transition-all duration-300 hover:!border-[#7612fa66] p-2 
+                onClick={() => handleModuleClick(module.id)}
+                className="flex-shrink-0 group flex items-center gap-3 snap-start rounded-2xl border backdrop-blur-md cursor-pointer transition-all duration-300 hover:!border-[#7612fa66] p-2
                            w-full md:w-[calc((50%)-8px)] lg:w-[calc((33.333%)-10.6px)]"
-                style={{ 
+                style={{
                     backgroundColor: "rgba(255, 255, 255, 0.95)",
                     borderColor: "rgba(140, 140, 170, 0.4)",
                     boxShadow: "0 2px 4px 0 rgba(124, 58, 237, 0.06)",
-                }} 
+                }}
               >
                 <div className="w-24 h-16 md:w-32 md:h-20 bg-[#A3A3A3] rounded-lg border border-gray-600 flex-shrink-0"></div>
 

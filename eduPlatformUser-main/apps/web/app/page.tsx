@@ -3,7 +3,7 @@ import MainNavbar from "./components/layout/MainNavBar";
 import HeroSection from "./components/layout/HeroSection";
 import ExploreTopics from "./components/layout/ExploreTopics";
 import Content from "./components/moduleFirstPage/Main";
-import Main from "./components/modules/Main";
+import Main from "./components/moduleFirstPage/Main";
 
 export default function Page() {
   return (
