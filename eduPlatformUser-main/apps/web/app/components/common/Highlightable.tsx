@@ -200,7 +200,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [selectedText, setSelectedText] = useState("");
-  const [pickerPosition, setPickerPosition] = useState({ x: 0, y: 0 });
+  const [pickerPosition, setPickerPosition] = useState({ x: 0, y: 0, showBelow: false });
   const [selectionInfo, setSelectionInfo] = useState<{
     startOffset: number;
     endOffset: number;
@@ -311,9 +311,32 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       prefixContext,
       suffixContext,
     });
+
+    // Calculate position relative to container
+    const selectionCenterX = rect.left - containerRect.left + rect.width / 2;
+    const topRelativeToContainer = rect.top - containerRect.top;
+    const bottomRelativeToContainer = rect.bottom - containerRect.top;
+
+    // Color picker dimensions (approximate) - use smaller mobile size for safer bounds
+    const pickerHeight = 100;
+    const isMobile = window.innerWidth < 640;
+    const pickerWidth = isMobile ? 216 : 280; // Mobile: 5×32px + 4×8px + 24px, Desktop: 5×40px + 4×12px + 32px
+    const pickerHalfWidth = pickerWidth / 2;
+
+    // Horizontal boundary checks for mobile
+    const containerWidth = containerRect.width;
+    const minX = pickerHalfWidth + 10; // 10px margin from left edge
+    const maxX = containerWidth - pickerHalfWidth - 10; // 10px margin from right edge
+    const xPos = Math.max(minX, Math.min(maxX, selectionCenterX));
+
+    // Check if there's enough space above the selection (using viewport position)
+    const spaceAbove = rect.top;
+    const showBelow = spaceAbove < pickerHeight + 10;
+
     setPickerPosition({
-      x: Math.max(100, rect.left - containerRect.left + rect.width / 2),
-      y: Math.max(70, rect.top - containerRect.top),
+      x: xPos,
+      y: showBelow ? bottomRelativeToContainer : topRelativeToContainer,
+      showBelow,
     });
     setShowColorPicker(true);
   }, [isLoggedIn, removeHighlight]);
@@ -362,23 +385,25 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
 
           <div
-            className="absolute z-[100] bg-white rounded-2xl shadow-2xl border border-gray-200 p-4"
+            className="absolute z-[100] bg-white rounded-2xl shadow-2xl border border-gray-200 p-3 sm:p-4"
             style={{
               left: pickerPosition.x,
-              top: pickerPosition.y - 80,
-              transform: "translateX(-50%)",
+              top: pickerPosition.showBelow ? pickerPosition.y + 10 : pickerPosition.y,
+              transform: pickerPosition.showBelow
+                ? "translateX(-50%)"
+                : "translateX(-50%) translateY(-100%) translateY(-10px)",
             }}
           >
-            <p className="text-xs text-gray-500 mb-3 text-center font-medium">
+            <p className="text-xs text-gray-500 mb-2 sm:mb-3 text-center font-medium">
               Select color
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               {HIGHLIGHT_COLORS.map((color) => (
                 <button
                   key={color.name}
                   type="button"
                   onClick={() => saveHighlight(color.value)}
-                  className="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 hover:border-gray-400 transition-all cursor-pointer shadow-md"
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-gray-200 hover:scale-110 hover:border-gray-400 transition-all cursor-pointer shadow-md active:scale-95"
                   style={{ backgroundColor: color.value }}
                   title={color.name}
                 />
