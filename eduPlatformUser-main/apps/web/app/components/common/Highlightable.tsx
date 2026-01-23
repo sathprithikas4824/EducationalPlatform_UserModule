@@ -54,7 +54,22 @@ const getTextOffset = (container: Node, targetNode: Node, targetOffset: number):
   return offset;
 };
 
-// Find and wrap text with highlight mark
+// Create a styled mark element for highlighting
+const createMarkElement = (highlightId: string, color: string): HTMLElement => {
+  const mark = document.createElement("mark");
+  mark.setAttribute("data-highlight-id", highlightId);
+  mark.style.backgroundColor = color;
+  mark.style.borderRadius = "2px";
+  mark.style.cursor = "pointer";
+  mark.style.padding = "0";
+  mark.style.margin = "0";
+  mark.style.display = "inline";
+  mark.style.boxDecorationBreak = "clone";
+  (mark.style as CSSStyleDeclaration & { webkitBoxDecorationBreak: string }).webkitBoxDecorationBreak = "clone";
+  return mark;
+};
+
+// Find and wrap text with highlight mark - handles cross-element selections
 const applyHighlightToDOM = (
   container: HTMLElement,
   highlight: Highlight
@@ -106,87 +121,113 @@ const applyHighlightToDOM = (
 
   if (targetIndex === -1) return;
 
-  // Now find the actual DOM nodes and create range
+  // Collect all text nodes that need to be highlighted
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
   let currentOffset = 0;
-  let startNode: Text | null = null;
-  let startNodeOffset = 0;
-  let endNode: Text | null = null;
-  let endNodeOffset = 0;
-
   const targetEndIndex = targetIndex + highlight.text.length;
+
+  interface TextNodeInfo {
+    node: Text;
+    startOffset: number;
+    endOffset: number;
+  }
+  const nodesToHighlight: TextNodeInfo[] = [];
 
   let node = walker.nextNode() as Text | null;
   while (node) {
     const nodeLength = node.textContent?.length || 0;
     const nodeEnd = currentOffset + nodeLength;
 
-    // Find start node
-    if (!startNode && targetIndex >= currentOffset && targetIndex < nodeEnd) {
-      startNode = node;
-      startNodeOffset = targetIndex - currentOffset;
+    // Check if this node overlaps with our target range
+    if (nodeEnd > targetIndex && currentOffset < targetEndIndex) {
+      const startInNode = Math.max(0, targetIndex - currentOffset);
+      const endInNode = Math.min(nodeLength, targetEndIndex - currentOffset);
+
+      nodesToHighlight.push({
+        node,
+        startOffset: startInNode,
+        endOffset: endInNode,
+      });
     }
 
-    // Find end node
-    if (!endNode && targetEndIndex > currentOffset && targetEndIndex <= nodeEnd) {
-      endNode = node;
-      endNodeOffset = targetEndIndex - currentOffset;
-    }
-
-    if (startNode && endNode) break;
+    // Stop if we've passed the target end
+    if (currentOffset >= targetEndIndex) break;
 
     currentOffset = nodeEnd;
     node = walker.nextNode() as Text | null;
   }
 
-  if (!startNode || !endNode) return;
+  if (nodesToHighlight.length === 0) return;
 
   // Check if already highlighted
-  const existingMark = startNode.parentElement?.closest(`[data-highlight-id="${highlight.id}"]`);
+  const existingMark = nodesToHighlight[0].node.parentElement?.closest(`[data-highlight-id="${highlight.id}"]`);
   if (existingMark) return;
 
-  try {
-    const range = document.createRange();
-    range.setStart(startNode, startNodeOffset);
-    range.setEnd(endNode, endNodeOffset);
+  // Verify the collected text matches
+  const collectedText = nodesToHighlight
+    .map(info => info.node.textContent?.substring(info.startOffset, info.endOffset) || "")
+    .join("");
+  if (collectedText !== highlight.text) {
+    return;
+  }
 
-    // Verify the range contains the correct text
-    const rangeText = range.toString();
-    if (rangeText !== highlight.text) {
-      return;
+  // Apply highlights to each text node (process in reverse to avoid offset issues)
+  for (let i = nodesToHighlight.length - 1; i >= 0; i--) {
+    const info = nodesToHighlight[i];
+    const textNode = info.node;
+    const text = textNode.textContent || "";
+
+    try {
+      // Split the text node and wrap the highlighted portion
+      const before = text.substring(0, info.startOffset);
+      const highlighted = text.substring(info.startOffset, info.endOffset);
+      const after = text.substring(info.endOffset);
+
+      const mark = createMarkElement(highlight.id, highlight.color);
+      mark.textContent = highlighted;
+
+      const parent = textNode.parentNode;
+      if (!parent) continue;
+
+      // Replace the text node with before + mark + after
+      if (after) {
+        const afterNode = document.createTextNode(after);
+        parent.insertBefore(afterNode, textNode.nextSibling);
+      }
+
+      parent.insertBefore(mark, textNode.nextSibling);
+
+      if (before) {
+        textNode.textContent = before;
+      } else {
+        parent.removeChild(textNode);
+      }
+    } catch (e) {
+      console.warn("Could not apply highlight to node:", e);
     }
-
-    const mark = document.createElement("mark");
-    mark.setAttribute("data-highlight-id", highlight.id);
-    mark.style.backgroundColor = highlight.color;
-    mark.style.borderRadius = "2px";
-    mark.style.cursor = "pointer";
-    mark.style.padding = "0";
-    mark.style.margin = "0";
-    mark.style.display = "inline";
-    mark.style.boxDecorationBreak = "clone";
-    (mark.style as CSSStyleDeclaration & { webkitBoxDecorationBreak: string }).webkitBoxDecorationBreak = "clone";
-
-    range.surroundContents(mark);
-  } catch (e) {
-    // surroundContents can fail if range crosses element boundaries
-    // In that case, we skip this highlight
-    console.warn("Could not apply highlight:", e);
   }
 };
 
-// Remove highlight from DOM
+// Remove highlight from DOM - handles multiple marks with same ID (cross-element highlights)
 const removeHighlightFromDOM = (container: HTMLElement, highlightId: string): void => {
-  const mark = container.querySelector(`[data-highlight-id="${highlightId}"]`);
-  if (mark) {
+  const marks = container.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
+  const parentsToNormalize = new Set<Node>();
+
+  marks.forEach(mark => {
     const parent = mark.parentNode;
-    while (mark.firstChild) {
-      parent?.insertBefore(mark.firstChild, mark);
+    if (parent) {
+      parentsToNormalize.add(parent);
+      while (mark.firstChild) {
+        parent.insertBefore(mark.firstChild, mark);
+      }
+      mark.remove();
     }
-    mark.remove();
-    // Normalize to merge adjacent text nodes
-    parent?.normalize();
-  }
+  });
+
+  // Normalize all affected parents to merge adjacent text nodes
+  parentsToNormalize.forEach(parent => {
+    parent.normalize();
+  });
 };
 
 export const Highlightable: React.FC<HighlightableProps> = ({
@@ -263,8 +304,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
-    const text = selection.toString().trim();
-    if (!text || text.length < 2) {
+    // First check if there's any selection
+    const selectionText = selection.toString().trim();
+    if (!selectionText || selectionText.length < 2) {
       setShowColorPicker(false);
       setSelectedText("");
       setSelectionInfo(null);
@@ -278,10 +320,22 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       return;
     }
 
-    // Calculate offsets and get context
+    // Calculate offsets and get context using TreeWalker-based text
+    // This ensures consistency when highlighting across block elements
     const fullText = getTextContent(container);
     const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
     const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
+
+    // Use the TreeWalker-based text instead of selection.toString()
+    // This ensures the stored text matches what we'll find when re-applying highlights
+    const text = fullText.substring(startOffset, endOffset);
+
+    if (!text || text.length < 2) {
+      setShowColorPicker(false);
+      setSelectedText("");
+      setSelectionInfo(null);
+      return;
+    }
 
     // Get surrounding context for accurate matching later
     const prefixStart = Math.max(0, startOffset - CONTEXT_LENGTH);
