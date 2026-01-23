@@ -254,8 +254,8 @@ export default function NavBar() {
                 onClick={toggleHighlightMode}
                 className={`p-1.5 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center ${
                   highlightModeEnabled
-                    ? "text-purple-600 bg-purple-100 hover:bg-purple-200"
-                    : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                    ? "text-purple-600 bg-purple-100"
+                    : "text-gray-700"
                 }`}
                 title={highlightModeEnabled ? "Disable highlighting" : "Enable highlighting"}
               >
@@ -375,8 +375,8 @@ export default function NavBar() {
                   onClick={toggleHighlightMode}
                   className={`p-1.5 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center ${
                     highlightModeEnabled
-                      ? "text-purple-600 bg-purple-100 hover:bg-purple-200"
-                      : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                      ? "text-purple-600 bg-purple-100"
+                      : "text-gray-700"
                   }`}
                   title={highlightModeEnabled ? "Disable highlighting" : "Enable highlighting"}
                 >
@@ -458,8 +458,8 @@ export default function NavBar() {
                   onClick={toggleHighlightMode}
                   className={`p-1.5 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center ${
                     highlightModeEnabled
-                      ? "text-purple-600 bg-purple-100 hover:bg-purple-200"
-                      : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                      ? "text-purple-600 bg-purple-100 "
+                      : "text-gray-700 "
                   }`}
                   title={highlightModeEnabled ? "Disable highlighting" : "Enable highlighting"}
                 >
