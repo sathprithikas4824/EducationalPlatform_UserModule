@@ -362,20 +362,45 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     processSelection();
   }, [processSelection]);
 
-  // Handle touch selection (mobile) with delay for Android
-  const handleTouchEnd = useCallback(() => {
-    if (!isTouchDevice()) return;
+  // Handle touch selection (mobile) using selectionchange event with debounce
+  // This allows users to extend their selection (select full sentences) before the color picker appears
+  useEffect(() => {
+    if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
 
-    // Clear any existing timeout
-    if (touchTimeoutRef.current) {
-      clearTimeout(touchTimeoutRef.current);
-    }
+    const handleSelectionChange = () => {
+      // Clear any existing timeout
+      if (touchTimeoutRef.current) {
+        clearTimeout(touchTimeoutRef.current);
+      }
 
-    // Delay to let the selection complete on Android
-    touchTimeoutRef.current = setTimeout(() => {
-      processSelection();
-    }, 100);
-  }, [processSelection]);
+      // Debounce - wait for selection to stabilize (user stopped extending)
+      // 400ms gives enough time for users to extend selection to full sentences
+      touchTimeoutRef.current = setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+
+        const text = selection.toString().trim();
+        if (!text || text.length < 2) return;
+
+        const range = selection.getRangeAt(0);
+        const container = contentRef.current;
+
+        // Only process if selection is within our container
+        if (!container || !container.contains(range.commonAncestorContainer)) return;
+
+        processSelection();
+      }, 400);
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      if (touchTimeoutRef.current) {
+        clearTimeout(touchTimeoutRef.current);
+      }
+    };
+  }, [isLoggedIn, highlightModeEnabled, processSelection]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -420,7 +445,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       <div
         ref={contentRef}
         onMouseUp={handleMouseUp}
-        onTouchEnd={handleTouchEnd}
         className={`highlightable-content ${showColorPicker ? "picker-active" : ""}`}
       >
         {children}
