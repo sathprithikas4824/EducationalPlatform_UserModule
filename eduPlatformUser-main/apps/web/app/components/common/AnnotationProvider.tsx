@@ -27,6 +27,8 @@ interface AnnotationContextType {
   user: User | null;
   highlights: Highlight[];
   isLoggedIn: boolean;
+  highlightModeEnabled: boolean;
+  toggleHighlightMode: () => void;
   login: (email: string, name?: string) => void;
   logout: () => void;
   addHighlight: (highlight: Omit<Highlight, "id" | "createdAt" | "userId">) => void;
@@ -115,6 +117,11 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [user, setUser] = useState<User | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [highlightModeEnabled, setHighlightModeEnabled] = useState(false);
+
+  const toggleHighlightMode = useCallback(() => {
+    setHighlightModeEnabled((prev) => !prev);
+  }, []);
 
   // Load user and highlights from cookies on mount
   useEffect(() => {
@@ -242,6 +249,8 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         user,
         highlights,
         isLoggedIn: !!user,
+        highlightModeEnabled,
+        toggleHighlightMode,
         login,
         logout,
         addHighlight,

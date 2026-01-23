@@ -202,6 +202,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     addHighlight,
     removeHighlight,
     getHighlightsForPage,
+    highlightModeEnabled,
   } = useAnnotation();
 
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -257,7 +258,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   }, [children, isLoggedIn]);
 
   const processSelection = useCallback(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || !highlightModeEnabled) return;
 
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
@@ -353,7 +354,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         window.getSelection()?.removeAllRanges();
       }, 10);
     }
-  }, [isLoggedIn, removeHighlight]);
+  }, [isLoggedIn, highlightModeEnabled, removeHighlight]);
 
   // Handle mouse selection (desktop)
   const handleMouseUp = useCallback(() => {

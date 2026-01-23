@@ -5,6 +5,7 @@ import Link from "next/link";
 
 // Import icons
 import { SearchDuotoneIcon, PenEditIcon } from "../icons";
+import { useAnnotation } from "../common/AnnotationProvider";
 
 const HamburgerIcon = () => (
   <svg
@@ -137,6 +138,7 @@ const MobileMenu = ({ isOpen, onClose, activeTab, setActiveTab }) => {
 export default function NavBar() {
   const [activeTab, setActiveTab] = useState("topics");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { highlightModeEnabled, toggleHighlightMode } = useAnnotation();
 
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
@@ -241,15 +243,25 @@ export default function NavBar() {
               </div>
             </div>
 
-            {/* Edit Icon Pill */}
+            {/* Edit Icon Pill - Highlight Toggle */}
             <div
-              className="flex items-center gap-0.5 px-2 py-2.5 rounded-2xl border relative overflow-hidden backdrop-blur-md"
-              style={pillStyle}
+              className={`flex items-center gap-0.5 px-2 py-2.5 rounded-2xl border relative overflow-hidden backdrop-blur-md transition-all duration-200 ${
+                highlightModeEnabled ? "ring-2 ring-purple-500 border-purple-400" : ""
+              }`}
+              style={highlightModeEnabled ? { ...pillStyle, backgroundColor: "rgba(147, 51, 234, 0.1)" } : pillStyle}
             >
-              <button className="p-1.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center">
+              <button
+                onClick={toggleHighlightMode}
+                className={`p-1.5 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center ${
+                  highlightModeEnabled
+                    ? "text-purple-600 bg-purple-100 hover:bg-purple-200"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                }`}
+                title={highlightModeEnabled ? "Disable highlighting" : "Enable highlighting"}
+              >
                 <PenEditIcon
                   size={20}
-                  className="hover:opacity-80 transition-opacity"
+                  className="transition-opacity"
                 />
               </button>
             </div>
@@ -352,15 +364,25 @@ export default function NavBar() {
                 </button>
               </div>
 
-              {/* Edit Icon */}
+              {/* Edit Icon - Highlight Toggle */}
               <div
-                className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md"
-                style={pillStyle}
+                className={`flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md transition-all duration-200 ${
+                  highlightModeEnabled ? "ring-2 ring-purple-500 border-purple-400" : ""
+                }`}
+                style={highlightModeEnabled ? { ...pillStyle, backgroundColor: "rgba(147, 51, 234, 0.1)" } : pillStyle}
               >
-                <button className="p-1.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center">
+                <button
+                  onClick={toggleHighlightMode}
+                  className={`p-1.5 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center ${
+                    highlightModeEnabled
+                      ? "text-purple-600 bg-purple-100 hover:bg-purple-200"
+                      : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                  title={highlightModeEnabled ? "Disable highlighting" : "Enable highlighting"}
+                >
                   <PenEditIcon
                     size={20}
-                    className="hover:opacity-80 transition-opacity"
+                    className="transition-opacity"
                   />
                 </button>
               </div>
@@ -425,15 +447,25 @@ export default function NavBar() {
 
             {/* Right: Edit + Auth */}
             <div className="flex items-center gap-1.5">
-              {/* Edit Icon Pill */}
+              {/* Edit Icon Pill - Highlight Toggle */}
               <div
-                className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md"
-                style={pillStyle}
+                className={`flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md transition-all duration-200 ${
+                  highlightModeEnabled ? "ring-2 ring-purple-500 border-purple-400" : ""
+                }`}
+                style={highlightModeEnabled ? { ...pillStyle, backgroundColor: "rgba(147, 51, 234, 0.1)" } : pillStyle}
               >
-                <button className="p-1.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center">
+                <button
+                  onClick={toggleHighlightMode}
+                  className={`p-1.5 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center ${
+                    highlightModeEnabled
+                      ? "text-purple-600 bg-purple-100 hover:bg-purple-200"
+                      : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                  title={highlightModeEnabled ? "Disable highlighting" : "Enable highlighting"}
+                >
                   <PenEditIcon
                     size={20}
-                    className="hover:opacity-80 transition-opacity"
+                    className="transition-opacity"
                   />
                 </button>
               </div>
