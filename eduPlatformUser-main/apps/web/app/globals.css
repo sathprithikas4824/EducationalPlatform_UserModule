@@ -247,3 +247,56 @@
   animation: gradientWave 2s ease infinite;
   transition: none;
 }
+
+/* ========================= */
+/* HIGHLIGHTABLE TEXT SELECTION */
+/* ========================= */
+
+/* Custom selection color for highlightable content */
+.highlightable-content::selection {
+  background-color: rgba(167, 139, 250, 0.3);
+}
+
+.highlightable-content *::selection {
+  background-color: rgba(167, 139, 250, 0.3);
+}
+
+/* WebKit (Safari/Chrome) selection */
+.highlightable-content::-webkit-selection {
+  background-color: rgba(167, 139, 250, 0.3);
+}
+
+.highlightable-content *::-webkit-selection {
+  background-color: rgba(167, 139, 250, 0.3);
+}
+
+/* Mozilla selection */
+.highlightable-content::-moz-selection {
+  background-color: rgba(167, 139, 250, 0.3);
+}
+
+.highlightable-content *::-moz-selection {
+  background-color: rgba(167, 139, 250, 0.3);
+}
+
+/* Prevent iOS callout and tap highlight */
+.highlightable-content {
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobile-specific: Hide selection when color picker is shown */
+.highlightable-content.picker-active::selection,
+.highlightable-content.picker-active *::selection {
+  background-color: transparent;
+}
+
+.highlightable-content.picker-active::-webkit-selection,
+.highlightable-content.picker-active *::-webkit-selection {
+  background-color: transparent;
+}
+
+.highlightable-content.picker-active::-moz-selection,
+.highlightable-content.picker-active *::-moz-selection {
+  background-color: transparent;
+}

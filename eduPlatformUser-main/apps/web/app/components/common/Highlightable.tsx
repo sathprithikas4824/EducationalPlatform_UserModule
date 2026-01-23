@@ -9,6 +9,12 @@ interface HighlightableProps {
   className?: string;
 }
 
+// Detect if touch device
+const isTouchDevice = (): boolean => {
+  if (typeof window === "undefined") return false;
+  return "ontouchstart" in window || navigator.maxTouchPoints > 0;
+};
+
 const HIGHLIGHT_COLORS = [
   { name: "Yellow", value: "#fef08a" },
   { name: "Green", value: "#bbf7d0" },
@@ -210,6 +216,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
   const highlights = getHighlightsForPage(pageId);
   const appliedHighlightsRef = useRef<Set<string>>(new Set());
+  const touchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Apply highlights to the DOM after render
   useEffect(() => {
@@ -249,7 +256,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     });
   }, [children, isLoggedIn]);
 
-  const handleTextSelection = useCallback(() => {
+  const processSelection = useCallback(() => {
     if (!isLoggedIn) return;
 
     const selection = window.getSelection();
@@ -319,14 +326,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
     // Color picker dimensions (approximate) - use smaller mobile size for safer bounds
     const pickerHeight = 100;
-    const isMobile = window.innerWidth < 640;
-    const pickerWidth = isMobile ? 216 : 280; // Mobile: 5×32px + 4×8px + 24px, Desktop: 5×40px + 4×12px + 32px
+    const isMobileView = window.innerWidth < 640;
+    const pickerWidth = isMobileView ? 216 : 280;
     const pickerHalfWidth = pickerWidth / 2;
 
     // Horizontal boundary checks for mobile
     const containerWidth = containerRect.width;
-    const minX = pickerHalfWidth + 10; // 10px margin from left edge
-    const maxX = containerWidth - pickerHalfWidth - 10; // 10px margin from right edge
+    const minX = pickerHalfWidth + 10;
+    const maxX = containerWidth - pickerHalfWidth - 10;
     const xPos = Math.max(minX, Math.min(maxX, selectionCenterX));
 
     // Check if there's enough space above the selection (using viewport position)
@@ -339,7 +346,44 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       showBelow,
     });
     setShowColorPicker(true);
+
+    // Clear native selection on mobile to remove blue highlight
+    if (isTouchDevice()) {
+      setTimeout(() => {
+        window.getSelection()?.removeAllRanges();
+      }, 10);
+    }
   }, [isLoggedIn, removeHighlight]);
+
+  // Handle mouse selection (desktop)
+  const handleMouseUp = useCallback(() => {
+    if (isTouchDevice()) return;
+    processSelection();
+  }, [processSelection]);
+
+  // Handle touch selection (mobile) with delay for Android
+  const handleTouchEnd = useCallback(() => {
+    if (!isTouchDevice()) return;
+
+    // Clear any existing timeout
+    if (touchTimeoutRef.current) {
+      clearTimeout(touchTimeoutRef.current);
+    }
+
+    // Delay to let the selection complete on Android
+    touchTimeoutRef.current = setTimeout(() => {
+      processSelection();
+    }, 100);
+  }, [processSelection]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (touchTimeoutRef.current) {
+        clearTimeout(touchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const saveHighlight = useCallback((color: string) => {
     if (!selectedText || !user || !selectionInfo) return;
@@ -374,8 +418,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     >
       <div
         ref={contentRef}
-        onMouseUp={handleTextSelection}
-        onTouchEnd={handleTextSelection}
+        onMouseUp={handleMouseUp}
+        onTouchEnd={handleTouchEnd}
+        className={`highlightable-content ${showColorPicker ? "picker-active" : ""}`}
       >
         {children}
       </div>
