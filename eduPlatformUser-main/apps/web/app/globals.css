@@ -300,3 +300,60 @@
 .highlightable-content.picker-active *::-moz-selection {
   background-color: transparent;
 }
+
+/* ========================= */
+/* MOBILE HIGHLIGHT BOTTOM SHEET */
+/* ========================= */
+
+/* Slide up animation for mobile bottom sheet */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Fade in animation for backdrop */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease-out forwards;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Safe area for iOS devices with notch/home indicator */
+.safe-area-bottom {
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+}
+
+/* Mobile: Keep native selection visible while picking color */
+@media (max-width: 639px) {
+  .highlightable-content.picker-active::selection,
+  .highlightable-content.picker-active *::selection {
+    background-color: rgba(167, 139, 250, 0.3);
+  }
+
+  .highlightable-content.picker-active::-webkit-selection,
+  .highlightable-content.picker-active *::-webkit-selection {
+    background-color: rgba(167, 139, 250, 0.3);
+  }
+
+  .highlightable-content.picker-active::-moz-selection,
+  .highlightable-content.picker-active *::-moz-selection {
+    background-color: rgba(167, 139, 250, 0.3);
+  }
+}
