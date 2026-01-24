@@ -253,6 +253,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   } = useAnnotation();
 
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showMobileHighlightButton, setShowMobileHighlightButton] = useState(false);
   const [selectedText, setSelectedText] = useState("");
   const [pickerPosition, setPickerPosition] = useState({ x: 0, y: 0, showBelow: false });
   const [selectionInfo, setSelectionInfo] = useState<{
@@ -406,10 +407,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       y: showBelow ? bottomRelativeToContainer : topRelativeToContainer,
       showBelow,
     });
-    setShowColorPicker(true);
 
-    // On mobile, keep the selection visible so users can see what they're highlighting
-    // Selection will be cleared after they pick a color or cancel
+    // On mobile: show highlight button first (user can still adjust selection)
+    // On desktop: show color picker directly
+    if (isTouchDevice()) {
+      setShowMobileHighlightButton(true);
+      setShowColorPicker(false);
+    } else {
+      setShowColorPicker(true);
+      setShowMobileHighlightButton(false);
+    }
   }, [isLoggedIn, highlightModeEnabled, removeHighlight]);
 
   // Handle mouse selection (desktop)
@@ -419,13 +426,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   }, [processSelection]);
 
   // Handle touch selection (mobile) using selectionchange event with debounce
-  // This allows users to extend their selection (select full sentences) before the color picker appears
+  // This allows users to extend their selection (select full sentences) before the highlight button appears
   useEffect(() => {
     if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
 
     const handleSelectionChange = () => {
-      // Don't process if color picker is already shown
-      if (showColorPicker) return;
+      // Don't process if color picker or highlight button is already shown
+      if (showColorPicker || showMobileHighlightButton) return;
 
       // Clear any existing timeout
       if (touchTimeoutRef.current) {
@@ -433,7 +440,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
 
       // Debounce - wait for selection to stabilize (user stopped extending)
-      // 600ms gives users enough time to adjust selection handles on mobile
+      // 800ms gives users enough time to adjust selection handles on mobile
       touchTimeoutRef.current = setTimeout(() => {
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0) return;
@@ -448,7 +455,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         if (!container || !container.contains(range.commonAncestorContainer)) return;
 
         processSelection();
-      }, 600);
+      }, 800);
     };
 
     document.addEventListener('selectionchange', handleSelectionChange);
@@ -459,7 +466,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         clearTimeout(touchTimeoutRef.current);
       }
     };
-  }, [isLoggedIn, highlightModeEnabled, processSelection, showColorPicker]);
+  }, [isLoggedIn, highlightModeEnabled, processSelection, showColorPicker, showMobileHighlightButton]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -489,8 +496,17 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     setSelectionInfo(null);
   }, [selectedText, user, selectionInfo, addHighlight, pageId]);
 
+  // Mobile: When user taps the highlight button, show color picker
+  const handleMobileHighlightTap = useCallback(() => {
+    setShowMobileHighlightButton(false);
+    setShowColorPicker(true);
+    // Clear native selection now that we're showing the picker
+    window.getSelection()?.removeAllRanges();
+  }, []);
+
   const closeColorPicker = useCallback(() => {
     setShowColorPicker(false);
+    setShowMobileHighlightButton(false);
     setSelectedText("");
     setSelectionInfo(null);
     window.getSelection()?.removeAllRanges();
@@ -509,80 +525,63 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         {children}
       </div>
 
+      {/* Mobile: Floating highlight button - appears first, user can still adjust selection */}
+      {showMobileHighlightButton && isLoggedIn && selectedText && (
+        <>
+          <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
+          <div
+            className="absolute z-[100] animate-fadeIn"
+            style={{
+              left: pickerPosition.x,
+              top: pickerPosition.showBelow ? pickerPosition.y + 8 : pickerPosition.y,
+              transform: pickerPosition.showBelow
+                ? "translateX(-50%)"
+                : "translateX(-50%) translateY(-100%) translateY(-8px)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleMobileHighlightTap}
+              className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-full shadow-lg active:scale-95 transition-transform font-medium text-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+              Highlight
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Color picker - positioned near selected text (both mobile and desktop) */}
       {showColorPicker && isLoggedIn && selectedText && (
         <>
-          {/* Desktop: Floating picker near selection */}
-          <div className="hidden sm:block">
-            <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
-            <div
-              className="absolute z-[100] bg-white rounded-2xl shadow-2xl border border-gray-200 p-4"
-              style={{
-                left: pickerPosition.x,
-                top: pickerPosition.showBelow ? pickerPosition.y + 10 : pickerPosition.y,
-                transform: pickerPosition.showBelow
-                  ? "translateX(-50%)"
-                  : "translateX(-50%) translateY(-100%) translateY(-10px)",
-              }}
-            >
-              <p className="text-xs text-gray-500 mb-3 text-center font-medium">
-                Select color
-              </p>
-              <div className="flex gap-3">
-                {HIGHLIGHT_COLORS.map((color) => (
-                  <button
-                    key={color.name}
-                    type="button"
-                    onClick={() => saveHighlight(color.value)}
-                    className="w-10 h-10 rounded-full border-2 border-gray-200 hover:scale-110 hover:border-gray-400 transition-all cursor-pointer shadow-md active:scale-95"
-                    style={{ backgroundColor: color.value }}
-                    title={color.name}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Mobile: Fixed bottom sheet for easier interaction */}
-          <div className="sm:hidden">
-            <div
-              className="fixed inset-0 bg-black/30 z-[99] animate-fadeIn"
-              onClick={closeColorPicker}
-            />
-            <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-3xl shadow-2xl p-5 pb-8 animate-slideUp safe-area-bottom">
-              {/* Handle bar */}
-              <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4" />
-
-              {/* Selected text preview */}
-              <div className="mb-4">
-                <p className="text-xs text-gray-500 mb-2 font-medium">Selected text:</p>
-                <p className="text-sm text-gray-800 bg-gray-100 rounded-xl p-3 line-clamp-3 leading-relaxed">
-                  {selectedText.length > 150 ? selectedText.substring(0, 150) + "..." : selectedText}
-                </p>
-              </div>
-
-              {/* Color selection */}
-              <p className="text-xs text-gray-500 mb-3 font-medium">Choose highlight color:</p>
-              <div className="flex justify-between gap-2 mb-4">
-                {HIGHLIGHT_COLORS.map((color) => (
-                  <button
-                    key={color.name}
-                    type="button"
-                    onClick={() => saveHighlight(color.value)}
-                    className="flex-1 h-14 rounded-2xl border-2 border-gray-200 active:scale-95 transition-transform shadow-md"
-                    style={{ backgroundColor: color.value }}
-                    aria-label={`Highlight with ${color.name}`}
-                  />
-                ))}
-              </div>
-
-              {/* Cancel button */}
-              <button
-                type="button"
-                onClick={closeColorPicker}
-                className="w-full py-3.5 text-gray-600 font-medium bg-gray-100 rounded-2xl active:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
+          <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
+          <div
+            className="absolute z-[100] bg-white rounded-2xl shadow-2xl border border-gray-200 p-3 sm:p-4 animate-fadeIn"
+            style={{
+              left: pickerPosition.x,
+              top: pickerPosition.showBelow ? pickerPosition.y + 10 : pickerPosition.y,
+              transform: pickerPosition.showBelow
+                ? "translateX(-50%)"
+                : "translateX(-50%) translateY(-100%) translateY(-10px)",
+            }}
+          >
+            <p className="text-xs text-gray-500 mb-2 sm:mb-3 text-center font-medium">
+              Select color
+            </p>
+            <div className="flex gap-2 sm:gap-3">
+              {HIGHLIGHT_COLORS.map((color) => (
+                <button
+                  key={color.name}
+                  type="button"
+                  onClick={() => saveHighlight(color.value)}
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-gray-200 hover:scale-110 hover:border-gray-400 transition-all cursor-pointer shadow-md active:scale-95"
+                  style={{ backgroundColor: color.value }}
+                  title={color.name}
+                />
+              ))}
             </div>
           </div>
         </>
