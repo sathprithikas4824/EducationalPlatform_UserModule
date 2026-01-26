@@ -468,6 +468,51 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
   }, [isLoggedIn, highlightModeEnabled, processSelection, showColorPicker, showMobileHighlightButton]);
 
+  // Prevent native context menu on mobile when highlight mode is enabled
+  useEffect(() => {
+    if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
+
+    const container = contentRef.current;
+    if (!container) return;
+
+    const handleContextMenu = (e: Event) => {
+      // Prevent native context menu (Copy, Share, Select all, Web search) on mobile
+      if (isMobileViewport()) {
+        e.preventDefault();
+      }
+    };
+
+    // Handle touchend to quickly show highlight button before native menu appears
+    const handleTouchEnd = () => {
+      if (isMobileViewport()) {
+        // Short delay to allow selection to be finalized
+        setTimeout(() => {
+          const selection = window.getSelection();
+          if (!selection || selection.rangeCount === 0) return;
+
+          const text = selection.toString().trim();
+          if (!text || text.length < 2) return;
+
+          const range = selection.getRangeAt(0);
+          if (!container.contains(range.commonAncestorContainer)) return;
+
+          // If we have a valid selection, process it immediately
+          if (!showColorPicker && !showMobileHighlightButton) {
+            processSelection();
+          }
+        }, 100);
+      }
+    };
+
+    container.addEventListener('contextmenu', handleContextMenu);
+    container.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      container.removeEventListener('contextmenu', handleContextMenu);
+      container.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, processSelection]);
+
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
@@ -520,7 +565,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       <div
         ref={contentRef}
         onMouseUp={handleMouseUp}
-        className={`highlightable-content ${showColorPicker ? "picker-active" : ""}`}
+        className={`highlightable-content ${showColorPicker ? "picker-active" : ""} ${highlightModeEnabled && isTouchDevice() ? "mobile-highlight-mode" : ""}`}
+        style={highlightModeEnabled && isTouchDevice() ? {
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'text',
+          userSelect: 'text',
+        } as React.CSSProperties : undefined}
       >
         {children}
       </div>
@@ -594,6 +644,22 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           </p>
         </div>
       )}
+
+      {/* Mobile styles to suppress native context menu */}
+      <style>{`
+        @media (max-width: 639px) {
+          .mobile-highlight-mode {
+            -webkit-touch-callout: none !important;
+            -webkit-tap-highlight-color: transparent;
+          }
+          .mobile-highlight-mode::selection {
+            background-color: rgba(147, 51, 234, 0.3);
+          }
+          .mobile-highlight-mode *::selection {
+            background-color: rgba(147, 51, 234, 0.3);
+          }
+        }
+      `}</style>
     </div>
   );
 };
