@@ -359,45 +359,11 @@
 }
 
 /* ========================= */
-/* iOS SAFARI SPECIFIC FIXES */
+/* MOBILE SELECTION CONTAINMENT */
 /* ========================= */
 
-/* iOS: COMPLETELY disable native text selection */
-/* On iOS, we use long-press to select sentences instead of native selection */
-/* This prevents the native Copy/Look Up/Find Selection menu from ever appearing */
-@supports (-webkit-touch-callout: none) {
-  /* When highlight mode is active, disable ALL selection on iOS */
-  body.highlight-mode-active {
-    -webkit-touch-callout: none !important;
-    -webkit-user-select: none !important;
-    user-select: none !important;
-  }
-
-  body.highlight-mode-active * {
-    -webkit-touch-callout: none !important;
-  }
-
-  /* iOS highlight container - no selection at all */
-  .ios-highlight-container,
-  .ios-highlight-container *,
-  .ios-no-select,
-  .ios-no-select * {
-    -webkit-touch-callout: none !important;
-    -webkit-user-select: none !important;
-    user-select: none !important;
-    -webkit-tap-highlight-color: transparent !important;
-  }
-
-  /* No selection highlighting on iOS */
-  .ios-highlight-container::selection,
-  .ios-highlight-container *::selection,
-  .ios-no-select::selection,
-  .ios-no-select *::selection {
-    background-color: transparent !important;
-  }
-}
-
 /* Mobile: Prevent page-wide selection on touch devices */
+/* Allow native drag selection within the content area only */
 @media (pointer: coarse) and (max-width: 1023px) {
   body.highlight-mode-active {
     -webkit-user-select: none !important;
@@ -406,11 +372,16 @@
     touch-action: pan-y pinch-zoom;
   }
 
-  /* Android only: Allow selection in content area (iOS uses long-press) */
-  body.highlight-mode-active .mobile-highlight-mode:not(.ios-no-select) {
+  /* Allow selection in content area for both iOS and Android */
+  body.highlight-mode-active .mobile-highlight-mode {
     -webkit-user-select: text !important;
     user-select: text !important;
     contain: content;
     isolation: isolate;
+  }
+
+  body.highlight-mode-active .mobile-highlight-mode * {
+    -webkit-user-select: text !important;
+    user-select: text !important;
   }
 }
