@@ -21,6 +21,13 @@ const isMobileViewport = (): boolean => {
   return window.innerWidth < 640;
 };
 
+// Detect iOS (iPhone, iPad, iPod)
+const isIOS = (): boolean => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
 const HIGHLIGHT_COLORS = [
   { name: "Yellow", value: "#fef08a" },
   { name: "Green", value: "#bbf7d0" },
@@ -262,10 +269,18 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     prefixContext: string;
     suffixContext: string;
   } | null>(null);
+  const [isiOSDevice, setIsiOSDevice] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   const highlights = getHighlightsForPage(pageId);
   const appliedHighlightsRef = useRef<Set<string>>(new Set());
   const touchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Detect iOS and mobile on client side to avoid hydration mismatch
+  useEffect(() => {
+    setIsiOSDevice(isIOS());
+    setIsMobileDevice(isTouchDevice());
+  }, []);
 
   // Apply highlights to the DOM after render
   useEffect(() => {
@@ -476,11 +491,15 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const container = contentRef.current;
     if (!container) return;
 
+    // For iOS: we need to suppress the native callout menu aggressively
+    const isiOSDevice = isIOS();
+
     const handleContextMenu = (e: Event) => {
       // Prevent native context menu (Copy, Share, Select all, Web search) on mobile
       if (isMobileViewport()) {
         e.preventDefault();
         e.stopPropagation();
+        return false;
       }
     };
 
@@ -492,7 +511,25 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const target = e.target as Node;
       if (!container.contains(target)) {
         e.preventDefault();
-        return;
+        e.stopPropagation();
+        return false;
+      }
+    };
+
+    // For iOS: Intercept touch events to prevent native menu
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!isMobileViewport()) return;
+
+      // Clear any existing selection when starting a new touch
+      // This helps prevent the selection from extending outside
+      if (isiOSDevice) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          if (!container.contains(range.commonAncestorContainer)) {
+            selection.removeAllRanges();
+          }
+        }
       }
     };
 
@@ -505,13 +542,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       const range = selection.getRangeAt(0);
 
-      // If selection has extended outside our container, collapse it to stay within
+      // If selection has extended outside our container, clear it
       if (!container.contains(range.commonAncestorContainer)) {
-        // Find the last valid position within the container
-        const containerText = getTextContent(container);
-        if (containerText.length > 0) {
-          // Clear the selection that went outside
-          selection.removeAllRanges();
+        selection.removeAllRanges();
+        if (isiOSDevice) {
+          e.preventDefault();
         }
       }
     };
@@ -522,15 +557,32 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         const selection = window.getSelection();
         if (selection && selection.rangeCount > 0) {
           const range = selection.getRangeAt(0);
-          // If selection extends outside container, prevent default behavior
+          // If selection extends outside container, clear it
           if (!container.contains(range.commonAncestorContainer)) {
             e.preventDefault();
+            e.stopPropagation();
             selection.removeAllRanges();
             return;
           }
+
+          // On iOS, immediately process selection to show our UI before native menu
+          if (isiOSDevice) {
+            const text = selection.toString().trim();
+            if (text && text.length >= 2) {
+              // Process immediately on iOS to beat the native menu
+              if (!showColorPicker && !showMobileHighlightButton) {
+                processSelection();
+                // Clear native selection after processing on iOS
+                setTimeout(() => {
+                  window.getSelection()?.removeAllRanges();
+                }, 50);
+              }
+              return;
+            }
+          }
         }
 
-        // Short delay to allow selection to be finalized
+        // Short delay for non-iOS devices
         setTimeout(() => {
           const sel = window.getSelection();
           if (!sel || sel.rangeCount === 0) return;
@@ -548,20 +600,39 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           if (!showColorPicker && !showMobileHighlightButton) {
             processSelection();
           }
-        }, 100);
+        }, 50);
       }
     };
 
-    container.addEventListener('contextmenu', handleContextMenu);
-    container.addEventListener('touchend', handleTouchEnd);
-    container.addEventListener('touchmove', handleTouchMove, { passive: true });
-    document.addEventListener('selectstart', handleSelectStart);
+    // Prevent copy/paste menu on iOS
+    const handleCopy = (e: ClipboardEvent) => {
+      if (isiOSDevice && isMobileViewport() && (showMobileHighlightButton || showColorPicker)) {
+        e.preventDefault();
+      }
+    };
+
+    container.addEventListener('contextmenu', handleContextMenu, { capture: true });
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchend', handleTouchEnd, { capture: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('copy', handleCopy);
+    document.addEventListener('selectstart', handleSelectStart, { capture: true });
+
+    // For iOS: also listen on document level
+    if (isiOSDevice) {
+      document.addEventListener('contextmenu', handleContextMenu, { capture: true });
+    }
 
     return () => {
-      container.removeEventListener('contextmenu', handleContextMenu);
-      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('contextmenu', handleContextMenu, { capture: true });
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchend', handleTouchEnd, { capture: true });
       container.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('selectstart', handleSelectStart);
+      container.removeEventListener('copy', handleCopy);
+      document.removeEventListener('selectstart', handleSelectStart, { capture: true });
+      if (isiOSDevice) {
+        document.removeEventListener('contextmenu', handleContextMenu, { capture: true });
+      }
     };
   }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, processSelection]);
 
@@ -625,18 +696,24 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative ${className} ${highlightModeEnabled && isTouchDevice() ? "highlight-container-mobile" : ""}`}
+      className={`relative ${className} ${highlightModeEnabled && isMobileDevice ? "highlight-container-mobile" : ""} ${highlightModeEnabled && isiOSDevice ? "ios-highlight-container" : ""}`}
+      style={highlightModeEnabled && isMobileDevice ? {
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+      } as React.CSSProperties : undefined}
     >
       <div
         ref={contentRef}
         onMouseUp={handleMouseUp}
-        className={`highlightable-content ${showColorPicker ? "picker-active" : ""} ${highlightModeEnabled && isTouchDevice() ? "mobile-highlight-mode" : ""}`}
-        style={highlightModeEnabled && isTouchDevice() ? {
+        className={`highlightable-content ${showColorPicker ? "picker-active" : ""} ${highlightModeEnabled && isMobileDevice ? "mobile-highlight-mode" : ""}`}
+        style={highlightModeEnabled && isMobileDevice ? {
           WebkitTouchCallout: 'none',
           WebkitUserSelect: 'text',
           userSelect: 'text',
           touchAction: 'pan-y pinch-zoom',
           contain: 'content',
+          isolation: 'isolate',
         } as React.CSSProperties : undefined}
       >
         {children}
@@ -719,7 +796,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           .highlight-container-mobile {
             -webkit-user-select: none;
             user-select: none;
-            -webkit-touch-callout: none;
+            -webkit-touch-callout: none !important;
           }
 
           /* Allow selection only within the content area */
@@ -734,10 +811,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             isolation: isolate;
           }
 
-          /* Prevent selection on parent elements */
+          /* Prevent selection on child elements from bubbling */
           .mobile-highlight-mode * {
             -webkit-user-select: text;
             user-select: text;
+            -webkit-touch-callout: none !important;
           }
 
           .mobile-highlight-mode::selection {
@@ -748,11 +826,42 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           }
         }
 
+        /* iOS Safari specific - suppress native callout menu */
+        @supports (-webkit-touch-callout: none) {
+          .highlight-container-mobile,
+          .highlight-container-mobile * {
+            -webkit-touch-callout: none !important;
+          }
+
+          .mobile-highlight-mode {
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: text !important;
+          }
+
+          /* Disable iOS text selection magnifier behavior on non-content areas */
+          body.highlight-mode-active {
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+          }
+
+          body.highlight-mode-active .mobile-highlight-mode {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+          }
+
+          body.highlight-mode-active .mobile-highlight-mode * {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+          }
+        }
+
         /* Global fix to prevent parent elements from being selected on touch */
         @media (pointer: coarse) {
           body.highlight-mode-active {
-            -webkit-user-select: none;
-            user-select: none;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            -webkit-touch-callout: none !important;
           }
 
           body.highlight-mode-active .mobile-highlight-mode,
@@ -761,15 +870,27 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             user-select: text !important;
           }
 
-          /* Prevent sidebar, header, and other elements from being selected */
-          body.highlight-mode-active nav,
-          body.highlight-mode-active header,
-          body.highlight-mode-active aside,
-          body.highlight-mode-active button,
-          body.highlight-mode-active [class*="sidebar"],
-          body.highlight-mode-active [class*="Sidebar"] {
+          /* Prevent ALL other elements from being selected */
+          body.highlight-mode-active *:not(.mobile-highlight-mode):not(.mobile-highlight-mode *) {
             -webkit-user-select: none !important;
             user-select: none !important;
+            -webkit-touch-callout: none !important;
+          }
+
+          /* Explicitly allow selection in highlight content */
+          body.highlight-mode-active .mobile-highlight-mode,
+          body.highlight-mode-active .mobile-highlight-mode p,
+          body.highlight-mode-active .mobile-highlight-mode span,
+          body.highlight-mode-active .mobile-highlight-mode h1,
+          body.highlight-mode-active .mobile-highlight-mode h2,
+          body.highlight-mode-active .mobile-highlight-mode h3,
+          body.highlight-mode-active .mobile-highlight-mode h4,
+          body.highlight-mode-active .mobile-highlight-mode li,
+          body.highlight-mode-active .mobile-highlight-mode div,
+          body.highlight-mode-active .mobile-highlight-mode section,
+          body.highlight-mode-active .mobile-highlight-mode article {
+            -webkit-user-select: text !important;
+            user-select: text !important;
           }
         }
       `}</style>

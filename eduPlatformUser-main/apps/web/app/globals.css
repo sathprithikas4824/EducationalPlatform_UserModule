@@ -357,3 +357,56 @@
     background-color: rgba(167, 139, 250, 0.3);
   }
 }
+
+/* ========================= */
+/* iOS SAFARI SPECIFIC FIXES */
+/* ========================= */
+
+/* Prevent iOS Safari native callout menu on highlight mode */
+@supports (-webkit-touch-callout: none) {
+  /* When highlight mode is active, prevent selection outside content area */
+  body.highlight-mode-active {
+    -webkit-touch-callout: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
+
+  /* But allow selection within the highlightable content */
+  body.highlight-mode-active .mobile-highlight-mode {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    -webkit-touch-callout: none !important;
+  }
+
+  body.highlight-mode-active .mobile-highlight-mode * {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    -webkit-touch-callout: none !important;
+  }
+
+  /* iOS: Suppress native text selection popup (Copy, Look Up, etc.) */
+  .ios-highlight-container {
+    -webkit-touch-callout: none !important;
+  }
+
+  .ios-highlight-container * {
+    -webkit-touch-callout: none !important;
+  }
+}
+
+/* Mobile: Prevent page-wide selection on touch devices */
+@media (pointer: coarse) and (max-width: 1023px) {
+  body.highlight-mode-active {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  /* Ensure only the content area is selectable */
+  body.highlight-mode-active .mobile-highlight-mode {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    contain: content;
+    isolation: isolate;
+  }
+}

@@ -558,9 +558,60 @@ const Contents: React.FC = () => {
           .jakarta-font > div:first-child,
           .jakarta-font > div:nth-child(2),
           .jakarta-font > div:nth-child(3) button {
-            -webkit-user-select: none;
-            user-select: none;
-            -webkit-touch-callout: none;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            -webkit-touch-callout: none !important;
+          }
+        }
+
+        /* iOS Safari: Prevent entire page selection */
+        @supports (-webkit-touch-callout: none) {
+          @media (max-width: 1023px) {
+            /* Disable selection on all non-content areas */
+            .jakarta-font {
+              -webkit-user-select: none;
+              user-select: none;
+              -webkit-touch-callout: none;
+            }
+
+            /* Header area */
+            .jakarta-font > div:first-child {
+              -webkit-user-select: none !important;
+              user-select: none !important;
+              -webkit-touch-callout: none !important;
+            }
+
+            /* Hero section */
+            .jakarta-font > div:nth-child(2) {
+              -webkit-user-select: none !important;
+              user-select: none !important;
+              -webkit-touch-callout: none !important;
+            }
+
+            /* Mobile toggle button */
+            .jakarta-font > div:nth-child(3) {
+              -webkit-user-select: none !important;
+              user-select: none !important;
+              -webkit-touch-callout: none !important;
+            }
+
+            /* Sidebar */
+            .jakarta-font > div:nth-child(4) > div:first-child {
+              -webkit-user-select: none !important;
+              user-select: none !important;
+              -webkit-touch-callout: none !important;
+            }
+
+            /* Only allow selection in the main content area */
+            .jakarta-font .mobile-highlight-mode {
+              -webkit-user-select: text !important;
+              user-select: text !important;
+            }
+
+            .jakarta-font .mobile-highlight-mode * {
+              -webkit-user-select: text !important;
+              user-select: text !important;
+            }
           }
         }
       `}</style>
