@@ -379,6 +379,19 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     endOffset: number;
   } | null>(null);
   const [showIOSSelectionUI, setShowIOSSelectionUI] = useState(false);
+  // iOS: Store both word and sentence for user choice
+  const [iOSWordSelection, setIOSWordSelection] = useState<{
+    text: string;
+    startOffset: number;
+    endOffset: number;
+  } | null>(null);
+  const [iOSSentenceSelection, setIOSSentenceSelection] = useState<{
+    text: string;
+    startOffset: number;
+    endOffset: number;
+  } | null>(null);
+  // Show iOS selection options (word/sentence choice)
+  const [showIOSOptions, setShowIOSOptions] = useState(false);
 
   const highlights = getHighlightsForPage(pageId);
   const appliedHighlightsRef = useRef<Set<string>>(new Set());
@@ -550,7 +563,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     processSelection();
   }, [processSelection]);
 
-  // iOS: Long-press to select sentence (no native selection menu)
+  // iOS: Long-press to select word/sentence (no native selection menu)
   // This completely bypasses iOS native text selection
   const handleIOSLongPress = useCallback((x: number, y: number) => {
     const container = contentRef.current;
@@ -567,32 +580,55 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const fullText = getTextContent(container);
     const offsetInContainer = getTextOffset(container, textNodeInfo.node, textNodeInfo.offset);
 
-    // Get the sentence at this position
+    // Get both word and sentence at this position
+    const word = getWordAtPosition(fullText, offsetInContainer);
     const sentence = getSentenceAtPosition(fullText, offsetInContainer);
-    if (!sentence) return;
+
+    if (!word && !sentence) return;
+
+    // Store both options for user choice
+    if (word) {
+      setIOSWordSelection({
+        text: word.text,
+        startOffset: word.start,
+        endOffset: word.end,
+      });
+    }
+
+    if (sentence) {
+      setIOSSentenceSelection({
+        text: sentence.text,
+        startOffset: sentence.start,
+        endOffset: sentence.end,
+      });
+    }
+
+    // Default to word selection initially (more precise)
+    const selection = word || sentence;
+    if (!selection) return;
 
     // Get context for later matching
-    const prefixStart = Math.max(0, sentence.start - CONTEXT_LENGTH);
-    const suffixEnd = Math.min(fullText.length, sentence.end + CONTEXT_LENGTH);
-    const prefixContext = fullText.substring(prefixStart, sentence.start);
-    const suffixContext = fullText.substring(sentence.end, suffixEnd);
+    const prefixStart = Math.max(0, selection.start - CONTEXT_LENGTH);
+    const suffixEnd = Math.min(fullText.length, selection.end + CONTEXT_LENGTH);
+    const prefixContext = fullText.substring(prefixStart, selection.start);
+    const suffixContext = fullText.substring(selection.end, suffixEnd);
 
-    // Store the selection info
+    // Store the selection info (start with word)
     setIOSTapSelection({
-      text: sentence.text,
-      startOffset: sentence.start,
-      endOffset: sentence.end,
+      text: selection.text,
+      startOffset: selection.start,
+      endOffset: selection.end,
     });
 
-    setSelectedText(sentence.text);
+    setSelectedText(selection.text);
     setSelectionInfo({
-      startOffset: sentence.start,
-      endOffset: sentence.end,
+      startOffset: selection.start,
+      endOffset: selection.end,
       prefixContext,
       suffixContext,
     });
 
-    // Position the highlight button near the touch point
+    // Position the UI near the touch point
     const containerRect = containerRef.current?.getBoundingClientRect();
     if (!containerRect) return;
 
@@ -600,7 +636,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const relativeY = y - containerRect.top;
 
     // Keep button within bounds
-    const buttonWidth = 120;
+    const buttonWidth = 200; // Wider for options
     const minX = buttonWidth / 2 + 10;
     const maxX = containerRect.width - buttonWidth / 2 - 10;
     const xPos = Math.max(minX, Math.min(maxX, relativeX));
@@ -611,7 +647,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       showBelow: true, // Show below touch point on iOS
     });
 
-    setShowMobileHighlightButton(true);
+    // Show iOS options UI (word/sentence choice)
+    setShowIOSOptions(true);
+    setShowMobileHighlightButton(false);
     setShowIOSSelectionUI(true);
 
     // Haptic feedback if available
@@ -619,6 +657,56 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       navigator.vibrate(50);
     }
   }, [highlightModeEnabled, isLoggedIn]);
+
+  // iOS: Handle user selecting word option
+  const handleIOSSelectWord = useCallback(() => {
+    if (!iOSWordSelection) return;
+
+    const container = contentRef.current;
+    if (!container) return;
+
+    const fullText = getTextContent(container);
+    const prefixStart = Math.max(0, iOSWordSelection.startOffset - CONTEXT_LENGTH);
+    const suffixEnd = Math.min(fullText.length, iOSWordSelection.endOffset + CONTEXT_LENGTH);
+    const prefixContext = fullText.substring(prefixStart, iOSWordSelection.startOffset);
+    const suffixContext = fullText.substring(iOSWordSelection.endOffset, suffixEnd);
+
+    setSelectedText(iOSWordSelection.text);
+    setSelectionInfo({
+      startOffset: iOSWordSelection.startOffset,
+      endOffset: iOSWordSelection.endOffset,
+      prefixContext,
+      suffixContext,
+    });
+
+    setShowIOSOptions(false);
+    setShowColorPicker(true);
+  }, [iOSWordSelection]);
+
+  // iOS: Handle user selecting sentence option
+  const handleIOSSelectSentence = useCallback(() => {
+    if (!iOSSentenceSelection) return;
+
+    const container = contentRef.current;
+    if (!container) return;
+
+    const fullText = getTextContent(container);
+    const prefixStart = Math.max(0, iOSSentenceSelection.startOffset - CONTEXT_LENGTH);
+    const suffixEnd = Math.min(fullText.length, iOSSentenceSelection.endOffset + CONTEXT_LENGTH);
+    const prefixContext = fullText.substring(prefixStart, iOSSentenceSelection.startOffset);
+    const suffixContext = fullText.substring(iOSSentenceSelection.endOffset, suffixEnd);
+
+    setSelectedText(iOSSentenceSelection.text);
+    setSelectionInfo({
+      startOffset: iOSSentenceSelection.startOffset,
+      endOffset: iOSSentenceSelection.endOffset,
+      prefixContext,
+      suffixContext,
+    });
+
+    setShowIOSOptions(false);
+    setShowColorPicker(true);
+  }, [iOSSentenceSelection]);
 
   // Handle touch selection (mobile) using selectionchange event
   // On iOS: Use long-press instead to avoid native menu
@@ -736,7 +824,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
 
       // If UI is showing, ignore new touches (except on UI elements)
-      if (showColorPicker || showMobileHighlightButton) {
+      if (showColorPicker || showMobileHighlightButton || showIOSOptions) {
         return;
       }
 
@@ -832,7 +920,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         clearTimeout(longPressTimeoutRef.current);
       }
     };
-  }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, handleIOSLongPress]);
+  }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, showIOSOptions, handleIOSLongPress]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -890,7 +978,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     setShowColorPicker(false);
     setShowMobileHighlightButton(false);
     setShowIOSSelectionUI(false);
+    setShowIOSOptions(false);
     setIOSTapSelection(null);
+    setIOSWordSelection(null);
+    setIOSSentenceSelection(null);
     setSelectedText("");
     setSelectionInfo(null);
     window.getSelection()?.removeAllRanges();
@@ -951,6 +1042,65 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                 <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
               </svg>
               Highlight
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* iOS: Word/Sentence selection options - appears after long-press */}
+      {showIOSOptions && isLoggedIn && (iOSWordSelection || iOSSentenceSelection) && (
+        <>
+          <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
+          <div
+            className="absolute z-[100] bg-white rounded-2xl shadow-2xl border border-gray-200 p-3 animate-fadeIn"
+            style={{
+              left: pickerPosition.x,
+              top: pickerPosition.y + 10,
+              transform: "translateX(-50%)",
+              minWidth: "200px",
+              maxWidth: "90vw",
+            }}
+          >
+            <p className="text-xs text-gray-500 mb-2 text-center font-medium">
+              What to highlight?
+            </p>
+            <div className="flex flex-col gap-2">
+              {/* Word option */}
+              {iOSWordSelection && (
+                <button
+                  type="button"
+                  onClick={handleIOSSelectWord}
+                  className="flex flex-col items-start gap-1 px-3 py-2.5 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 rounded-xl transition-colors text-left w-full"
+                >
+                  <span className="text-xs font-semibold text-purple-600">Word</span>
+                  <span className="text-sm text-gray-800 line-clamp-1 break-all">
+                    &ldquo;{iOSWordSelection.text}&rdquo;
+                  </span>
+                </button>
+              )}
+              {/* Sentence option */}
+              {iOSSentenceSelection && (
+                <button
+                  type="button"
+                  onClick={handleIOSSelectSentence}
+                  className="flex flex-col items-start gap-1 px-3 py-2.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 rounded-xl transition-colors text-left w-full"
+                >
+                  <span className="text-xs font-semibold text-blue-600">Sentence</span>
+                  <span className="text-sm text-gray-800 line-clamp-2 break-words">
+                    &ldquo;{iOSSentenceSelection.text.length > 60
+                      ? iOSSentenceSelection.text.substring(0, 60) + "..."
+                      : iOSSentenceSelection.text}&rdquo;
+                  </span>
+                </button>
+              )}
+            </div>
+            {/* Cancel button */}
+            <button
+              type="button"
+              onClick={closeColorPicker}
+              className="mt-2 w-full py-2 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              Cancel
             </button>
           </div>
         </>
