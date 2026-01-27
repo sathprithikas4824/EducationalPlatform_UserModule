@@ -440,10 +440,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     processSelection();
   }, [processSelection]);
 
-  // Handle touch selection (mobile) using selectionchange event with debounce
-  // This allows users to extend their selection (select full sentences) before the highlight button appears
+  // Handle touch selection (mobile) using selectionchange event
+  // On iOS: process immediately and clear selection to prevent native menu
+  // On Android: allow time for selection adjustment
   useEffect(() => {
     if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
+
+    const isiOSDevice = isIOS();
 
     const handleSelectionChange = () => {
       // Don't process if color picker or highlight button is already shown
@@ -454,23 +457,64 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         clearTimeout(touchTimeoutRef.current);
       }
 
-      // Debounce - wait for selection to stabilize (user stopped extending)
-      // 800ms gives users enough time to adjust selection handles on mobile
-      touchTimeoutRef.current = setTimeout(() => {
-        const selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0) return;
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
 
-        const text = selection.toString().trim();
-        if (!text || text.length < 2) return;
+      const text = selection.toString().trim();
+      if (!text || text.length < 2) return;
 
-        const range = selection.getRangeAt(0);
-        const container = contentRef.current;
+      const range = selection.getRangeAt(0);
+      const container = contentRef.current;
 
-        // Only process if selection is within our container
-        if (!container || !container.contains(range.commonAncestorContainer)) return;
+      // Only process if selection is within our container
+      if (!container || !container.contains(range.commonAncestorContainer)) {
+        // Selection is outside container - clear it on iOS to prevent page selection
+        if (isiOSDevice) {
+          selection.removeAllRanges();
+        }
+        return;
+      }
 
-        processSelection();
-      }, 800);
+      if (isiOSDevice) {
+        // iOS: Process IMMEDIATELY to beat the native menu
+        // Use very short timeout just to let the selection finalize
+        touchTimeoutRef.current = setTimeout(() => {
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return;
+
+          const selText = sel.toString().trim();
+          if (!selText || selText.length < 2) return;
+
+          const selRange = sel.getRangeAt(0);
+          if (!container.contains(selRange.commonAncestorContainer)) {
+            sel.removeAllRanges();
+            return;
+          }
+
+          // Process the selection
+          processSelection();
+
+          // CRITICAL: Clear the native selection immediately after processing
+          // This prevents iOS from showing its native menu
+          setTimeout(() => {
+            window.getSelection()?.removeAllRanges();
+          }, 10);
+        }, 100); // Very short delay for iOS
+      } else {
+        // Android/Other: Allow more time for selection adjustment
+        touchTimeoutRef.current = setTimeout(() => {
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return;
+
+          const selText = sel.toString().trim();
+          if (!selText || selText.length < 2) return;
+
+          const selRange = sel.getRangeAt(0);
+          if (!container.contains(selRange.commonAncestorContainer)) return;
+
+          processSelection();
+        }, 600);
+      }
     };
 
     document.addEventListener('selectionchange', handleSelectionChange);
@@ -495,10 +539,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const isiOSDevice = isIOS();
 
     const handleContextMenu = (e: Event) => {
-      // Prevent native context menu (Copy, Share, Select all, Web search) on mobile
+      // ALWAYS prevent native context menu on mobile when highlight mode is on
       if (isMobileViewport()) {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         return false;
       }
     };
@@ -517,19 +562,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     // For iOS: Intercept touch events to prevent native menu
-    const handleTouchStart = (e: TouchEvent) => {
+    const handleTouchStart = () => {
       if (!isMobileViewport()) return;
 
-      // Clear any existing selection when starting a new touch
-      // This helps prevent the selection from extending outside
-      if (isiOSDevice) {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          if (!container.contains(range.commonAncestorContainer)) {
-            selection.removeAllRanges();
-          }
-        }
+      // On iOS, if we already have our UI showing, clear any new selection attempts
+      if (isiOSDevice && (showColorPicker || showMobileHighlightButton)) {
+        window.getSelection()?.removeAllRanges();
       }
     };
 
@@ -542,7 +580,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       const range = selection.getRangeAt(0);
 
-      // If selection has extended outside our container, clear it
+      // If selection has extended outside our container, clear it immediately
       if (!container.contains(range.commonAncestorContainer)) {
         selection.removeAllRanges();
         if (isiOSDevice) {
@@ -551,76 +589,71 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
     };
 
-    // Handle touchend to quickly show highlight button before native menu appears
+    // Handle touchend - on iOS we process in selectionchange, here we just prevent defaults
     const handleTouchEnd = (e: TouchEvent) => {
-      if (isMobileViewport()) {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          // If selection extends outside container, clear it
-          if (!container.contains(range.commonAncestorContainer)) {
-            e.preventDefault();
-            e.stopPropagation();
-            selection.removeAllRanges();
-            return;
-          }
+      if (!isMobileViewport()) return;
 
-          // On iOS, immediately process selection to show our UI before native menu
-          if (isiOSDevice) {
-            const text = selection.toString().trim();
-            if (text && text.length >= 2) {
-              // Process immediately on iOS to beat the native menu
-              if (!showColorPicker && !showMobileHighlightButton) {
-                processSelection();
-                // Clear native selection after processing on iOS
-                setTimeout(() => {
-                  window.getSelection()?.removeAllRanges();
-                }, 50);
-              }
-              return;
-            }
-          }
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+
+        // If selection extends outside container, clear it
+        if (!container.contains(range.commonAncestorContainer)) {
+          e.preventDefault();
+          e.stopPropagation();
+          selection.removeAllRanges();
+          return;
         }
+      }
+    };
 
-        // Short delay for non-iOS devices
+    // For iOS: Prevent the native action sheet by intercepting touch events globally
+    const handleGlobalTouchEnd = (e: TouchEvent) => {
+      if (!isiOSDevice || !isMobileViewport()) return;
+
+      // If our highlight UI is showing, prevent any default touch behavior
+      if (showMobileHighlightButton || showColorPicker) {
+        const target = e.target as HTMLElement;
+        // Don't prevent touches on our own UI elements
+        if (!target.closest('.highlight-container-mobile') &&
+            !target.closest('[class*="z-[100]"]')) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    // Listen for the native action sheet and try to prevent it
+    const handleTouchCancel = () => {
+      // Touch was cancelled (possibly by iOS showing menu) - reprocess if needed
+      if (isiOSDevice && !showColorPicker && !showMobileHighlightButton) {
         setTimeout(() => {
           const sel = window.getSelection();
-          if (!sel || sel.rangeCount === 0) return;
-
-          const text = sel.toString().trim();
-          if (!text || text.length < 2) return;
-
-          const range = sel.getRangeAt(0);
-          if (!container.contains(range.commonAncestorContainer)) {
-            sel.removeAllRanges();
-            return;
+          if (sel && sel.rangeCount > 0 && sel.toString().trim().length >= 2) {
+            const range = sel.getRangeAt(0);
+            if (container.contains(range.commonAncestorContainer)) {
+              processSelection();
+              // Clear immediately after processing
+              setTimeout(() => {
+                window.getSelection()?.removeAllRanges();
+              }, 0);
+            }
           }
-
-          // If we have a valid selection, process it immediately
-          if (!showColorPicker && !showMobileHighlightButton) {
-            processSelection();
-          }
-        }, 50);
+        }, 0);
       }
     };
 
-    // Prevent copy/paste menu on iOS
-    const handleCopy = (e: ClipboardEvent) => {
-      if (isiOSDevice && isMobileViewport() && (showMobileHighlightButton || showColorPicker)) {
-        e.preventDefault();
-      }
-    };
-
+    // Use capture phase to intercept events before they bubble
     container.addEventListener('contextmenu', handleContextMenu, { capture: true });
     container.addEventListener('touchstart', handleTouchStart, { passive: true });
     container.addEventListener('touchend', handleTouchEnd, { capture: true });
     container.addEventListener('touchmove', handleTouchMove, { passive: false });
-    container.addEventListener('copy', handleCopy);
+    container.addEventListener('touchcancel', handleTouchCancel);
     document.addEventListener('selectstart', handleSelectStart, { capture: true });
 
-    // For iOS: also listen on document level
+    // For iOS: also listen on document level to catch everything
     if (isiOSDevice) {
       document.addEventListener('contextmenu', handleContextMenu, { capture: true });
+      document.addEventListener('touchend', handleGlobalTouchEnd, { capture: true, passive: false });
     }
 
     return () => {
@@ -628,10 +661,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       container.removeEventListener('touchstart', handleTouchStart);
       container.removeEventListener('touchend', handleTouchEnd, { capture: true });
       container.removeEventListener('touchmove', handleTouchMove);
-      container.removeEventListener('copy', handleCopy);
+      container.removeEventListener('touchcancel', handleTouchCancel);
       document.removeEventListener('selectstart', handleSelectStart, { capture: true });
       if (isiOSDevice) {
         document.removeEventListener('contextmenu', handleContextMenu, { capture: true });
+        document.removeEventListener('touchend', handleGlobalTouchEnd, { capture: true });
       }
     };
   }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, processSelection]);
