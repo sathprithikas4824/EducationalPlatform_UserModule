@@ -552,6 +552,17 @@ const Contents: React.FC = () => {
           white-space: pre-wrap;
           word-break: break-word;
         }
+
+        /* Mobile: Prevent sidebar and header from being selected */
+        @media (max-width: 1023px) and (pointer: coarse) {
+          .jakarta-font > div:first-child,
+          .jakarta-font > div:nth-child(2),
+          .jakarta-font > div:nth-child(3) button {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+          }
+        }
       `}</style>
     </div>
   );
