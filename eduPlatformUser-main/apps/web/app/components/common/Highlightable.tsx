@@ -872,6 +872,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const container = contentRef.current;
     if (!container) return;
 
+    const isIOSBrowser = isIOS();
+
     // Prevent context menu (copy/paste/select all) on all mobile devices - VERY aggressive
     const handleContextMenu = (e: Event) => {
       e.preventDefault();
@@ -882,10 +884,19 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
     // Prevent copy/cut actions
     const handleCopy = (e: Event) => {
-      if (isMobileViewport()) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return false;
+    };
+
+    // iOS specific: Prevent native action menu by intercepting touch events
+    const handleTouchStartIOS = (e: TouchEvent) => {
+      if (!isIOSBrowser) return;
+      // Don't interfere with the touch, just ensure callout is suppressed
+      const target = e.target as HTMLElement;
+      if (target) {
+        target.style.webkitTouchCallout = 'none';
       }
     };
 
@@ -1057,10 +1068,78 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
   }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, processSelection, removeHighlight]);
 
-  // iOS-specific: Additional event suppression (but uses same selection as Android)
-  // This helps prevent native iOS context menu from appearing
+  // iOS-specific: Aggressively suppress native Copy/Lookup/Share menu
+  // Uses same selection approach as Android but with extra menu prevention
   useEffect(() => {
-    // Disabled - iOS now uses same approach as Android
+    if (!isIOSDevice || !highlightModeEnabled || !isLoggedIn) return;
+
+    const container = contentRef.current;
+    if (!container) return;
+
+    // Aggressively prevent iOS native action menu
+    const preventIOSMenu = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return false;
+    };
+
+    // Prevent selection menu from appearing by intercepting action events
+    const handleAction = (e: Event) => {
+      // Only prevent if there's a selection
+      const sel = window.getSelection();
+      if (sel && sel.toString().trim().length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
+      }
+    };
+
+    // Set touch-callout on all text elements dynamically
+    const setTouchCallout = () => {
+      const elements = container.querySelectorAll('*');
+      elements.forEach((el) => {
+        if (el instanceof HTMLElement) {
+          el.style.webkitTouchCallout = 'none';
+        }
+      });
+    };
+
+    // Initial setup
+    setTouchCallout();
+    container.style.webkitTouchCallout = 'none';
+
+    // Add iOS-specific listeners with capture to intercept early
+    container.addEventListener('contextmenu', preventIOSMenu, { capture: true });
+    container.addEventListener('copy', handleAction, { capture: true });
+    container.addEventListener('cut', handleAction, { capture: true });
+
+    // Document level prevention
+    document.addEventListener('contextmenu', preventIOSMenu, { capture: true });
+    document.addEventListener('copy', handleAction, { capture: true });
+    document.addEventListener('cut', handleAction, { capture: true });
+
+    // Re-apply touch-callout when content changes
+    const observer = new MutationObserver(() => {
+      setTouchCallout();
+    });
+    observer.observe(container, { childList: true, subtree: true });
+
+    return () => {
+      container.removeEventListener('contextmenu', preventIOSMenu, { capture: true });
+      container.removeEventListener('copy', handleAction, { capture: true });
+      container.removeEventListener('cut', handleAction, { capture: true });
+      document.removeEventListener('contextmenu', preventIOSMenu, { capture: true });
+      document.removeEventListener('copy', handleAction, { capture: true });
+      document.removeEventListener('cut', handleAction, { capture: true });
+      observer.disconnect();
+    };
+  }, [isIOSDevice, highlightModeEnabled, isLoggedIn]);
+
+  // Disabled legacy iOS custom selection (now using same approach as Android)
+  useEffect(() => {
+    // This is disabled - iOS now uses native selection with selectionchange event
     if (true) return;
     if (!isIOSDevice || !highlightModeEnabled || !isLoggedIn) return;
 
@@ -1535,6 +1614,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           }
 
           /* iOS specific styles - CRITICAL for Safari text selection */
+          /* IMPORTANT: Suppress native iOS menu (copy, lookup, share) */
           .ios-highlight-mode {
             -webkit-touch-callout: none !important;
             -webkit-user-select: text !important;
@@ -1544,7 +1624,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             -webkit-text-size-adjust: 100%;
             pointer-events: auto;
             cursor: text;
-            /* iOS Safari specific - ensure text is selectable */
+            /* iOS Safari specific - ensure text is selectable but no callout */
             -webkit-user-modify: read-only;
           }
 
@@ -1577,6 +1657,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           .ios-highlight-mode::-webkit-selection,
           .ios-highlight-mode *::-webkit-selection {
             background-color: rgba(147, 51, 234, 0.4) !important;
+          }
+
+          /* iOS: Force suppress native callout menu on ALL elements */
+          body.highlight-mode-active .ios-highlight-mode,
+          body.highlight-mode-active .ios-highlight-mode * {
+            -webkit-touch-callout: none !important;
           }
 
           /* Temp highlights */

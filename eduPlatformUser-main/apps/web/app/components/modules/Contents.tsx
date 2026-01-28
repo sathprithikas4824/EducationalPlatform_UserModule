@@ -578,9 +578,18 @@ const Contents: React.FC = () => {
             pointer-events: auto;
           }
 
-          /* iOS Safari specific - ensure text is selectable */
+          /* iOS Safari specific - ensure text is selectable but NO native menu */
           body.highlight-mode-active .ios-highlight-mode {
             -webkit-user-modify: read-only;
+            -webkit-touch-callout: none !important;
+          }
+
+          /* iOS: Force suppress native callout on all child elements */
+          body.highlight-mode-active .ios-highlight-mode *,
+          body.highlight-mode-active .ios-highlight-mode p,
+          body.highlight-mode-active .ios-highlight-mode span,
+          body.highlight-mode-active .ios-highlight-mode div {
+            -webkit-touch-callout: none !important;
           }
 
           /* Purple selection color - works with Android & iOS selection handles */
