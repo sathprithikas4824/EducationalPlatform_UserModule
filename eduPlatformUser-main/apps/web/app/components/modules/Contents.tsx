@@ -553,20 +553,20 @@ const Contents: React.FC = () => {
           word-break: break-word;
         }
 
-        /* Mobile: Prevent sidebar and header from being selected */
-        @media (max-width: 1023px) and (pointer: coarse) {
-          .jakarta-font > div:first-child,
-          .jakarta-font > div:nth-child(2),
-          .jakarta-font > div:nth-child(3) button {
+        /* Mobile only: Prevent sidebar and header from being selected */
+        @media (pointer: coarse) {
+          body.highlight-mode-active .jakarta-font > div:first-child,
+          body.highlight-mode-active .jakarta-font > div:nth-child(2),
+          body.highlight-mode-active .jakarta-font > div:nth-child(3) button {
             -webkit-user-select: none !important;
             user-select: none !important;
             -webkit-touch-callout: none !important;
           }
         }
 
-        /* iOS Safari: Only suppress OS options when highlight mode is active */
-        @supports (-webkit-touch-callout: none) {
-          @media (max-width: 1023px) {
+        /* Mobile only: iOS Safari - suppress OS options when highlight mode is active */
+        @media (pointer: coarse) {
+          @supports (-webkit-touch-callout: none) {
             /* Only disable selection on non-content areas when highlight mode is active */
             body.highlight-mode-active .jakarta-font > div:first-child,
             body.highlight-mode-active .jakarta-font > div:nth-child(2),
@@ -628,9 +628,9 @@ const Contents: React.FC = () => {
           }
         }
 
-        /* iOS Safari: Allow selection but suppress callout menu */
-        @supports (-webkit-touch-callout: none) {
-          @media (pointer: coarse) {
+        /* Mobile only: iOS Safari - suppress callout menu */
+        @media (pointer: coarse) {
+          @supports (-webkit-touch-callout: none) {
             /* Allow native selection on iOS (same as Android) */
             .ios-highlight-mode,
             .ios-highlight-mode * {
@@ -644,6 +644,29 @@ const Contents: React.FC = () => {
             .ios-highlight-mode *::selection {
               background-color: rgba(147, 51, 234, 0.3) !important;
             }
+          }
+        }
+
+        /* Desktop: Normal OS behavior ONLY when highlight mode is NOT active */
+        @media (pointer: fine), (hover: hover) {
+          /* When highlight mode is NOT active, allow normal OS behavior */
+          body:not(.highlight-mode-active) .highlightable-content,
+          body:not(.highlight-mode-active) .highlightable-content *,
+          body:not(.highlight-mode-active) .ai-content-wrapper,
+          body:not(.highlight-mode-active) .ai-content-wrapper * {
+            -webkit-touch-callout: auto !important;
+            -webkit-user-select: text !important;
+            user-select: text !important;
+          }
+
+          /* When highlight mode IS active on desktop, suppress OS options */
+          body.highlight-mode-active .highlightable-content,
+          body.highlight-mode-active .highlightable-content *,
+          body.highlight-mode-active .ai-content-wrapper,
+          body.highlight-mode-active .ai-content-wrapper * {
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: text !important;
+            user-select: text !important;
           }
         }
       `}</style>

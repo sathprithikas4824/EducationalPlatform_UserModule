@@ -600,12 +600,90 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     processSelection();
   }, [processSelection]);
 
+  // Prevent native context menu on desktop when highlight mode is enabled
+  useEffect(() => {
+    if (!highlightModeEnabled || !isLoggedIn) return;
+
+    const container = contentRef.current;
+    if (!container) return;
+
+    // Prevent right-click context menu
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+
+    // Prevent copy/cut keyboard shortcuts
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'x')) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    };
+
+    container.addEventListener('contextmenu', handleContextMenu);
+    container.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      container.removeEventListener('contextmenu', handleContextMenu);
+      container.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [highlightModeEnabled, isLoggedIn]);
+
   // Handle touch selection (mobile) using selectionchange event
   // Both iOS and Android: Allow native drag selection for multi-word/sentence selection
   useEffect(() => {
     if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
 
     const container = contentRef.current;
+
+    // Track if user is actively touching/dragging to extend selection
+    let isTouchActive = false;
+    let lastSelectionLength = 0;
+    let selectionGrowingTimer: NodeJS.Timeout | null = null;
+
+    // Track touch state for handle dragging detection
+    const handleTouchStartForSelection = () => {
+      isTouchActive = true;
+      // Clear any pending processing when user starts a new touch
+      if (selectionStableTimeoutRef.current) {
+        clearTimeout(selectionStableTimeoutRef.current);
+        selectionStableTimeoutRef.current = null;
+      }
+    };
+
+    const handleTouchEndForSelection = () => {
+      isTouchActive = false;
+      // When touch ends, start a longer timer to allow iOS selection handles to settle
+      // iOS needs more time after touch ends for handle adjustments
+      const sel = window.getSelection();
+      const selText = sel?.toString().trim() || "";
+
+      if (selText && selText.length >= 2 && !showColorPicker && !showMobileHighlightButton) {
+        // Clear any existing timer
+        if (selectionStableTimeoutRef.current) {
+          clearTimeout(selectionStableTimeoutRef.current);
+        }
+
+        // Use longer delay after touch ends on iOS to allow handle manipulation
+        const delay = isIOS() ? 800 : 500;
+        selectionStableTimeoutRef.current = setTimeout(() => {
+          const currentSel = window.getSelection();
+          if (!currentSel || currentSel.rangeCount === 0) return;
+
+          const currentText = currentSel.toString().trim();
+          if (!currentText || currentText.length < 2) return;
+
+          const currentRange = currentSel.getRangeAt(0);
+          if (!container || !container.contains(currentRange.commonAncestorContainer)) return;
+
+          isSelectingRef.current = false;
+          processSelection();
+        }, delay);
+      }
+    };
 
     // Track selection changes to detect when user finishes selecting
     // Use debounce: reset timer on each change to allow extending selection
@@ -616,6 +694,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) {
         lastSelectionTextRef.current = "";
+        lastSelectionLength = 0;
         isSelectingRef.current = false;
         return;
       }
@@ -632,15 +711,35 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       lastSelectionTextRef.current = selText;
       isSelectingRef.current = selText.length > 0;
 
+      // Track if selection is growing (user is dragging handles)
+      const isSelectionGrowing = selText.length > lastSelectionLength;
+      lastSelectionLength = selText.length;
+
       // Clear any pending stable timeout - this allows user to keep extending selection
       if (selectionStableTimeoutRef.current) {
         clearTimeout(selectionStableTimeoutRef.current);
         selectionStableTimeoutRef.current = null;
       }
 
+      // Clear selection growing timer
+      if (selectionGrowingTimer) {
+        clearTimeout(selectionGrowingTimer);
+        selectionGrowingTimer = null;
+      }
+
+      // Don't auto-process while touch is active (user is still dragging)
+      // Let the touchend handler process the selection instead
+      if (isTouchActive) {
+        return;
+      }
+
       // Only start the stable timer if we have a valid selection
-      // Use short delay to beat native OS menu but allow selection extension
+      // Use longer delay on iOS to allow time for dragging selection handles
       if (selText && selText.length >= 2) {
+        // iOS needs much longer delay because users drag handles to extend selection
+        // Android also benefits from longer delay for smoother handle dragging
+        const baseDelay = isIOS() ? 1000 : 600;
+
         selectionStableTimeoutRef.current = setTimeout(() => {
           // Double-check selection is still valid
           const currentSel = window.getSelection();
@@ -652,26 +751,37 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           const currentRange = currentSel.getRangeAt(0);
           if (!container || !container.contains(currentRange.commonAncestorContainer)) return;
 
-          // Selection is stable, process it immediately
+          // Selection is stable, process it
           // processSelection will apply temp highlight and clear native selection
           isSelectingRef.current = false;
           processSelection();
-        }, 300); // 300ms delay - allows extending selection but beats native menu
+        }, baseDelay);
       }
     };
+
+    // Add touch listeners to track active touch state
+    document.addEventListener('touchstart', handleTouchStartForSelection, { passive: true });
+    document.addEventListener('touchend', handleTouchEndForSelection, { passive: true });
+    document.addEventListener('touchcancel', handleTouchEndForSelection, { passive: true });
 
     document.addEventListener('selectionchange', handleSelectionChange);
 
     return () => {
       document.removeEventListener('selectionchange', handleSelectionChange);
+      document.removeEventListener('touchstart', handleTouchStartForSelection);
+      document.removeEventListener('touchend', handleTouchEndForSelection);
+      document.removeEventListener('touchcancel', handleTouchEndForSelection);
       if (touchTimeoutRef.current) {
         clearTimeout(touchTimeoutRef.current);
       }
       if (selectionStableTimeoutRef.current) {
         clearTimeout(selectionStableTimeoutRef.current);
       }
+      if (selectionGrowingTimer) {
+        clearTimeout(selectionGrowingTimer);
+      }
     };
-  }, [isLoggedIn, highlightModeEnabled, processSelection, showColorPicker, showMobileHighlightButton]);
+  }, [isLoggedIn, highlightModeEnabled, processSelection, showColorPicker, showMobileHighlightButton, isIOSDevice]);
 
   // Touch handling for both iOS and Android
   // Allows native drag selection for multi-word/sentence selection
@@ -1088,13 +1198,15 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
   }, []);
 
-  // Add body class for mobile highlight mode to prevent page-wide selection
+  // Add body class when highlight mode is active (both desktop and mobile)
+  // This helps CSS suppress OS options when highlight mode is ON
   useEffect(() => {
-    if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) {
+    if (!highlightModeEnabled || !isLoggedIn) {
       document.body.classList.remove('highlight-mode-active');
       return;
     }
 
+    // Add class on both desktop and mobile when highlight mode is enabled
     document.body.classList.add('highlight-mode-active');
     return () => {
       document.body.classList.remove('highlight-mode-active');
@@ -1151,25 +1263,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     <div
       ref={containerRef}
       className={`relative ${className} ${highlightModeEnabled && isMobileDevice ? "highlight-container-mobile" : ""}`}
-      style={highlightModeEnabled && isMobileDevice ? {
-        WebkitTouchCallout: 'none',
-        WebkitUserSelect: 'none',
-        userSelect: 'none',
-      } as React.CSSProperties : undefined}
     >
       <div
         ref={contentRef}
         onMouseUp={handleMouseUp}
         className={`highlightable-content ${showColorPicker ? "picker-active" : ""} ${highlightModeEnabled && isMobileDevice ? "mobile-highlight-mode" : ""} ${highlightModeEnabled && isIOSDevice ? "ios-highlight-mode" : ""}`}
-        style={highlightModeEnabled && isMobileDevice ? {
-          WebkitTouchCallout: 'none',
-          // Allow native text selection for drag-to-select on both iOS and Android
-          WebkitUserSelect: 'text',
-          userSelect: 'text',
-          touchAction: 'pan-y pinch-zoom',
-          contain: 'content',
-          isolation: 'isolate',
-        } as React.CSSProperties : undefined}
       >
         {children}
       </div>
@@ -1247,8 +1345,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       {/* Mobile styles to contain selection within content area and suppress native menus */}
       <style>{`
-        /* Aggressive suppression of native menus for all mobile devices */
-        @media (max-width: 639px), (pointer: coarse) {
+        /* Mobile only: Suppression of native menus (pointer: coarse = touch devices) */
+        @media (pointer: coarse) {
           /* Prevent selection from escaping the container */
           .highlight-container-mobile {
             -webkit-user-select: none;
@@ -1321,62 +1419,94 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           }
         }
 
-        /* iOS Safari specific: ONLY suppress callout when highlight mode classes are present */
-        @supports (-webkit-touch-callout: none) {
-          /* These classes are only added when highlight mode is enabled */
-          .highlight-container-mobile,
-          .highlight-container-mobile *,
+        /* Mobile only: Suppress OS callout menu but ALLOW drag selection */
+        @media (pointer: coarse) {
+          /* iOS Safari specific - MUST allow user-select for drag selection */
+          @supports (-webkit-touch-callout: none) {
+            .highlight-container-mobile {
+              -webkit-touch-callout: none !important;
+            }
+
+            /* Critical: Allow text selection for drag-to-select on iOS */
+            .mobile-highlight-mode,
+            .mobile-highlight-mode * {
+              -webkit-touch-callout: none !important;
+              -webkit-user-select: text !important;
+              user-select: text !important;
+              -webkit-user-drag: none !important;
+            }
+
+            /* iOS specific: Enable drag selection with handles */
+            .ios-highlight-mode {
+              -webkit-touch-callout: none !important;
+              -webkit-user-select: text !important;
+              user-select: text !important;
+              -webkit-tap-highlight-color: transparent !important;
+              touch-action: pan-y pinch-zoom !important;
+              /* Allow selection handles to work properly */
+              -webkit-text-size-adjust: 100%;
+            }
+
+            /* iOS: All text elements must allow selection */
+            .ios-highlight-mode *,
+            .ios-highlight-mode p,
+            .ios-highlight-mode span,
+            .ios-highlight-mode div,
+            .ios-highlight-mode h1,
+            .ios-highlight-mode h2,
+            .ios-highlight-mode h3,
+            .ios-highlight-mode h4,
+            .ios-highlight-mode h5,
+            .ios-highlight-mode h6,
+            .ios-highlight-mode li,
+            .ios-highlight-mode td,
+            .ios-highlight-mode th,
+            .ios-highlight-mode article,
+            .ios-highlight-mode section {
+              -webkit-touch-callout: none !important;
+              -webkit-user-select: text !important;
+              user-select: text !important;
+              -webkit-user-drag: none !important;
+            }
+          }
+
+          /* Custom purple selection color on mobile */
+          .mobile-highlight-mode::selection,
+          .mobile-highlight-mode *::selection,
+          .ios-highlight-mode::selection,
+          .ios-highlight-mode *::selection {
+            background-color: rgba(147, 51, 234, 0.3) !important;
+          }
+
+          /* Disable tap highlight on mobile */
           .mobile-highlight-mode,
-          .mobile-highlight-mode * {
-            -webkit-touch-callout: none !important;
-            /* Allow native selection for drag-to-select on iOS (same as Android) */
+          .ios-highlight-mode {
+            -webkit-tap-highlight-color: transparent !important;
+          }
+
+          /* Ensure temp highlights are visible */
+          .ios-highlight-mode [data-temp-highlight="true"] {
+            background-color: rgba(147, 51, 234, 0.3) !important;
+          }
+        }
+
+        /* Desktop: Normal OS behavior ONLY when highlight mode is NOT active */
+        @media (pointer: fine), (hover: hover) {
+          /* When highlight mode is NOT active, allow normal OS behavior */
+          body:not(.highlight-mode-active) .highlightable-content,
+          body:not(.highlight-mode-active) .highlightable-content * {
+            -webkit-touch-callout: auto !important;
             -webkit-user-select: text !important;
             user-select: text !important;
           }
 
-          /* Custom purple selection color */
-          .mobile-highlight-mode::selection,
-          .mobile-highlight-mode *::selection {
-            background-color: rgba(147, 51, 234, 0.3) !important;
+          /* When highlight mode IS active on desktop, suppress OS options */
+          body.highlight-mode-active .highlightable-content,
+          body.highlight-mode-active .highlightable-content * {
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: text !important;
+            user-select: text !important;
           }
-
-          /* Disable tap highlight */
-          .mobile-highlight-mode {
-            -webkit-tap-highlight-color: transparent !important;
-          }
-        }
-
-        /* Android Chrome: Disable text selection menu actions */
-        .mobile-highlight-mode {
-          -webkit-tap-highlight-color: transparent !important;
-        }
-
-        /* Additional Android fixes */
-        @media (pointer: coarse) {
-          .mobile-highlight-mode {
-            /* Prevent Android action mode/menu */
-            -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
-          }
-        }
-
-        /* iOS-specific: Allow selection but suppress callout */
-        .ios-highlight-mode,
-        .ios-highlight-mode * {
-          -webkit-touch-callout: none !important;
-          -webkit-user-select: text !important;
-          user-select: text !important;
-          -webkit-tap-highlight-color: transparent !important;
-        }
-
-        /* Custom purple selection color on iOS */
-        .ios-highlight-mode::selection,
-        .ios-highlight-mode *::selection {
-          background-color: rgba(147, 51, 234, 0.3) !important;
-        }
-
-        /* Ensure temp highlights are visible on iOS */
-        .ios-highlight-mode [data-temp-highlight="true"] {
-          background-color: rgba(147, 51, 234, 0.3) !important;
         }
       `}</style>
     </div>
