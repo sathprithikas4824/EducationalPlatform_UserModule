@@ -75,6 +75,118 @@ const createMarkElement = (highlightId: string, color: string): HTMLElement => {
   return mark;
 };
 
+// Create a temporary highlight mark (used to show selection before user picks color)
+const createTempMarkElement = (): HTMLElement => {
+  const mark = document.createElement("mark");
+  mark.setAttribute("data-temp-highlight", "true");
+  mark.style.backgroundColor = "rgba(147, 51, 234, 0.3)"; // Purple selection color
+  mark.style.borderRadius = "2px";
+  mark.style.padding = "0";
+  mark.style.margin = "0";
+  mark.style.display = "inline";
+  mark.style.boxDecorationBreak = "clone";
+  (mark.style as CSSStyleDeclaration & { webkitBoxDecorationBreak: string }).webkitBoxDecorationBreak = "clone";
+  return mark;
+};
+
+// Apply temporary highlight to show what user selected (before they pick a color)
+const applyTempHighlight = (container: HTMLElement, startOffset: number, endOffset: number): void => {
+  const fullText = getTextContent(container);
+
+  // Collect all text nodes that need to be highlighted
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  let currentOffset = 0;
+
+  interface TextNodeInfo {
+    node: Text;
+    startOffset: number;
+    endOffset: number;
+  }
+  const nodesToHighlight: TextNodeInfo[] = [];
+
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    const nodeLength = node.textContent?.length || 0;
+    const nodeEnd = currentOffset + nodeLength;
+
+    // Check if this node overlaps with our target range
+    if (nodeEnd > startOffset && currentOffset < endOffset) {
+      const startInNode = Math.max(0, startOffset - currentOffset);
+      const endInNode = Math.min(nodeLength, endOffset - currentOffset);
+
+      nodesToHighlight.push({
+        node,
+        startOffset: startInNode,
+        endOffset: endInNode,
+      });
+    }
+
+    // Stop if we've passed the target end
+    if (currentOffset >= endOffset) break;
+
+    currentOffset = nodeEnd;
+    node = walker.nextNode() as Text | null;
+  }
+
+  if (nodesToHighlight.length === 0) return;
+
+  // Apply highlights to each text node (process in reverse to avoid offset issues)
+  for (let i = nodesToHighlight.length - 1; i >= 0; i--) {
+    const info = nodesToHighlight[i];
+    const textNode = info.node;
+    const text = textNode.textContent || "";
+
+    try {
+      const before = text.substring(0, info.startOffset);
+      const highlighted = text.substring(info.startOffset, info.endOffset);
+      const after = text.substring(info.endOffset);
+
+      const mark = createTempMarkElement();
+      mark.textContent = highlighted;
+
+      const parent = textNode.parentNode;
+      if (!parent) continue;
+
+      if (after) {
+        const afterNode = document.createTextNode(after);
+        parent.insertBefore(afterNode, textNode.nextSibling);
+      }
+
+      parent.insertBefore(mark, textNode.nextSibling);
+
+      if (before) {
+        textNode.textContent = before;
+      } else {
+        parent.removeChild(textNode);
+      }
+    } catch (e) {
+      console.warn("Could not apply temp highlight to node:", e);
+    }
+  }
+};
+
+// Remove all temporary highlights
+const removeTempHighlights = (container: HTMLElement): void => {
+  const marks = container.querySelectorAll('[data-temp-highlight="true"]');
+  const parentsToNormalize = new Set<Node>();
+
+  marks.forEach(mark => {
+    const parent = mark.parentNode;
+    if (parent) {
+      parentsToNormalize.add(parent);
+      while (mark.firstChild) {
+        parent.insertBefore(mark.firstChild, mark);
+      }
+      mark.remove();
+    }
+  });
+
+  // Normalize all affected parents to merge adjacent text nodes
+  parentsToNormalize.forEach(parent => {
+    parent.normalize();
+  });
+};
+
 // Find and wrap text with highlight mark - handles cross-element selections
 const applyHighlightToDOM = (
   container: HTMLElement,
@@ -418,9 +530,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       showBelow,
     });
 
-    // On mobile: show highlight button first (user can still adjust selection)
+    // On mobile: show highlight button first
+    // Clear native selection immediately and show temp highlight to prevent OS menu
     // On desktop: show color picker directly
     if (isTouchDevice()) {
+      // Apply temporary visual highlight to show what user selected
+      applyTempHighlight(container, startOffset, endOffset);
+
+      // Clear native selection immediately to prevent iOS/Android native menu
+      window.getSelection()?.removeAllRanges();
+
       setShowMobileHighlightButton(true);
       setShowColorPicker(false);
     } else {
@@ -488,11 +607,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             if (!container.contains(currentRange.commonAncestorContainer)) return;
 
             // Selection is stable, process it
+            // processSelection will apply temp highlight and clear native selection
             isSelectingRef.current = false;
             processSelection();
-
-            // Keep selection visible - don't clear it here
-            // Selection will be cleared when user taps highlight button or dismisses
           }, 400); // 400ms stability check - allows time for multi-word selection
         }
       }
@@ -591,10 +708,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         if (!container.contains(selRange.commonAncestorContainer)) return;
 
         // Process the selection
+        // processSelection will apply temp highlight and clear native selection
         processSelection();
-
-        // Keep selection visible - don't clear it here
-        // Selection will be cleared when user taps highlight button or dismisses
 
         isSelectingRef.current = false;
       }, 100);
@@ -661,6 +776,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   const saveHighlight = useCallback((color: string) => {
     if (!selectedText || !user || !selectionInfo) return;
 
+    // Remove temporary highlight before applying real one
+    if (contentRef.current) {
+      removeTempHighlights(contentRef.current);
+    }
+
     addHighlight({
       text: selectedText,
       startOffset: selectionInfo.startOffset,
@@ -673,6 +793,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
     window.getSelection()?.removeAllRanges();
     setShowColorPicker(false);
+    setShowMobileHighlightButton(false);
     setSelectedText("");
     setSelectionInfo(null);
   }, [selectedText, user, selectionInfo, addHighlight, pageId]);
@@ -681,11 +802,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   const handleMobileHighlightTap = useCallback(() => {
     setShowMobileHighlightButton(false);
     setShowColorPicker(true);
-    // Clear native selection now that we're showing the picker
+    // Keep temp highlight visible while color picker is shown
     window.getSelection()?.removeAllRanges();
   }, []);
 
   const closeColorPicker = useCallback(() => {
+    // Remove temporary highlight when dismissing
+    if (contentRef.current) {
+      removeTempHighlights(contentRef.current);
+    }
+
     setShowColorPicker(false);
     setShowMobileHighlightButton(false);
     setSelectedText("");
