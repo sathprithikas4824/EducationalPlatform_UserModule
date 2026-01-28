@@ -684,9 +684,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     let lastProcessedSelection = "";
 
     // Track touch state for handle dragging detection
-    const handleTouchStartForSelection = (e: TouchEvent) => {
+    const handleTouchStartForSelection = () => {
       isTouchActive = true;
-      isHandleDraggingRef.current = false;
       selectionStableCountRef.current = 0;
 
       // Clear any pending processing when user starts a new touch
@@ -695,10 +694,15 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         selectionStableTimeoutRef.current = null;
       }
 
-      // Check if there's already a selection - if so, user might be dragging handles
+      // Check if there's already a selection - if so, user is likely dragging handles
+      // DON'T reset isHandleDraggingRef if there's an active selection!
       const sel = window.getSelection();
       if (sel && sel.toString().trim().length > 0) {
+        // User has selection and is touching again - they're likely adjusting handles
         isHandleDraggingRef.current = true;
+      } else {
+        // No selection yet, reset the flag
+        isHandleDraggingRef.current = false;
       }
     };
 
@@ -884,15 +888,15 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
     };
 
-    // Allow selection only within container
+    // Track when selection starts - DO NOT prevent native selection!
+    // Native selection must work for drag-to-select functionality
     const handleSelectStart = (e: Event) => {
       const target = e.target as Node;
-      if (!container.contains(target)) {
-        e.preventDefault();
-        return false;
+      // Just track selection state, don't prevent the event
+      if (container.contains(target)) {
+        isSelectingRef.current = true;
+        isHandleDraggingRef.current = true;
       }
-      // Mark that user started selecting
-      isSelectingRef.current = true;
     };
 
     // Touch start - track position and mark selection start
@@ -1050,8 +1054,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     container.addEventListener('copy', handleCopy, { capture: true });
     container.addEventListener('cut', handleCopy, { capture: true });
 
-    // Prevent selection outside container
-    document.addEventListener('selectstart', handleSelectStart, { capture: true });
+    // Track selection start on container only (don't prevent it!)
+    container.addEventListener('selectstart', handleSelectStart, { passive: true });
 
     // Prevent context menu at document level for all mobile devices (iOS and Android)
     document.addEventListener('contextmenu', handleContextMenu, { capture: true });
@@ -1066,7 +1070,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       container.removeEventListener('touchcancel', handleTouchCancel);
       container.removeEventListener('copy', handleCopy, { capture: true });
       container.removeEventListener('cut', handleCopy, { capture: true });
-      document.removeEventListener('selectstart', handleSelectStart, { capture: true });
+      container.removeEventListener('selectstart', handleSelectStart);
       document.removeEventListener('contextmenu', handleContextMenu, { capture: true });
       document.removeEventListener('copy', handleCopy, { capture: true });
       document.removeEventListener('cut', handleCopy, { capture: true });
@@ -1479,12 +1483,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       <style>{`
         /* Mobile only: Suppression of native menus (pointer: coarse = touch devices) */
         @media (pointer: coarse) {
-          /* Prevent selection from escaping the container */
+          /* Container styles - allow selection to work inside */
           .highlight-container-mobile {
-            -webkit-user-select: none;
-            user-select: none;
             -webkit-touch-callout: none !important;
-            -webkit-text-size-adjust: none;
+            -webkit-text-size-adjust: 100%;
+            /* Allow touch interactions */
+            touch-action: auto;
           }
 
           /* Allow selection only within the content area */
@@ -1493,19 +1497,19 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             user-select: text !important;
             -webkit-touch-callout: none !important;
             -webkit-tap-highlight-color: transparent;
-            /* Allow manipulation for selection handles to work */
-            touch-action: pan-y pinch-zoom manipulation;
-            contain: content;
+            /* CRITICAL: Use auto to allow ALL native touch interactions including selection handles */
+            touch-action: auto !important;
             position: relative;
-            isolation: isolate;
           }
 
-          /* Allow selection on child elements but PREVENT callout completely */
+          /* Allow selection on child elements - selection handles need pointer-events */
           .mobile-highlight-mode,
           .mobile-highlight-mode * {
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-touch-callout: none !important;
+            /* Allow touch interactions on all elements for handle dragging */
+            touch-action: auto !important;
           }
 
           .mobile-highlight-mode::selection,
@@ -1575,8 +1579,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
               -webkit-user-select: text !important;
               user-select: text !important;
               -webkit-tap-highlight-color: transparent !important;
-              /* Allow manipulation for selection handles to work on iOS */
-              touch-action: pan-y pinch-zoom manipulation !important;
+              /* CRITICAL: Use auto to allow ALL native touch interactions including selection handles */
+              touch-action: auto !important;
               /* Allow selection handles to work properly */
               -webkit-text-size-adjust: 100%;
               /* Ensure selection handles are interactive */
