@@ -555,16 +555,20 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   }, [processSelection]);
 
   // Handle touch selection (mobile) using selectionchange event
-  // Both iOS and Android: Allow native drag selection for multi-word/sentence selection
+  // Process immediately to prevent iOS native menu from appearing
   useEffect(() => {
     if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
 
     const container = contentRef.current;
+    let processingSelection = false;
 
-    // Track selection changes to detect when user finishes selecting
+    // Track selection changes and process IMMEDIATELY to beat iOS menu
     const handleSelectionChange = () => {
       // Don't process if color picker or highlight button is already shown
       if (showColorPicker || showMobileHighlightButton) return;
+
+      // Prevent re-entry
+      if (processingSelection) return;
 
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) {
@@ -581,36 +585,21 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         return;
       }
 
-      // If selection text changed, user is still selecting
-      if (selText !== lastSelectionTextRef.current) {
+      // Track that we have a selection
+      isSelectingRef.current = selText.length > 0;
+
+      // If selection is valid and changed, process it IMMEDIATELY
+      // This prevents iOS from showing its native menu
+      if (selText && selText.length >= 2 && selText !== lastSelectionTextRef.current) {
         lastSelectionTextRef.current = selText;
-        isSelectingRef.current = selText.length > 0;
 
-        // Clear any pending stable timeout
-        if (selectionStableTimeoutRef.current) {
-          clearTimeout(selectionStableTimeoutRef.current);
-        }
-
-        // Only start the stable timer if we have a valid selection
-        if (selText && selText.length >= 2) {
-          // Wait for selection to stabilize (user stopped dragging)
-          // Longer delay to allow sentence/multi-word selection
-          selectionStableTimeoutRef.current = setTimeout(() => {
-            // Double-check selection is still valid
-            const currentSel = window.getSelection();
-            if (!currentSel || currentSel.rangeCount === 0) return;
-
-            const currentText = currentSel.toString().trim();
-            if (!currentText || currentText.length < 2) return;
-
-            const currentRange = currentSel.getRangeAt(0);
-            if (!container.contains(currentRange.commonAncestorContainer)) return;
-
-            // Selection is stable, process it
-            // processSelection will apply temp highlight and clear native selection
-            isSelectingRef.current = false;
-            processSelection();
-          }, 400); // 400ms stability check - allows time for multi-word selection
+        // Process synchronously - no delay
+        processingSelection = true;
+        try {
+          processSelection();
+        } finally {
+          processingSelection = false;
+          isSelectingRef.current = false;
         }
       }
     };
@@ -674,6 +663,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       // Reset selection tracking
       lastSelectionTextRef.current = "";
+
+      // Clear any existing selection to prevent iOS menu from previous selection
+      window.getSelection()?.removeAllRanges();
     };
 
     // Touch move - user is dragging to select more text
@@ -684,19 +676,17 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
     };
 
-    // Touch end - process selection after user finishes dragging
+    // Touch end - process selection immediately to beat iOS menu
     const handleTouchEnd = () => {
       touchStartPosRef.current = null;
 
       if (!isMobileViewport()) return;
       if (showColorPicker || showMobileHighlightButton) return;
 
-      // Give a moment for the selection to finalize after touch ends
-      // Then the selectionchange handler will pick it up
-      // But also handle the case where selection doesn't change after touchend
-      setTimeout(() => {
+      // Process immediately on touch end to beat iOS native menu
+      // Use requestAnimationFrame for fastest possible execution
+      requestAnimationFrame(() => {
         if (showColorPicker || showMobileHighlightButton) return;
-        if (!isSelectingRef.current) return;
 
         const sel = window.getSelection();
         if (!sel || sel.rangeCount === 0) return;
@@ -707,12 +697,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         const selRange = sel.getRangeAt(0);
         if (!container.contains(selRange.commonAncestorContainer)) return;
 
-        // Process the selection
+        // Process the selection immediately
         // processSelection will apply temp highlight and clear native selection
         processSelection();
 
         isSelectingRef.current = false;
-      }, 100);
+      });
     };
 
     // Touch cancel
