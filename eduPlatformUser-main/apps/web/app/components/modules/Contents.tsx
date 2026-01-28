@@ -578,13 +578,24 @@ const Contents: React.FC = () => {
             pointer-events: auto;
           }
 
-          /* Purple selection color - works with Android selection handles */
+          /* iOS Safari specific - ensure text is selectable */
+          body.highlight-mode-active .ios-highlight-mode {
+            -webkit-user-modify: read-only;
+          }
+
+          /* Purple selection color - works with Android & iOS selection handles */
           body.highlight-mode-active .mobile-highlight-mode::selection,
           body.highlight-mode-active .mobile-highlight-mode *::selection,
           body.highlight-mode-active .ios-highlight-mode::selection,
           body.highlight-mode-active .ios-highlight-mode *::selection {
             background-color: rgba(147, 51, 234, 0.4) !important;
             color: inherit !important;
+          }
+
+          /* iOS Safari webkit selection */
+          body.highlight-mode-active .ios-highlight-mode::-webkit-selection,
+          body.highlight-mode-active .ios-highlight-mode *::-webkit-selection {
+            background-color: rgba(147, 51, 234, 0.4) !important;
           }
 
           /* When highlight mode is NOT active, allow normal OS behavior */

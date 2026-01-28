@@ -1534,7 +1534,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             background-color: rgba(147, 51, 234, 0.4) !important;
           }
 
-          /* iOS specific styles */
+          /* iOS specific styles - CRITICAL for Safari text selection */
           .ios-highlight-mode {
             -webkit-touch-callout: none !important;
             -webkit-user-select: text !important;
@@ -1544,18 +1544,38 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             -webkit-text-size-adjust: 100%;
             pointer-events: auto;
             cursor: text;
+            /* iOS Safari specific - ensure text is selectable */
+            -webkit-user-modify: read-only;
           }
 
-          .ios-highlight-mode * {
+          .ios-highlight-mode *,
+          .ios-highlight-mode p,
+          .ios-highlight-mode span,
+          .ios-highlight-mode div,
+          .ios-highlight-mode h1,
+          .ios-highlight-mode h2,
+          .ios-highlight-mode h3,
+          .ios-highlight-mode li,
+          .ios-highlight-mode a,
+          .ios-highlight-mode mark {
             -webkit-touch-callout: none !important;
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-user-drag: none !important;
+            touch-action: manipulation !important;
+            pointer-events: auto;
             cursor: text;
           }
 
           .ios-highlight-mode::selection,
           .ios-highlight-mode *::selection {
+            background-color: rgba(147, 51, 234, 0.4) !important;
+            color: inherit !important;
+          }
+
+          /* iOS Safari specific selection */
+          .ios-highlight-mode::-webkit-selection,
+          .ios-highlight-mode *::-webkit-selection {
             background-color: rgba(147, 51, 234, 0.4) !important;
           }
 
