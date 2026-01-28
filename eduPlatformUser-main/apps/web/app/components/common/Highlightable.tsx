@@ -589,11 +589,18 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         return;
       }
 
-      // If selection text changed, user is still selecting
-      if (selText !== lastSelectionTextRef.current) {
-        lastSelectionTextRef.current = selText;
-        isSelectingRef.current = selText.length > 0;
+      // Track selection text
+      lastSelectionTextRef.current = selText;
+      isSelectingRef.current = selText.length > 0;
 
+      // iOS: Don't process on selectionchange - only on touchend
+      // This allows dragging to select more text
+      if (isiOSDevice) {
+        return;
+      }
+
+      // Android: Use selectionchange with delay for stability
+      if (selText !== lastSelectionTextRef.current) {
         // Clear any pending stable timeout
         if (selectionStableTimeoutRef.current) {
           clearTimeout(selectionStableTimeoutRef.current);
@@ -601,10 +608,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
         // Only start the stable timer if we have a valid selection
         if (selText && selText.length >= 2) {
-          // iOS: Process immediately to prevent native menu from appearing
-          // Android: Use longer delay to allow sentence/multi-word selection
-          const delay = isiOSDevice ? 10 : 400;
-
           selectionStableTimeoutRef.current = setTimeout(() => {
             // Double-check selection is still valid
             const currentSel = window.getSelection();
@@ -620,7 +623,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             // processSelection will apply temp highlight and clear native selection
             isSelectingRef.current = false;
             processSelection();
-          }, delay);
+          }, 400);
         }
       }
     };
@@ -689,14 +692,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     // Touch move - user is dragging to select more text
-    // On iOS: don't clear timeout - let selection process quickly
-    // On Android: clear timeout to allow more dragging time
+    // Clear any pending timeout to allow more selection time
     const handleTouchMove = () => {
-      if (!isiOSDevice) {
-        // Only clear pending timeout on Android to allow more selection time
-        if (selectionStableTimeoutRef.current) {
-          clearTimeout(selectionStableTimeoutRef.current);
-        }
+      if (selectionStableTimeoutRef.current) {
+        clearTimeout(selectionStableTimeoutRef.current);
       }
     };
 
@@ -707,13 +706,28 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       if (!isMobileViewport()) return;
       if (showColorPicker || showMobileHighlightButton) return;
 
-      // iOS: Process immediately to beat native menu
-      // Android: Give a moment for selection to finalize
-      const delay = isiOSDevice ? 0 : 100;
+      // iOS: Process immediately on touchend to beat native menu
+      // User has finished dragging, so process right away
+      if (isiOSDevice) {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
 
+        const selText = sel.toString().trim();
+        if (!selText || selText.length < 2) return;
+
+        const selRange = sel.getRangeAt(0);
+        if (!container.contains(selRange.commonAncestorContainer)) return;
+
+        // Process immediately - no delay
+        processSelection();
+        isSelectingRef.current = false;
+        return;
+      }
+
+      // Android: Give a moment for selection to finalize
       setTimeout(() => {
         if (showColorPicker || showMobileHighlightButton) return;
-        if (!isiOSDevice && !isSelectingRef.current) return;
+        if (!isSelectingRef.current) return;
 
         const sel = window.getSelection();
         if (!sel || sel.rangeCount === 0) return;
@@ -729,7 +743,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         processSelection();
 
         isSelectingRef.current = false;
-      }, delay);
+      }, 100);
     };
 
     // Touch cancel
