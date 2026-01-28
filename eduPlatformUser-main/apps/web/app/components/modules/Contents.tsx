@@ -564,7 +564,7 @@ const Contents: React.FC = () => {
             -webkit-touch-callout: none !important;
           }
 
-          /* CRITICAL: Allow text selection with drag handles in content area */
+          /* CRITICAL: Allow text selection with drag handles in content area (Android & iOS) */
           body.highlight-mode-active .mobile-highlight-mode,
           body.highlight-mode-active .mobile-highlight-mode *,
           body.highlight-mode-active .ios-highlight-mode,
@@ -572,16 +572,19 @@ const Contents: React.FC = () => {
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-touch-callout: none !important;
-            touch-action: auto !important;
+            /* manipulation allows both selection gestures and scrolling */
+            touch-action: manipulation !important;
             cursor: text;
+            pointer-events: auto;
           }
 
-          /* Purple selection color */
+          /* Purple selection color - works with Android selection handles */
           body.highlight-mode-active .mobile-highlight-mode::selection,
           body.highlight-mode-active .mobile-highlight-mode *::selection,
           body.highlight-mode-active .ios-highlight-mode::selection,
           body.highlight-mode-active .ios-highlight-mode *::selection {
-            background-color: rgba(147, 51, 234, 0.3) !important;
+            background-color: rgba(147, 51, 234, 0.4) !important;
+            color: inherit !important;
           }
 
           /* When highlight mode is NOT active, allow normal OS behavior */
@@ -591,10 +594,18 @@ const Contents: React.FC = () => {
             user-select: auto;
           }
 
-          /* Disable tap highlight */
+          /* Disable tap highlight but allow selection */
           .mobile-highlight-mode,
           .ios-highlight-mode {
             -webkit-tap-highlight-color: transparent !important;
+          }
+
+          /* Ensure content wrapper allows selection on mobile */
+          body.highlight-mode-active .ai-content-wrapper,
+          body.highlight-mode-active .ai-content-wrapper * {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            touch-action: manipulation !important;
           }
         }
 

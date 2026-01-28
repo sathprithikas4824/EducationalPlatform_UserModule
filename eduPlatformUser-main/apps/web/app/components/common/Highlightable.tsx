@@ -678,6 +678,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   // Handle touch selection (mobile) using selectionchange event
   // Both iOS and Android: Allow native drag selection for multi-word/sentence selection
   // Key principle: Keep native selection visible until user confirms by tapping highlight button
+  // Android-specific: Selection handles appear and user can drag them to adjust selection
   useEffect(() => {
     if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
 
@@ -687,10 +688,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     let isTouchActive = false;
     let lastProcessedSelection = "";
     let selectionCheckTimer: NodeJS.Timeout | null = null;
+    let selectionStableCounter = 0; // Track how many times selection stayed the same
 
     // When touch starts, clear any pending timers
     const handleTouchStartForSelection = () => {
       isTouchActive = true;
+      selectionStableCounter = 0;
 
       // Clear any pending processing
       if (selectionStableTimeoutRef.current) {
@@ -727,9 +730,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           clearTimeout(selectionStableTimeoutRef.current);
         }
 
-        // Short delay to allow for any final selection adjustments
-        // This is much shorter than before (300ms vs 800-1500ms)
-        const delay = 300;
+        // Longer delay on Android to properly wait for selection handles to settle
+        // Android selection handles have a brief animation/settle period after touch ends
+        const delay = 500;
 
         selectionStableTimeoutRef.current = setTimeout(() => {
           const currentSel = window.getSelection();
@@ -755,6 +758,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     // Track selection changes - reset timer when selection changes
+    // This is critical for Android handle dragging - selection changes rapidly while dragging
     const handleSelectionChange = () => {
       // Don't process if UI is already showing
       if (showColorPicker || showMobileHighlightButton) return;
@@ -764,6 +768,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         lastSelectionTextRef.current = "";
         lastSelectionLengthRef.current = 0;
         isSelectingRef.current = false;
+        selectionStableCounter = 0;
         return;
       }
 
@@ -780,27 +785,36 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       lastSelectionTextRef.current = selText;
       isSelectingRef.current = selText.length > 0;
 
-      // If selection changed, user is still adjusting - reset the timer
+      // If selection changed, user is still adjusting handles - reset timers
       if (selText !== prevSelText) {
         isHandleDraggingRef.current = true;
+        selectionStableCounter = 0;
 
         // Clear any pending processing timer
         if (selectionStableTimeoutRef.current) {
           clearTimeout(selectionStableTimeoutRef.current);
           selectionStableTimeoutRef.current = null;
         }
+        if (selectionCheckTimer) {
+          clearTimeout(selectionCheckTimer);
+          selectionCheckTimer = null;
+        }
+      } else if (selText.length >= 2) {
+        // Selection is the same - increment stable counter
+        selectionStableCounter++;
       }
 
       lastSelectionLengthRef.current = selText.length;
 
-      // If touch is not active and we have a selection, start processing timer
-      // This handles the case where user finishes dragging handles
-      if (!isTouchActive && selText && selText.length >= 2) {
+      // If touch is not active and we have a stable selection, start processing timer
+      // Wait for selection to be stable for a few cycles before processing
+      if (!isTouchActive && selText && selText.length >= 2 && selectionStableCounter >= 2) {
         if (selectionCheckTimer) {
           clearTimeout(selectionCheckTimer);
         }
 
-        // Wait a bit to see if selection is stable
+        // Wait longer to ensure user is done with handle dragging
+        // Android handle dragging triggers many selectionchange events
         selectionCheckTimer = setTimeout(() => {
           const currentSel = window.getSelection();
           if (!currentSel || currentSel.rangeCount === 0) return;
@@ -817,7 +831,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           isHandleDraggingRef.current = false;
           lastProcessedSelection = currentText;
           processSelection(true); // Keep native selection
-        }, 400);
+        }, 600); // Longer delay for Android handle stability
       }
     };
 
@@ -1454,33 +1468,62 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           .highlight-container-mobile {
             -webkit-touch-callout: none !important;
             -webkit-text-size-adjust: 100%;
-            touch-action: auto;
+            touch-action: manipulation;
+            position: relative;
           }
 
-          /* CRITICAL: Allow native text selection with drag handles */
+          /* CRITICAL: Allow native text selection with drag handles on Android */
           .mobile-highlight-mode {
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-touch-callout: none !important;
             -webkit-tap-highlight-color: transparent;
-            touch-action: auto !important;
+            /* touch-action: manipulation allows both selection and scrolling */
+            touch-action: manipulation !important;
             position: relative;
             cursor: text;
+            /* Ensure text can be selected */
+            pointer-events: auto;
           }
 
           /* All child elements must allow selection for handle dragging */
-          .mobile-highlight-mode * {
+          .mobile-highlight-mode *,
+          .mobile-highlight-mode p,
+          .mobile-highlight-mode span,
+          .mobile-highlight-mode div,
+          .mobile-highlight-mode h1,
+          .mobile-highlight-mode h2,
+          .mobile-highlight-mode h3,
+          .mobile-highlight-mode li,
+          .mobile-highlight-mode a,
+          .mobile-highlight-mode mark {
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-touch-callout: none !important;
-            touch-action: auto !important;
+            touch-action: manipulation !important;
             cursor: text;
+            pointer-events: auto;
           }
 
-          /* Purple selection color */
+          /* Android specific: Ensure selection handles can be dragged */
+          .mobile-highlight-mode {
+            /* Allow long-press to start selection */
+            -webkit-user-select: text !important;
+            /* Don't interfere with drag gestures for selection handles */
+            -webkit-user-drag: none !important;
+          }
+
+          /* Purple selection color for native selection on Android */
           .mobile-highlight-mode::selection,
           .mobile-highlight-mode *::selection {
-            background-color: rgba(147, 51, 234, 0.3) !important;
+            background-color: rgba(147, 51, 234, 0.4) !important;
+            color: inherit !important;
+          }
+
+          /* Webkit-specific selection color */
+          .mobile-highlight-mode::-webkit-selection,
+          .mobile-highlight-mode *::-webkit-selection {
+            background-color: rgba(147, 51, 234, 0.4) !important;
           }
 
           /* iOS specific styles */
@@ -1489,7 +1532,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-tap-highlight-color: transparent !important;
-            touch-action: auto !important;
+            touch-action: manipulation !important;
             -webkit-text-size-adjust: 100%;
             pointer-events: auto;
             cursor: text;
@@ -1505,13 +1548,22 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
           .ios-highlight-mode::selection,
           .ios-highlight-mode *::selection {
-            background-color: rgba(147, 51, 234, 0.3) !important;
+            background-color: rgba(147, 51, 234, 0.4) !important;
           }
 
           /* Temp highlights */
           .mobile-highlight-mode [data-temp-highlight="true"],
           .ios-highlight-mode [data-temp-highlight="true"] {
-            background-color: rgba(147, 51, 234, 0.3) !important;
+            background-color: rgba(147, 51, 234, 0.35) !important;
+            border-radius: 2px;
+          }
+
+          /* Ensure saved highlights don't interfere with selection */
+          .mobile-highlight-mode mark[data-highlight-id],
+          .ios-highlight-mode mark[data-highlight-id] {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            cursor: text;
           }
         }
 
@@ -1534,6 +1586,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           body:not(.highlight-mode-active) * {
             -webkit-touch-callout: auto;
           }
+
+          /* Android: Make sure selection handles are visible and draggable */
+          body.highlight-mode-active .mobile-highlight-mode::selection,
+          body.highlight-mode-active .mobile-highlight-mode *::selection {
+            background-color: rgba(147, 51, 234, 0.4) !important;
+          }
         }
 
         /* Desktop styles */
@@ -1551,6 +1609,15 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             -webkit-user-select: text !important;
             user-select: text !important;
           }
+        }
+
+        /* Animation for UI elements */
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.15s ease-out;
         }
       `}</style>
     </div>
