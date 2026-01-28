@@ -364,6 +364,7 @@
 
 /* Mobile: Prevent page-wide selection on touch devices */
 /* Allow native drag selection within the content area only */
+/* Suppress native OS menus (copy/paste/select all) - only show custom highlight button */
 @media (pointer: coarse) and (max-width: 1023px) {
   body.highlight-mode-active {
     -webkit-user-select: none !important;
@@ -376,6 +377,7 @@
   body.highlight-mode-active .mobile-highlight-mode {
     -webkit-user-select: text !important;
     user-select: text !important;
+    -webkit-touch-callout: none !important;
     contain: content;
     isolation: isolate;
   }
@@ -383,5 +385,26 @@
   body.highlight-mode-active .mobile-highlight-mode * {
     -webkit-user-select: text !important;
     user-select: text !important;
+    -webkit-touch-callout: none !important;
+  }
+}
+
+/* iOS Safari specific: Completely suppress native callout menu */
+@supports (-webkit-touch-callout: none) {
+  body.highlight-mode-active .mobile-highlight-mode,
+  body.highlight-mode-active .mobile-highlight-mode * {
+    -webkit-touch-callout: none !important;
+  }
+}
+
+/* Prevent iOS magnifier and selection handles from triggering menu */
+body.highlight-mode-active {
+  -webkit-text-size-adjust: none;
+}
+
+/* Android: Disable context menu actions on selected text */
+@media (pointer: coarse) {
+  .mobile-highlight-mode {
+    -webkit-tap-highlight-color: transparent !important;
   }
 }
