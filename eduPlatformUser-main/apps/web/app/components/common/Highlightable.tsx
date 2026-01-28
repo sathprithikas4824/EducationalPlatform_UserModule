@@ -896,7 +896,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       // Don't interfere with the touch, just ensure callout is suppressed
       const target = e.target as HTMLElement;
       if (target) {
-        target.style.webkitTouchCallout = 'none';
+        (target.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
       }
     };
 
@@ -1101,14 +1101,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const elements = container.querySelectorAll('*');
       elements.forEach((el) => {
         if (el instanceof HTMLElement) {
-          el.style.webkitTouchCallout = 'none';
+          (el.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
         }
       });
     };
 
     // Initial setup
     setTouchCallout();
-    container.style.webkitTouchCallout = 'none';
+    (container.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
 
     // Add iOS-specific listeners with capture to intercept early
     container.addEventListener('contextmenu', preventIOSMenu, { capture: true });
