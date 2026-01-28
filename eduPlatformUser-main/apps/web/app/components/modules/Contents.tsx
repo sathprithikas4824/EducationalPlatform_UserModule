@@ -564,11 +564,10 @@ const Contents: React.FC = () => {
             -webkit-touch-callout: none !important;
           }
 
-          /* CRITICAL: Allow text selection with drag handles in content area (Android & iOS) */
+          /* CRITICAL: Allow text selection with drag handles in content area (Android only) */
+          /* iOS uses custom selection handling to avoid native menu */
           body.highlight-mode-active .mobile-highlight-mode,
-          body.highlight-mode-active .mobile-highlight-mode *,
-          body.highlight-mode-active .ios-highlight-mode,
-          body.highlight-mode-active .ios-highlight-mode * {
+          body.highlight-mode-active .mobile-highlight-mode * {
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-touch-callout: none !important;
@@ -578,33 +577,30 @@ const Contents: React.FC = () => {
             pointer-events: auto;
           }
 
-          /* iOS Safari specific - ensure text is selectable but NO native menu */
+          /* iOS Safari - COMPLETELY DISABLE native selection */
+          /* We use custom touch handling on iOS to avoid native Copy/Look Up menu */
           body.highlight-mode-active .ios-highlight-mode {
-            -webkit-user-modify: read-only;
             -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
           }
 
-          /* iOS: Force suppress native callout on all child elements */
+          /* iOS: Force disable native selection on all child elements */
           body.highlight-mode-active .ios-highlight-mode *,
           body.highlight-mode-active .ios-highlight-mode p,
           body.highlight-mode-active .ios-highlight-mode span,
           body.highlight-mode-active .ios-highlight-mode div {
             -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
           }
 
-          /* Purple selection color - works with Android & iOS selection handles */
+          /* Purple selection color - works with Android selection handles */
+          /* iOS uses custom highlighting instead of native selection */
           body.highlight-mode-active .mobile-highlight-mode::selection,
-          body.highlight-mode-active .mobile-highlight-mode *::selection,
-          body.highlight-mode-active .ios-highlight-mode::selection,
-          body.highlight-mode-active .ios-highlight-mode *::selection {
+          body.highlight-mode-active .mobile-highlight-mode *::selection {
             background-color: rgba(147, 51, 234, 0.4) !important;
             color: inherit !important;
-          }
-
-          /* iOS Safari webkit selection */
-          body.highlight-mode-active .ios-highlight-mode::-webkit-selection,
-          body.highlight-mode-active .ios-highlight-mode *::-webkit-selection {
-            background-color: rgba(147, 51, 234, 0.4) !important;
           }
 
           /* When highlight mode is NOT active, allow normal OS behavior */

@@ -1137,10 +1137,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
   }, [isIOSDevice, highlightModeEnabled, isLoggedIn]);
 
-  // Disabled legacy iOS custom selection (now using same approach as Android)
+  // iOS CUSTOM selection - completely bypasses native selection to avoid iOS menu
+  // This is ENABLED for iOS to prevent Copy/Look Up/Share menu from appearing
   useEffect(() => {
-    // This is disabled - iOS now uses native selection with selectionchange event
-    if (true) return;
+    // Only use custom selection on iOS
     if (!isIOSDevice || !highlightModeEnabled || !isLoggedIn) return;
 
     const container = contentRef.current;
@@ -1290,27 +1290,32 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const prefixContext = fullText.substring(prefixStart, startOffset);
       const suffixContext = fullText.substring(endOffset, suffixEnd);
 
-      // Calculate picker position
+      // Calculate picker position - find the temp highlight position
       const containerRect = containerRef.current?.getBoundingClientRect();
       if (!containerRect) {
         iosSelectionRef.current = null;
         return;
       }
 
-      const touch = e.changedTouches[0];
-      const touchY = touch?.clientY || 0;
-      const touchX = touch?.clientX || 0;
+      // Find the temp highlight element to position the button above it
+      const tempHighlight = container.querySelector('[data-temp-highlight="true"]');
+      let yPos: number;
+      let xPos: number;
 
-      const xPos = touchX - containerRect.left;
-      const yPos = touchY - containerRect.top;
-
-      const pickerHeight = 100;
-      const spaceAbove = touchY;
-      const showBelow = spaceAbove < pickerHeight + 10;
+      if (tempHighlight) {
+        const highlightRect = tempHighlight.getBoundingClientRect();
+        yPos = highlightRect.top - containerRect.top;
+        xPos = highlightRect.left - containerRect.left + highlightRect.width / 2;
+      } else {
+        // Fallback to touch position
+        const touch = e.changedTouches[0];
+        yPos = (touch?.clientY || 0) - containerRect.top;
+        xPos = (touch?.clientX || 0) - containerRect.left;
+      }
 
       // Ensure x position is within bounds
       const isMobileView = window.innerWidth < 640;
-      const pickerWidth = isMobileView ? 216 : 280;
+      const pickerWidth = isMobileView ? 160 : 280;
       const pickerHalfWidth = pickerWidth / 2;
       const containerWidth = containerRect.width;
       const minX = pickerHalfWidth + 10;
@@ -1327,13 +1332,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       setPickerPosition({
         x: boundedX,
         y: yPos,
-        showBelow,
+        showBelow: false, // Always show above on iOS
       });
       setShowMobileHighlightButton(true);
       setShowColorPicker(false);
 
-      // Keep the temp highlight visible
-      // Clear native selection
+      // Clear native selection to prevent iOS menu
       window.getSelection()?.removeAllRanges();
     };
 
@@ -1613,19 +1617,18 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             background-color: rgba(147, 51, 234, 0.4) !important;
           }
 
-          /* iOS specific styles - CRITICAL for Safari text selection */
-          /* IMPORTANT: Suppress native iOS menu (copy, lookup, share) */
+          /* iOS specific styles - COMPLETELY DISABLE native selection */
+          /* We use custom touch handling on iOS to avoid native Copy/Look Up menu */
           .ios-highlight-mode {
             -webkit-touch-callout: none !important;
-            -webkit-user-select: text !important;
-            user-select: text !important;
+            /* DISABLE native selection on iOS - we handle it ourselves */
+            -webkit-user-select: none !important;
+            user-select: none !important;
             -webkit-tap-highlight-color: transparent !important;
             touch-action: manipulation !important;
             -webkit-text-size-adjust: 100%;
             pointer-events: auto;
             cursor: text;
-            /* iOS Safari specific - ensure text is selectable but no callout */
-            -webkit-user-modify: read-only;
           }
 
           .ios-highlight-mode *,
@@ -1639,30 +1642,24 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           .ios-highlight-mode a,
           .ios-highlight-mode mark {
             -webkit-touch-callout: none !important;
-            -webkit-user-select: text !important;
-            user-select: text !important;
+            /* DISABLE native selection on iOS */
+            -webkit-user-select: none !important;
+            user-select: none !important;
             -webkit-user-drag: none !important;
             touch-action: manipulation !important;
             pointer-events: auto;
             cursor: text;
           }
 
-          .ios-highlight-mode::selection,
-          .ios-highlight-mode *::selection {
-            background-color: rgba(147, 51, 234, 0.4) !important;
-            color: inherit !important;
-          }
-
-          /* iOS Safari specific selection */
-          .ios-highlight-mode::-webkit-selection,
-          .ios-highlight-mode *::-webkit-selection {
-            background-color: rgba(147, 51, 234, 0.4) !important;
-          }
+          /* iOS: No native selection means no selection color needed */
+          /* Our temp highlights provide the visual feedback instead */
 
           /* iOS: Force suppress native callout menu on ALL elements */
           body.highlight-mode-active .ios-highlight-mode,
           body.highlight-mode-active .ios-highlight-mode * {
             -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
           }
 
           /* Temp highlights */
