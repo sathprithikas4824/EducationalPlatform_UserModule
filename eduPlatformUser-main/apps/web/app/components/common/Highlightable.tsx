@@ -440,19 +440,39 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
-    // First check if there's any selection
+    const range = selection.getRangeAt(0);
+    const container = contentRef.current;
+
+    if (!container || !container.contains(range.commonAncestorContainer)) {
+      return;
+    }
+
+    // Check if clicking on an existing highlight FIRST (before selection length check)
+    // This allows tapping on highlights to remove them
+    const clickedMark = (range.startContainer.parentElement?.closest('[data-highlight-id]') ||
+                        range.endContainer.parentElement?.closest('[data-highlight-id]')) as HTMLElement | null;
+
+    if (clickedMark) {
+      const highlightId = clickedMark.getAttribute('data-highlight-id');
+      if (highlightId) {
+        removeHighlight(highlightId);
+        removeHighlightFromDOM(container, highlightId);
+        appliedHighlightsRef.current.delete(highlightId);
+        window.getSelection()?.removeAllRanges();
+        setShowColorPicker(false);
+        setShowMobileHighlightButton(false);
+        setSelectedText("");
+        setSelectionInfo(null);
+        return;
+      }
+    }
+
+    // Now check if there's enough selection for new highlight
     const selectionText = selection.toString().trim();
     if (!selectionText || selectionText.length < 2) {
       setShowColorPicker(false);
       setSelectedText("");
       setSelectionInfo(null);
-      return;
-    }
-
-    const range = selection.getRangeAt(0);
-    const container = contentRef.current;
-
-    if (!container || !container.contains(range.commonAncestorContainer)) {
       return;
     }
 
@@ -477,25 +497,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const prefixStart = Math.max(0, startOffset - CONTEXT_LENGTH);
     const suffixEnd = Math.min(fullText.length, endOffset + CONTEXT_LENGTH);
     const prefixContext = fullText.substring(prefixStart, startOffset);
-    const suffixContext = fullText.substring(endOffset, suffixEnd);
-
-    // Check if clicking on an existing highlight
-    const clickedMark = (range.startContainer.parentElement?.closest('[data-highlight-id]') ||
-                        range.endContainer.parentElement?.closest('[data-highlight-id]')) as HTMLElement | null;
-
-    if (clickedMark) {
-      const highlightId = clickedMark.getAttribute('data-highlight-id');
-      if (highlightId) {
-        removeHighlight(highlightId);
-        removeHighlightFromDOM(container, highlightId);
-        appliedHighlightsRef.current.delete(highlightId);
-        window.getSelection()?.removeAllRanges();
-        setShowColorPicker(false);
-        setSelectedText("");
-        setSelectionInfo(null);
-        return;
-      }
-    }
+    const suffixContext = fullText.substring(endOffset, suffixEnd)
 
     const rect = range.getBoundingClientRect();
     const containerRect = containerRef.current?.getBoundingClientRect();
@@ -689,6 +691,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       // Reset selection tracking
       lastSelectionTextRef.current = "";
+
+      // Check if tapping on an existing highlight (for de-highlighting)
+      const target = e.target as HTMLElement;
+      const highlightMark = target.closest('[data-highlight-id]') as HTMLElement | null;
+      if (highlightMark) {
+        // Store the highlight element for potential removal on tap
+        (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = highlightMark;
+      } else {
+        (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
+      }
     };
 
     // Touch move - user is dragging to select more text
@@ -700,11 +712,38 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     // Touch end - process selection after user finishes dragging
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (e: TouchEvent) => {
+      const startPos = touchStartPosRef.current;
       touchStartPosRef.current = null;
 
       if (!isMobileViewport()) return;
       if (showColorPicker || showMobileHighlightButton) return;
+
+      // Check if this was a tap on an existing highlight (for de-highlighting)
+      const pendingRemoval = (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval;
+      if (pendingRemoval && startPos) {
+        const touch = e.changedTouches[0];
+        if (touch) {
+          const moveDistance = Math.sqrt(
+            Math.pow(touch.clientX - startPos.x, 2) +
+            Math.pow(touch.clientY - startPos.y, 2)
+          );
+          // If it was a tap (not a drag), remove the highlight
+          if (moveDistance < 10) {
+            const highlightId = pendingRemoval.getAttribute('data-highlight-id');
+            if (highlightId) {
+              removeHighlight(highlightId);
+              removeHighlightFromDOM(container, highlightId);
+              appliedHighlightsRef.current.delete(highlightId);
+              window.getSelection()?.removeAllRanges();
+              (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
+              isSelectingRef.current = false;
+              return;
+            }
+          }
+        }
+      }
+      (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
 
       // iOS: Process immediately on touchend to beat native menu
       // User has finished dragging, so process right away
@@ -777,7 +816,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       document.removeEventListener('selectstart', handleSelectStart, { capture: true });
       document.removeEventListener('contextmenu', handleContextMenu, { capture: true });
     };
-  }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, processSelection]);
+  }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, processSelection, removeHighlight]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
