@@ -498,11 +498,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             isSelectingRef.current = false;
             processSelection();
 
-            // Clear native selection immediately after capturing to prevent OS menu
-            // The selection data is already stored in state
-            setTimeout(() => {
-              window.getSelection()?.removeAllRanges();
-            }, 10);
+            // DON'T clear selection here - keep it visible while highlight button shows
+            // Selection will be cleared when user taps highlight button or dismisses
           }, 400); // 400ms stability check - allows time for multi-word selection
         }
       }
@@ -605,10 +602,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         // Process the selection
         processSelection();
 
-        // Clear native selection immediately to prevent OS menu from appearing
-        setTimeout(() => {
-          window.getSelection()?.removeAllRanges();
-        }, 10);
+        // DON'T clear selection here - keep it visible while highlight button shows
+        // Selection will be cleared when user taps highlight button or dismisses
 
         isSelectingRef.current = false;
       }, 100);
