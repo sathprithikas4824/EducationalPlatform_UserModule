@@ -557,28 +557,23 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     // Calculate position relative to container
     const selectionCenterX = rect.left - containerRect.left + rect.width / 2;
     const topRelativeToContainer = rect.top - containerRect.top;
-    const bottomRelativeToContainer = rect.bottom - containerRect.top;
 
-    // Color picker dimensions (approximate) - use smaller mobile size for safer bounds
-    const pickerHeight = 100;
+    // Color picker/button dimensions
     const isMobileView = window.innerWidth < 640;
-    const pickerWidth = isMobileView ? 216 : 280;
+    const pickerWidth = isMobileView ? 160 : 280;
     const pickerHalfWidth = pickerWidth / 2;
 
-    // Horizontal boundary checks for mobile
+    // Horizontal boundary checks
     const containerWidth = containerRect.width;
     const minX = pickerHalfWidth + 10;
     const maxX = containerWidth - pickerHalfWidth - 10;
     const xPos = Math.max(minX, Math.min(maxX, selectionCenterX));
 
-    // Check if there's enough space above the selection (using viewport position)
-    const spaceAbove = rect.top;
-    const showBelow = spaceAbove < pickerHeight + 10;
-
+    // Always show ABOVE the selection on mobile (no jumping)
     setPickerPosition({
       x: xPos,
-      y: showBelow ? bottomRelativeToContainer : topRelativeToContainer,
-      showBelow,
+      y: topRelativeToContainer,
+      showBelow: false,
     });
 
     if (isTouchDevice()) {
@@ -1406,18 +1401,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         {children}
       </div>
 
-      {/* Mobile: Floating highlight button - appears first, user can still adjust selection */}
+      {/* Mobile: Floating highlight button - always appears ABOVE the selected text */}
       {showMobileHighlightButton && isLoggedIn && selectedText && (
         <>
           <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
           <div
-            className="absolute z-[100] animate-fadeIn"
+            className="absolute z-[100]"
             style={{
               left: pickerPosition.x,
-              top: pickerPosition.showBelow ? pickerPosition.y + 8 : pickerPosition.y,
-              transform: pickerPosition.showBelow
-                ? "translateX(-50%)"
-                : "translateX(-50%) translateY(-100%) translateY(-8px)",
+              top: pickerPosition.y,
+              transform: "translateX(-50%) translateY(-100%) translateY(-12px)",
             }}
           >
             <button
@@ -1436,18 +1429,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       )}
 
 
-      {/* Color picker - positioned near selected text (both mobile and desktop) */}
+      {/* Color picker - always positioned ABOVE the selected text */}
       {showColorPicker && isLoggedIn && selectedText && (
         <>
           <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
           <div
-            className="absolute z-[100] bg-white rounded-2xl shadow-2xl border border-gray-200 p-3 sm:p-4 animate-fadeIn"
+            className="absolute z-[100] bg-white rounded-2xl shadow-2xl border border-gray-200 p-3 sm:p-4"
             style={{
               left: pickerPosition.x,
-              top: pickerPosition.showBelow ? pickerPosition.y + 10 : pickerPosition.y,
-              transform: pickerPosition.showBelow
-                ? "translateX(-50%)"
-                : "translateX(-50%) translateY(-100%) translateY(-10px)",
+              top: pickerPosition.y,
+              transform: "translateX(-50%) translateY(-100%) translateY(-12px)",
             }}
           >
             <p className="text-xs text-gray-500 mb-2 sm:mb-3 text-center font-medium">
@@ -1628,14 +1619,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           }
         }
 
-        /* Animation for UI elements */
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.15s ease-out;
-        }
       `}</style>
     </div>
   );
