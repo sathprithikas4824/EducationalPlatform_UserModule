@@ -553,63 +553,34 @@ const Contents: React.FC = () => {
           word-break: break-word;
         }
 
-        /* Mobile only: Prevent sidebar and header from being selected */
+        /* Mobile: Prevent sidebar and header from being selected */
         @media (pointer: coarse) {
           body.highlight-mode-active .jakarta-font > div:first-child,
           body.highlight-mode-active .jakarta-font > div:nth-child(2),
-          body.highlight-mode-active .jakarta-font > div:nth-child(3) button {
+          body.highlight-mode-active .jakarta-font > div:nth-child(3) button,
+          body.highlight-mode-active .jakarta-font > div:nth-child(4) > div:first-child {
             -webkit-user-select: none !important;
             user-select: none !important;
             -webkit-touch-callout: none !important;
           }
-        }
 
-        /* Mobile only: iOS Safari - suppress OS options when highlight mode is active */
-        @media (pointer: coarse) {
-          @supports (-webkit-touch-callout: none) {
-            /* Only disable selection on non-content areas when highlight mode is active */
-            body.highlight-mode-active .jakarta-font > div:first-child,
-            body.highlight-mode-active .jakarta-font > div:nth-child(2),
-            body.highlight-mode-active .jakarta-font > div:nth-child(3),
-            body.highlight-mode-active .jakarta-font > div:nth-child(4) > div:first-child {
-              -webkit-user-select: none !important;
-              user-select: none !important;
-              -webkit-touch-callout: none !important;
-            }
-
-            /* Allow selection in the main content area when highlight mode is active */
-            body.highlight-mode-active .jakarta-font .mobile-highlight-mode {
-              -webkit-user-select: text !important;
-              user-select: text !important;
-              -webkit-touch-callout: none !important;
-            }
-
-            body.highlight-mode-active .jakarta-font .mobile-highlight-mode * {
-              -webkit-user-select: text !important;
-              user-select: text !important;
-              -webkit-touch-callout: none !important;
-            }
-          }
-        }
-
-        /* Global mobile suppression of native context menus - ONLY when highlight mode is active */
-        @media (pointer: coarse) {
-          /* Suppress iOS callout menu ONLY when highlight mode is active */
-          body.highlight-mode-active {
-            -webkit-touch-callout: none !important;
-          }
-
-          /* Allow selection only in highlight content area when highlight mode is active */
+          /* CRITICAL: Allow text selection with drag handles in content area */
           body.highlight-mode-active .mobile-highlight-mode,
-          body.highlight-mode-active .mobile-highlight-mode * {
+          body.highlight-mode-active .mobile-highlight-mode *,
+          body.highlight-mode-active .ios-highlight-mode,
+          body.highlight-mode-active .ios-highlight-mode * {
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-touch-callout: none !important;
+            touch-action: auto !important;
+            cursor: text;
           }
 
-          /* Custom purple selection color when highlight mode is active */
+          /* Purple selection color */
           body.highlight-mode-active .mobile-highlight-mode::selection,
-          body.highlight-mode-active .mobile-highlight-mode *::selection {
+          body.highlight-mode-active .mobile-highlight-mode *::selection,
+          body.highlight-mode-active .ios-highlight-mode::selection,
+          body.highlight-mode-active .ios-highlight-mode *::selection {
             background-color: rgba(147, 51, 234, 0.3) !important;
           }
 
@@ -619,37 +590,16 @@ const Contents: React.FC = () => {
             -webkit-user-select: auto;
             user-select: auto;
           }
-        }
 
-        /* Android specific fixes */
-        @media (pointer: coarse) and (hover: none) {
-          .mobile-highlight-mode {
+          /* Disable tap highlight */
+          .mobile-highlight-mode,
+          .ios-highlight-mode {
             -webkit-tap-highlight-color: transparent !important;
           }
         }
 
-        /* Mobile only: iOS Safari - suppress callout menu */
-        @media (pointer: coarse) {
-          @supports (-webkit-touch-callout: none) {
-            /* Allow native selection on iOS (same as Android) */
-            .ios-highlight-mode,
-            .ios-highlight-mode * {
-              -webkit-touch-callout: none !important;
-              -webkit-user-select: text !important;
-              user-select: text !important;
-            }
-
-            /* Custom purple selection color */
-            .ios-highlight-mode::selection,
-            .ios-highlight-mode *::selection {
-              background-color: rgba(147, 51, 234, 0.3) !important;
-            }
-          }
-        }
-
-        /* Desktop: Normal OS behavior ONLY when highlight mode is NOT active */
+        /* Desktop styles */
         @media (pointer: fine), (hover: hover) {
-          /* When highlight mode is NOT active, allow normal OS behavior */
           body:not(.highlight-mode-active) .highlightable-content,
           body:not(.highlight-mode-active) .highlightable-content *,
           body:not(.highlight-mode-active) .ai-content-wrapper,
@@ -659,7 +609,6 @@ const Contents: React.FC = () => {
             user-select: text !important;
           }
 
-          /* When highlight mode IS active on desktop, suppress OS options */
           body.highlight-mode-active .highlightable-content,
           body.highlight-mode-active .highlightable-content *,
           body.highlight-mode-active .ai-content-wrapper,
