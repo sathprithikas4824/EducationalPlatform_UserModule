@@ -1283,14 +1283,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           }
         }
 
-        /* Global fix to prevent parent elements from being selected on touch */
+        /* Global fix - ONLY suppress OS options when highlight mode is active */
         @media (pointer: coarse) {
+          /* When highlight mode is active, suppress OS options outside content area */
           body.highlight-mode-active {
-            -webkit-user-select: none !important;
-            user-select: none !important;
             -webkit-touch-callout: none !important;
           }
 
+          /* Allow selection in content area when highlight mode is active */
           body.highlight-mode-active .mobile-highlight-mode,
           body.highlight-mode-active .mobile-highlight-mode * {
             -webkit-user-select: text !important;
@@ -1298,14 +1298,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             -webkit-touch-callout: none !important;
           }
 
-          /* Prevent ALL other elements from being selected */
-          body.highlight-mode-active *:not(.mobile-highlight-mode):not(.mobile-highlight-mode *) {
-            -webkit-user-select: none !important;
-            user-select: none !important;
-            -webkit-touch-callout: none !important;
-          }
-
-          /* Explicitly allow selection in highlight content */
+          /* Explicitly allow selection in highlight content elements */
           body.highlight-mode-active .mobile-highlight-mode,
           body.highlight-mode-active .mobile-highlight-mode p,
           body.highlight-mode-active .mobile-highlight-mode span,
@@ -1321,10 +1314,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             user-select: text !important;
             -webkit-touch-callout: none !important;
           }
+
+          /* When highlight mode is NOT active, allow normal OS behavior */
+          body:not(.highlight-mode-active) * {
+            -webkit-touch-callout: auto;
+          }
         }
 
-        /* iOS Safari specific: Allow selection but suppress callout menu */
+        /* iOS Safari specific: ONLY suppress callout when highlight mode classes are present */
         @supports (-webkit-touch-callout: none) {
+          /* These classes are only added when highlight mode is enabled */
           .highlight-container-mobile,
           .highlight-container-mobile *,
           .mobile-highlight-mode,

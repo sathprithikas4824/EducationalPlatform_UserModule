@@ -564,52 +564,27 @@ const Contents: React.FC = () => {
           }
         }
 
-        /* iOS Safari: Prevent entire page selection */
+        /* iOS Safari: Only suppress OS options when highlight mode is active */
         @supports (-webkit-touch-callout: none) {
           @media (max-width: 1023px) {
-            /* Disable selection on all non-content areas */
-            .jakarta-font {
-              -webkit-user-select: none;
-              user-select: none;
-              -webkit-touch-callout: none;
-            }
-
-            /* Header area */
-            .jakarta-font > div:first-child {
+            /* Only disable selection on non-content areas when highlight mode is active */
+            body.highlight-mode-active .jakarta-font > div:first-child,
+            body.highlight-mode-active .jakarta-font > div:nth-child(2),
+            body.highlight-mode-active .jakarta-font > div:nth-child(3),
+            body.highlight-mode-active .jakarta-font > div:nth-child(4) > div:first-child {
               -webkit-user-select: none !important;
               user-select: none !important;
               -webkit-touch-callout: none !important;
             }
 
-            /* Hero section */
-            .jakarta-font > div:nth-child(2) {
-              -webkit-user-select: none !important;
-              user-select: none !important;
-              -webkit-touch-callout: none !important;
-            }
-
-            /* Mobile toggle button */
-            .jakarta-font > div:nth-child(3) {
-              -webkit-user-select: none !important;
-              user-select: none !important;
-              -webkit-touch-callout: none !important;
-            }
-
-            /* Sidebar */
-            .jakarta-font > div:nth-child(4) > div:first-child {
-              -webkit-user-select: none !important;
-              user-select: none !important;
-              -webkit-touch-callout: none !important;
-            }
-
-            /* Only allow selection in the main content area */
-            .jakarta-font .mobile-highlight-mode {
+            /* Allow selection in the main content area when highlight mode is active */
+            body.highlight-mode-active .jakarta-font .mobile-highlight-mode {
               -webkit-user-select: text !important;
               user-select: text !important;
               -webkit-touch-callout: none !important;
             }
 
-            .jakarta-font .mobile-highlight-mode * {
+            body.highlight-mode-active .jakarta-font .mobile-highlight-mode * {
               -webkit-user-select: text !important;
               user-select: text !important;
               -webkit-touch-callout: none !important;
@@ -617,16 +592,14 @@ const Contents: React.FC = () => {
           }
         }
 
-        /* Global mobile suppression of native context menus */
+        /* Global mobile suppression of native context menus - ONLY when highlight mode is active */
         @media (pointer: coarse) {
-          /* Suppress iOS callout menu globally when highlight mode is active */
+          /* Suppress iOS callout menu ONLY when highlight mode is active */
           body.highlight-mode-active {
             -webkit-touch-callout: none !important;
-            -webkit-user-select: none !important;
-            user-select: none !important;
           }
 
-          /* Allow selection only in highlight content area */
+          /* Allow selection only in highlight content area when highlight mode is active */
           body.highlight-mode-active .mobile-highlight-mode,
           body.highlight-mode-active .mobile-highlight-mode * {
             -webkit-user-select: text !important;
@@ -634,10 +607,17 @@ const Contents: React.FC = () => {
             -webkit-touch-callout: none !important;
           }
 
-          /* Custom purple selection color */
+          /* Custom purple selection color when highlight mode is active */
           body.highlight-mode-active .mobile-highlight-mode::selection,
           body.highlight-mode-active .mobile-highlight-mode *::selection {
             background-color: rgba(147, 51, 234, 0.3) !important;
+          }
+
+          /* When highlight mode is NOT active, allow normal OS behavior */
+          body:not(.highlight-mode-active) {
+            -webkit-touch-callout: default;
+            -webkit-user-select: auto;
+            user-select: auto;
           }
         }
 
