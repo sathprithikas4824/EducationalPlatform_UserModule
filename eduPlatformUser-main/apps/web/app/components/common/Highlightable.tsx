@@ -21,13 +21,6 @@ const isMobileViewport = (): boolean => {
   return window.innerWidth < 640;
 };
 
-// Detect iOS (iPhone, iPad, iPod)
-const isIOS = (): boolean => {
-  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-};
-
 const HIGHLIGHT_COLORS = [
   { name: "Yellow", value: "#fef08a" },
   { name: "Green", value: "#bbf7d0" },
@@ -498,7 +491,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             isSelectingRef.current = false;
             processSelection();
 
-            // DON'T clear selection here - keep it visible while highlight button shows
+            // Keep selection visible - don't clear it here
             // Selection will be cleared when user taps highlight button or dismisses
           }, 400); // 400ms stability check - allows time for multi-word selection
         }
@@ -526,8 +519,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
     const container = contentRef.current;
     if (!container) return;
-
-    const isiOSDevice = isIOS();
 
     // Prevent context menu (copy/paste/select all) on all mobile devices
     const handleContextMenu = (e: Event) => {
@@ -602,7 +593,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         // Process the selection
         processSelection();
 
-        // DON'T clear selection here - keep it visible while highlight button shows
+        // Keep selection visible - don't clear it here
         // Selection will be cleared when user taps highlight button or dismisses
 
         isSelectingRef.current = false;
@@ -628,27 +619,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     // Prevent selection outside container
     document.addEventListener('selectstart', handleSelectStart, { capture: true });
 
-    // Prevent context menu at document level for all mobile devices
+    // Prevent context menu at document level for all mobile devices (iOS and Android)
     document.addEventListener('contextmenu', handleContextMenu, { capture: true });
-
-    // Additional iOS Safari specific: prevent the callout menu
-    if (isiOSDevice) {
-      // Intercept and prevent the native selection menu
-      const preventNativeMenu = (e: Event) => {
-        // Only prevent if we have an active selection in our container
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          if (container.contains(range.commonAncestorContainer)) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-        }
-      };
-
-      // These events can trigger the native menu on iOS
-      document.addEventListener('touchforcechange', preventNativeMenu, { capture: true });
-    }
 
     return () => {
       container.removeEventListener('contextmenu', handleContextMenu, { capture: true });
