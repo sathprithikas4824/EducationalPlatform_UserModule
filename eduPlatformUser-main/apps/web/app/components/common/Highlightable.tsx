@@ -677,8 +677,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
   // Handle touch selection (mobile) using selectionchange event
   // Both iOS and Android: Allow native drag selection for multi-word/sentence selection
-  // Key principle: Keep native selection visible until user confirms by tapping highlight button
+  // Key principle: Keep native selection visible until user is COMPLETELY DONE dragging handles
   // Android-specific: Selection handles appear and user can drag them to adjust selection
+  // The highlight button only appears after user has stopped touching for 1.2 seconds
   useEffect(() => {
     if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
 
@@ -688,14 +689,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     let isTouchActive = false;
     let lastProcessedSelection = "";
     let selectionCheckTimer: NodeJS.Timeout | null = null;
-    let selectionStableCounter = 0; // Track how many times selection stayed the same
+    let lastSelectionChangeTime = 0;
+    let touchEndTime = 0;
 
-    // When touch starts, clear any pending timers
+    // When touch starts, ALWAYS clear pending timers - user is interacting
     const handleTouchStartForSelection = () => {
       isTouchActive = true;
-      selectionStableCounter = 0;
 
-      // Clear any pending processing
+      // Clear ALL pending processing - user is touching again
       if (selectionStableTimeoutRef.current) {
         clearTimeout(selectionStableTimeoutRef.current);
         selectionStableTimeoutRef.current = null;
@@ -705,18 +706,17 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         selectionCheckTimer = null;
       }
 
-      // Check if there's already a selection - user might be adjusting handles
+      // Mark that user might be dragging handles
       const sel = window.getSelection();
       if (sel && sel.toString().trim().length > 0) {
         isHandleDraggingRef.current = true;
-      } else {
-        isHandleDraggingRef.current = false;
       }
     };
 
-    // When touch ends, check if there's a valid selection to process
+    // When touch ends, start a LONG timer to wait for handle dragging to complete
     const handleTouchEndForSelection = () => {
       isTouchActive = false;
+      touchEndTime = Date.now();
 
       // Don't process if UI is already showing
       if (showColorPicker || showMobileHighlightButton) return;
@@ -730,11 +730,17 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           clearTimeout(selectionStableTimeoutRef.current);
         }
 
-        // Longer delay on Android to properly wait for selection handles to settle
-        // Android selection handles have a brief animation/settle period after touch ends
-        const delay = 500;
+        // LONG delay (1.2 seconds) to allow user to:
+        // 1. Lift finger, see selection handles
+        // 2. Touch and drag a handle to extend selection
+        // 3. Release and see the highlight button
+        const delay = 1200;
 
         selectionStableTimeoutRef.current = setTimeout(() => {
+          // Check if user touched again during the wait
+          if (isTouchActive) return;
+
+          // Check if selection changed since touch ended
           const currentSel = window.getSelection();
           if (!currentSel || currentSel.rangeCount === 0) return;
 
@@ -747,8 +753,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           const currentRange = currentSel.getRangeAt(0);
           if (!container || !container.contains(currentRange.commonAncestorContainer)) return;
 
+          // Only process if selection hasn't changed in the last 800ms
+          const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
+          if (timeSinceLastChange < 800) {
+            // Selection is still changing, wait more
+            return;
+          }
+
           // Process selection but KEEP native selection visible
-          // This allows users to still adjust handles after the button appears
           isSelectingRef.current = false;
           isHandleDraggingRef.current = false;
           lastProcessedSelection = currentText;
@@ -757,9 +769,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
     };
 
-    // Track selection changes - reset timer when selection changes
-    // This is critical for Android handle dragging - selection changes rapidly while dragging
+    // Track selection changes - this fires when user drags handles
     const handleSelectionChange = () => {
+      lastSelectionChangeTime = Date.now();
+
       // Don't process if UI is already showing
       if (showColorPicker || showMobileHighlightButton) return;
 
@@ -768,7 +781,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         lastSelectionTextRef.current = "";
         lastSelectionLengthRef.current = 0;
         isSelectingRef.current = false;
-        selectionStableCounter = 0;
         return;
       }
 
@@ -784,13 +796,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const prevSelText = lastSelectionTextRef.current;
       lastSelectionTextRef.current = selText;
       isSelectingRef.current = selText.length > 0;
+      lastSelectionLengthRef.current = selText.length;
 
-      // If selection changed, user is still adjusting handles - reset timers
+      // If selection changed, user is dragging handles - RESET ALL TIMERS
       if (selText !== prevSelText) {
         isHandleDraggingRef.current = true;
-        selectionStableCounter = 0;
 
-        // Clear any pending processing timer
+        // Clear any pending processing timer - selection is changing
         if (selectionStableTimeoutRef.current) {
           clearTimeout(selectionStableTimeoutRef.current);
           selectionStableTimeoutRef.current = null;
@@ -799,23 +811,21 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           clearTimeout(selectionCheckTimer);
           selectionCheckTimer = null;
         }
-      } else if (selText.length >= 2) {
-        // Selection is the same - increment stable counter
-        selectionStableCounter++;
       }
 
-      lastSelectionLengthRef.current = selText.length;
-
-      // If touch is not active and we have a stable selection, start processing timer
-      // Wait for selection to be stable for a few cycles before processing
-      if (!isTouchActive && selText && selText.length >= 2 && selectionStableCounter >= 2) {
+      // If touch is NOT active and selection exists, start a stability check
+      // This handles the case where user drags handle and releases
+      if (!isTouchActive && selText && selText.length >= 2) {
         if (selectionCheckTimer) {
           clearTimeout(selectionCheckTimer);
         }
 
-        // Wait longer to ensure user is done with handle dragging
-        // Android handle dragging triggers many selectionchange events
+        // Wait 1.5 seconds after last selection change before showing button
+        // This gives user plenty of time to drag handles
         selectionCheckTimer = setTimeout(() => {
+          // Double-check user isn't touching
+          if (isTouchActive) return;
+
           const currentSel = window.getSelection();
           if (!currentSel || currentSel.rangeCount === 0) return;
 
@@ -824,6 +834,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           if (currentText === lastProcessedSelection) return;
           if (showColorPicker || showMobileHighlightButton) return;
 
+          // Check selection hasn't changed recently
+          const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
+          if (timeSinceLastChange < 1000) return;
+
           const currentRange = currentSel.getRangeAt(0);
           if (!container || !container.contains(currentRange.commonAncestorContainer)) return;
 
@@ -831,7 +845,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           isHandleDraggingRef.current = false;
           lastProcessedSelection = currentText;
           processSelection(true); // Keep native selection
-        }, 600); // Longer delay for Android handle stability
+        }, 1500);
       }
     };
 
@@ -896,12 +910,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     // Touch start - track position and mark selection start
+    // CRITICAL: Don't interfere with native selection handle dragging
     const handleTouchStart = (e: TouchEvent) => {
-      // If UI is showing, ignore new touches
-      if (showColorPicker || showMobileHighlightButton) {
-        return;
-      }
-
       const touch = e.touches[0];
       if (!touch) return;
 
@@ -911,17 +921,23 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const sel = window.getSelection();
       const hasExistingSelection = sel && sel.toString().trim().length > 0;
 
-      if (!hasExistingSelection) {
+      if (hasExistingSelection) {
+        // User might be about to drag selection handles - mark it
+        isHandleDraggingRef.current = true;
+
+        // If highlight button is showing and user touches (to drag handle), hide it
+        // This allows user to continue adjusting selection
+        if (showMobileHighlightButton) {
+          setShowMobileHighlightButton(false);
+        }
+      } else {
         // Reset selection tracking only if no existing selection
         lastSelectionTextRef.current = "";
         lastSelectionLengthRef.current = 0;
         isHandleDraggingRef.current = false;
-      } else {
-        // User might be about to drag selection handles
-        isHandleDraggingRef.current = true;
       }
 
-      // Clear any pending timeout from previous selection
+      // Clear any pending timeout - user is interacting again
       if (selectionStableTimeoutRef.current) {
         clearTimeout(selectionStableTimeoutRef.current);
         selectionStableTimeoutRef.current = null;
@@ -942,16 +958,21 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     // Clear any pending timeout to allow more selection time
     // Do NOT cancel selection on movement - this allows handle dragging
     const handleTouchMove = () => {
-      // Clear any pending processing timeout - user is still adjusting selection
+      // Clear any pending processing timeout - user is actively dragging
       if (selectionStableTimeoutRef.current) {
         clearTimeout(selectionStableTimeoutRef.current);
         selectionStableTimeoutRef.current = null;
       }
 
-      // Check if there's an active selection - if so, user might be dragging handles
+      // Check if there's an active selection - user is dragging handles
       const sel = window.getSelection();
       if (sel && sel.toString().trim().length > 0) {
         isHandleDraggingRef.current = true;
+
+        // Hide highlight button if showing - user is still adjusting
+        if (showMobileHighlightButton) {
+          setShowMobileHighlightButton(false);
+        }
       }
     };
 
