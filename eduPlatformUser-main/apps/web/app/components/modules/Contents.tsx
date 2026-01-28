@@ -647,6 +647,25 @@ const Contents: React.FC = () => {
             -webkit-tap-highlight-color: transparent !important;
           }
         }
+
+        /* iOS Safari: Complete suppression of native selection UI */
+        @supports (-webkit-touch-callout: none) {
+          @media (pointer: coarse) {
+            /* Completely disable native selection on iOS */
+            .ios-highlight-mode,
+            .ios-highlight-mode * {
+              -webkit-touch-callout: none !important;
+              -webkit-user-select: none !important;
+              user-select: none !important;
+            }
+
+            /* Hide native selection completely */
+            .ios-highlight-mode::selection,
+            .ios-highlight-mode *::selection {
+              background-color: transparent !important;
+            }
+          }
+        }
       `}</style>
     </div>
   );
