@@ -730,11 +730,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           clearTimeout(selectionStableTimeoutRef.current);
         }
 
-        // LONG delay (1.2 seconds) to allow user to:
-        // 1. Lift finger, see selection handles
-        // 2. Touch and drag a handle to extend selection
-        // 3. Release and see the highlight button
-        const delay = 1200;
+        // 1 second delay to allow user to drag handles if needed
+        const delay = 1000;
 
         selectionStableTimeoutRef.current = setTimeout(() => {
           // Check if user touched again during the wait
@@ -753,9 +750,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           const currentRange = currentSel.getRangeAt(0);
           if (!container || !container.contains(currentRange.commonAncestorContainer)) return;
 
-          // Only process if selection hasn't changed in the last 800ms
+          // Only process if selection hasn't changed in the last 500ms
           const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
-          if (timeSinceLastChange < 800) {
+          if (timeSinceLastChange < 500) {
             // Selection is still changing, wait more
             return;
           }
@@ -820,8 +817,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           clearTimeout(selectionCheckTimer);
         }
 
-        // Wait 1.5 seconds after last selection change before showing button
-        // This gives user plenty of time to drag handles
+        // Wait 1 second after last selection change before showing button
         selectionCheckTimer = setTimeout(() => {
           // Double-check user isn't touching
           if (isTouchActive) return;
@@ -836,7 +832,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
           // Check selection hasn't changed recently
           const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
-          if (timeSinceLastChange < 1000) return;
+          if (timeSinceLastChange < 600) return;
 
           const currentRange = currentSel.getRangeAt(0);
           if (!container || !container.contains(currentRange.commonAncestorContainer)) return;
@@ -845,7 +841,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           isHandleDraggingRef.current = false;
           lastProcessedSelection = currentText;
           processSelection(true); // Keep native selection
-        }, 1500);
+        }, 1000);
       }
     };
 
