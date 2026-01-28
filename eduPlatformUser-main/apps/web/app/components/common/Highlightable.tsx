@@ -21,6 +21,13 @@ const isMobileViewport = (): boolean => {
   return window.innerWidth < 640;
 };
 
+// Detect iOS (iPhone, iPad, iPod)
+const isIOS = (): boolean => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
 const HIGHLIGHT_COLORS = [
   { name: "Yellow", value: "#fef08a" },
   { name: "Green", value: "#bbf7d0" },
@@ -560,6 +567,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
 
     const container = contentRef.current;
+    const isiOSDevice = isIOS();
 
     // Track selection changes to detect when user finishes selecting
     const handleSelectionChange = () => {
@@ -593,8 +601,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
         // Only start the stable timer if we have a valid selection
         if (selText && selText.length >= 2) {
-          // Wait for selection to stabilize (user stopped dragging)
-          // Longer delay to allow sentence/multi-word selection
+          // iOS: Process immediately to prevent native menu from appearing
+          // Android: Use longer delay to allow sentence/multi-word selection
+          const delay = isiOSDevice ? 10 : 400;
+
           selectionStableTimeoutRef.current = setTimeout(() => {
             // Double-check selection is still valid
             const currentSel = window.getSelection();
@@ -610,7 +620,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             // processSelection will apply temp highlight and clear native selection
             isSelectingRef.current = false;
             processSelection();
-          }, 400); // 400ms stability check - allows time for multi-word selection
+          }, delay);
         }
       }
     };
@@ -636,6 +646,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
     const container = contentRef.current;
     if (!container) return;
+
+    const isiOSDevice = isIOS();
 
     // Prevent context menu (copy/paste/select all) on all mobile devices
     const handleContextMenu = (e: Event) => {
@@ -677,10 +689,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     // Touch move - user is dragging to select more text
+    // On iOS: don't clear timeout - let selection process quickly
+    // On Android: clear timeout to allow more dragging time
     const handleTouchMove = () => {
-      // Clear any pending selection processing while user is still dragging
-      if (selectionStableTimeoutRef.current) {
-        clearTimeout(selectionStableTimeoutRef.current);
+      if (!isiOSDevice) {
+        // Only clear pending timeout on Android to allow more selection time
+        if (selectionStableTimeoutRef.current) {
+          clearTimeout(selectionStableTimeoutRef.current);
+        }
       }
     };
 
@@ -691,12 +707,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       if (!isMobileViewport()) return;
       if (showColorPicker || showMobileHighlightButton) return;
 
-      // Give a moment for the selection to finalize after touch ends
-      // Then the selectionchange handler will pick it up
-      // But also handle the case where selection doesn't change after touchend
+      // iOS: Process immediately to beat native menu
+      // Android: Give a moment for selection to finalize
+      const delay = isiOSDevice ? 0 : 100;
+
       setTimeout(() => {
         if (showColorPicker || showMobileHighlightButton) return;
-        if (!isSelectingRef.current) return;
+        if (!isiOSDevice && !isSelectingRef.current) return;
 
         const sel = window.getSelection();
         if (!sel || sel.rangeCount === 0) return;
@@ -712,7 +729,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         processSelection();
 
         isSelectingRef.current = false;
-      }, 100);
+      }, delay);
     };
 
     // Touch cancel
