@@ -606,12 +606,45 @@ const Contents: React.FC = () => {
             .jakarta-font .mobile-highlight-mode {
               -webkit-user-select: text !important;
               user-select: text !important;
+              -webkit-touch-callout: none !important;
             }
 
             .jakarta-font .mobile-highlight-mode * {
               -webkit-user-select: text !important;
               user-select: text !important;
+              -webkit-touch-callout: none !important;
             }
+          }
+        }
+
+        /* Global mobile suppression of native context menus */
+        @media (pointer: coarse) {
+          /* Suppress iOS callout menu globally when highlight mode is active */
+          body.highlight-mode-active {
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+          }
+
+          /* Allow selection only in highlight content area */
+          body.highlight-mode-active .mobile-highlight-mode,
+          body.highlight-mode-active .mobile-highlight-mode * {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            -webkit-touch-callout: none !important;
+          }
+
+          /* Custom purple selection color */
+          body.highlight-mode-active .mobile-highlight-mode::selection,
+          body.highlight-mode-active .mobile-highlight-mode *::selection {
+            background-color: rgba(147, 51, 234, 0.3) !important;
+          }
+        }
+
+        /* Android specific fixes */
+        @media (pointer: coarse) and (hover: none) {
+          .mobile-highlight-mode {
+            -webkit-tap-highlight-color: transparent !important;
           }
         }
       `}</style>
