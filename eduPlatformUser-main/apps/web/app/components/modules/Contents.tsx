@@ -648,21 +648,21 @@ const Contents: React.FC = () => {
           }
         }
 
-        /* iOS Safari: Complete suppression of native selection UI */
+        /* iOS Safari: Allow selection but suppress callout menu */
         @supports (-webkit-touch-callout: none) {
           @media (pointer: coarse) {
-            /* Completely disable native selection on iOS */
+            /* Allow native selection on iOS (same as Android) */
             .ios-highlight-mode,
             .ios-highlight-mode * {
               -webkit-touch-callout: none !important;
-              -webkit-user-select: none !important;
-              user-select: none !important;
+              -webkit-user-select: text !important;
+              user-select: text !important;
             }
 
-            /* Hide native selection completely */
+            /* Custom purple selection color */
             .ios-highlight-mode::selection,
             .ios-highlight-mode *::selection {
-              background-color: transparent !important;
+              background-color: rgba(147, 51, 234, 0.3) !important;
             }
           }
         }

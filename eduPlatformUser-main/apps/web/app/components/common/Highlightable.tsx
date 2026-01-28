@@ -601,12 +601,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   }, [processSelection]);
 
   // Handle touch selection (mobile) using selectionchange event
-  // Android only: Allow native drag selection for multi-word/sentence selection
-  // iOS has its own dedicated handler above
+  // Both iOS and Android: Allow native drag selection for multi-word/sentence selection
   useEffect(() => {
     if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
-    // Skip for iOS - it has its own dedicated handler
-    if (isIOS()) return;
 
     const container = contentRef.current;
 
@@ -676,14 +673,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
   }, [isLoggedIn, highlightModeEnabled, processSelection, showColorPicker, showMobileHighlightButton]);
 
-  // Touch handling for Android only
+  // Touch handling for both iOS and Android
   // Allows native drag selection for multi-word/sentence selection
   // Suppresses OS context menu (copy/paste/select all) completely
-  // iOS has its own dedicated handler
   useEffect(() => {
     if (!isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
-    // Skip for iOS - it has its own dedicated handler
-    if (isIOS()) return;
 
     const container = contentRef.current;
     if (!container) return;
@@ -837,9 +831,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
   }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, processSelection, removeHighlight]);
 
-  // iOS-specific: Custom touch-based text selection
-  // This completely bypasses native iOS selection to prevent OS context menu
+  // iOS-specific: Additional event suppression (but uses same selection as Android)
+  // This helps prevent native iOS context menu from appearing
   useEffect(() => {
+    // Disabled - iOS now uses same approach as Android
+    if (true) return;
     if (!isIOSDevice || !highlightModeEnabled || !isLoggedIn) return;
 
     const container = contentRef.current;
@@ -916,8 +912,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     const handleIOSTouchMove = (e: TouchEvent) => {
-      if (!iosTouchStartRef.current) return;
-
       const touch = e.touches[0];
       if (!touch) return;
 
@@ -930,39 +924,21 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         Math.pow(touch.clientY - startPos.y, 2)
       );
 
-      // If moved significantly, start dragging (even without long press)
-      if (moveDistance > 10 && !isDraggingRef.current) {
+      // If user moves significantly, they're scrolling - cancel everything
+      if (moveDistance > 15) {
+        // Cancel long press timer
         if (longPressTimer) {
           clearTimeout(longPressTimer);
           longPressTimer = null;
         }
-        isDraggingRef.current = true;
-
-        // Initialize selection from start point
-        const startOffset = iosTouchStartRef.current.startOffset;
-        iosSelectionRef.current = { startOffset, endOffset: startOffset };
-      }
-
-      if (isDraggingRef.current) {
-        e.preventDefault(); // Prevent scrolling while selecting
-
-        // Get current caret position
-        const caretPos = getCaretPositionFromPoint(touch.clientX, touch.clientY);
-        if (!caretPos || !container.contains(caretPos.node)) return;
-
-        const currentOffset = getTextOffset(container, caretPos.node, caretPos.offset);
-        const startOffset = iosTouchStartRef.current.startOffset;
-
-        // Determine selection range (handle both directions)
-        const selStart = Math.min(startOffset, currentOffset);
-        const selEnd = Math.max(startOffset, currentOffset);
-
-        if (selEnd > selStart) {
-          // Remove previous temp highlight and apply new one
-          removeTempHighlights(container);
-          applyTempHighlight(container, selStart, selEnd);
-          iosSelectionRef.current = { startOffset: selStart, endOffset: selEnd };
-        }
+        // Reset ALL touch tracking - user is scrolling
+        iosTouchStartRef.current = null;
+        touchStartPosRef.current = null;
+        isDraggingRef.current = false;
+        iosSelectionRef.current = null;
+        // Remove any temp highlights
+        removeTempHighlights(container);
+        return;
       }
     };
 
@@ -1187,11 +1163,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         className={`highlightable-content ${showColorPicker ? "picker-active" : ""} ${highlightModeEnabled && isMobileDevice ? "mobile-highlight-mode" : ""} ${highlightModeEnabled && isIOSDevice ? "ios-highlight-mode" : ""}`}
         style={highlightModeEnabled && isMobileDevice ? {
           WebkitTouchCallout: 'none',
-          // iOS: Disable native selection completely (we use custom touch handling)
-          // Android: Allow native text selection for drag-to-select
-          WebkitUserSelect: isIOSDevice ? 'none' : 'text',
-          userSelect: isIOSDevice ? 'none' : 'text',
-          touchAction: isIOSDevice ? 'pan-y' : 'pan-y pinch-zoom',
+          // Allow native text selection for drag-to-select on both iOS and Android
+          WebkitUserSelect: 'text',
+          userSelect: 'text',
+          touchAction: 'pan-y pinch-zoom',
           contain: 'content',
           isolation: 'isolate',
         } as React.CSSProperties : undefined}
@@ -1348,25 +1323,25 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           }
         }
 
-        /* iOS Safari specific: Completely disable native selection and callout */
+        /* iOS Safari specific: Allow selection but suppress callout menu */
         @supports (-webkit-touch-callout: none) {
           .highlight-container-mobile,
           .highlight-container-mobile *,
           .mobile-highlight-mode,
           .mobile-highlight-mode * {
             -webkit-touch-callout: none !important;
-            /* Disable native selection on iOS - we use custom touch handling */
-            -webkit-user-select: none !important;
-            user-select: none !important;
+            /* Allow native selection for drag-to-select on iOS (same as Android) */
+            -webkit-user-select: text !important;
+            user-select: text !important;
           }
 
-          /* Hide any native selection that might slip through */
+          /* Custom purple selection color */
           .mobile-highlight-mode::selection,
           .mobile-highlight-mode *::selection {
-            background-color: transparent !important;
+            background-color: rgba(147, 51, 234, 0.3) !important;
           }
 
-          /* Disable iOS text selection handles/grabbers */
+          /* Disable tap highlight */
           .mobile-highlight-mode {
             -webkit-tap-highlight-color: transparent !important;
           }
@@ -1385,20 +1360,19 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           }
         }
 
-        /* iOS-specific: Complete native selection suppression */
+        /* iOS-specific: Allow selection but suppress callout */
         .ios-highlight-mode,
         .ios-highlight-mode * {
           -webkit-touch-callout: none !important;
-          -webkit-user-select: none !important;
-          user-select: none !important;
+          -webkit-user-select: text !important;
+          user-select: text !important;
           -webkit-tap-highlight-color: transparent !important;
         }
 
-        /* Hide any native iOS selection UI */
+        /* Custom purple selection color on iOS */
         .ios-highlight-mode::selection,
         .ios-highlight-mode *::selection {
-          background-color: transparent !important;
-          color: inherit !important;
+          background-color: rgba(147, 51, 234, 0.3) !important;
         }
 
         /* Ensure temp highlights are visible on iOS */
