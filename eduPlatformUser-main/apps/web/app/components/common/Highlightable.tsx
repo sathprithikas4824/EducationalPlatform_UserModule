@@ -2176,34 +2176,30 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         }
 
         /* Dehighlight animation - smooth fade out */
-        @keyframes dehighlight-fade {
-          0% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 0;
-          }
-        }
-
         .dehighlight-animation {
-          animation: dehighlight-fade 0.15s ease-out forwards;
-          pointer-events: none; /* Prevent double-taps during animation */
+          opacity: 0 !important;
+          transition: opacity 0.12s ease-out;
+          pointer-events: none;
         }
 
-        /* Make highlighted text easier to tap on mobile */
+        /* Make highlighted text easier to tap on mobile - NO color feedback */
         @media (pointer: coarse) {
           mark[data-highlight-id] {
             /* Increase touch target slightly */
             padding: 2px 0 !important;
             margin: -2px 0 !important;
-            /* Ensure it's tappable */
             cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
+            /* Completely disable any tap color feedback */
+            -webkit-tap-highlight-color: transparent !important;
+            -webkit-touch-callout: none !important;
           }
 
-          /* Visual feedback on touch */
-          mark[data-highlight-id]:active {
-            opacity: 0.7;
+          /* No visual feedback on touch - keep it clean */
+          mark[data-highlight-id]:active,
+          mark[data-highlight-id]:focus,
+          mark[data-highlight-id]:hover {
+            /* Keep original appearance, no color change */
+            opacity: 1;
           }
         }
 
