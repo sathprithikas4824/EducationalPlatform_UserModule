@@ -485,6 +485,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   // Track when we just dehighlighted to prevent highlight button from showing
   const justDehighlightedRef = useRef<boolean>(false);
 
+  // Track if button has been positioned for current selection session
+  // This prevents the button from jumping when user adjusts selection
+  const buttonPositionedRef = useRef<boolean>(false);
+
   // Detect mobile on client side to avoid hydration mismatch
   useEffect(() => {
     setIsMobileDevice(isTouchDevice());
@@ -566,6 +570,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         setSelectionInfo(null);
         pendingSelectionRef.current = null;
         justDehighlightedRef.current = true;
+        buttonPositionedRef.current = false;
 
         // Instant removal - no animation
         removeHighlightFromDOM(container, highlightId);
@@ -644,6 +649,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           setSelectionInfo(null);
           pendingSelectionRef.current = null;
           justDehighlightedRef.current = true;
+          buttonPositionedRef.current = false;
 
           // Instant removal
           removeHighlightFromDOM(container, highlight.id);
@@ -690,27 +696,34 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       suffixContext,
     });
 
-    // Calculate position relative to container
-    const selectionCenterX = rect.left - containerRect.left + rect.width / 2;
-    const topRelativeToContainer = rect.top - containerRect.top;
+    // Only update position if button hasn't been positioned yet for this selection session
+    // This prevents the button from jumping around as user adjusts selection
+    if (!buttonPositionedRef.current) {
+      // Calculate position relative to container
+      const selectionCenterX = rect.left - containerRect.left + rect.width / 2;
+      const topRelativeToContainer = rect.top - containerRect.top;
 
-    // Color picker/button dimensions
-    const isMobileView = window.innerWidth < 640;
-    const pickerWidth = isMobileView ? 160 : 280;
-    const pickerHalfWidth = pickerWidth / 2;
+      // Color picker/button dimensions
+      const isMobileView = window.innerWidth < 640;
+      const pickerWidth = isMobileView ? 160 : 280;
+      const pickerHalfWidth = pickerWidth / 2;
 
-    // Horizontal boundary checks
-    const containerWidth = containerRect.width;
-    const minX = pickerHalfWidth + 10;
-    const maxX = containerWidth - pickerHalfWidth - 10;
-    const xPos = Math.max(minX, Math.min(maxX, selectionCenterX));
+      // Horizontal boundary checks
+      const containerWidth = containerRect.width;
+      const minX = pickerHalfWidth + 10;
+      const maxX = containerWidth - pickerHalfWidth - 10;
+      const xPos = Math.max(minX, Math.min(maxX, selectionCenterX));
 
-    // Always show ABOVE the selection on mobile (no jumping)
-    setPickerPosition({
-      x: xPos,
-      y: topRelativeToContainer,
-      showBelow: false,
-    });
+      // Always show ABOVE the selection on mobile (no jumping)
+      setPickerPosition({
+        x: xPos,
+        y: topRelativeToContainer,
+        showBelow: false,
+      });
+
+      // Mark button as positioned for this selection session
+      buttonPositionedRef.current = true;
+    }
 
     if (isTouchDevice()) {
       // Mobile: Show highlight button but KEEP native selection visible
@@ -1270,6 +1283,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
               // Mark that we just dehighlighted to prevent UI from showing
               justDehighlightedRef.current = true;
+              buttonPositionedRef.current = false;
 
               // Instant removal - no animation
               removeHighlightFromDOM(container, highlightId);
@@ -1517,6 +1531,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           pendingSelectionRef.current = null;
           lastProcessedSelection = "";
           justDehighlightedRef.current = true;
+          buttonPositionedRef.current = false;
 
           // Instant removal
           removeHighlightFromDOM(container, highlight.id);
@@ -1545,27 +1560,34 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         suffixContext,
       });
 
-      // Calculate position
-      const rect = range.getBoundingClientRect();
-      const containerRect = containerRef.current?.getBoundingClientRect();
-      if (containerRect) {
-        const selectionCenterX = rect.left - containerRect.left + rect.width / 2;
-        const topRelativeToContainer = rect.top - containerRect.top;
+      // Only update position if button hasn't been positioned yet for this selection session
+      // This prevents the button from jumping around as user adjusts selection
+      if (!buttonPositionedRef.current) {
+        // Calculate position
+        const rect = range.getBoundingClientRect();
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (containerRect) {
+          const selectionCenterX = rect.left - containerRect.left + rect.width / 2;
+          const topRelativeToContainer = rect.top - containerRect.top;
 
-        const isMobileView = window.innerWidth < 640;
-        const pickerWidth = isMobileView ? 160 : 280;
-        const pickerHalfWidth = pickerWidth / 2;
+          const isMobileView = window.innerWidth < 640;
+          const pickerWidth = isMobileView ? 160 : 280;
+          const pickerHalfWidth = pickerWidth / 2;
 
-        const containerWidth = containerRect.width;
-        const minX = pickerHalfWidth + 10;
-        const maxX = containerWidth - pickerHalfWidth - 10;
-        const xPos = Math.max(minX, Math.min(maxX, selectionCenterX));
+          const containerWidth = containerRect.width;
+          const minX = pickerHalfWidth + 10;
+          const maxX = containerWidth - pickerHalfWidth - 10;
+          const xPos = Math.max(minX, Math.min(maxX, selectionCenterX));
 
-        setPickerPosition({
-          x: xPos,
-          y: topRelativeToContainer,
-          showBelow: false,
-        });
+          setPickerPosition({
+            x: xPos,
+            y: topRelativeToContainer,
+            showBelow: false,
+          });
+        }
+
+        // Mark button as positioned for this selection session
+        buttonPositionedRef.current = true;
       }
 
       // Keep native selection visible for handle dragging (blue drag lines)
@@ -1691,6 +1713,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
             // Mark that we just dehighlighted to prevent UI from showing
             justDehighlightedRef.current = true;
+            buttonPositionedRef.current = false;
 
             // Instant removal - no animation
             removeHighlightFromDOM(container, pendingRemoval);
@@ -1993,6 +2016,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     lastSelectionLengthRef.current = 0;
     isSelectingRef.current = false;
     isHandleDraggingRef.current = false;
+    buttonPositionedRef.current = false;
   }, []);
 
   return (
