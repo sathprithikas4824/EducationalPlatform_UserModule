@@ -405,24 +405,58 @@ const applyHighlightToDOM = (
 };
 
 // Remove highlight from DOM - handles multiple marks with same ID (cross-element highlights)
-const removeHighlightFromDOM = (container: HTMLElement, highlightId: string): void => {
-  const marks = container.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
-  const parentsToNormalize = new Set<Node>();
+// Optional animated removal for better UX feedback
+const removeHighlightFromDOM = (container: HTMLElement, highlightId: string, animated: boolean = false): Promise<void> => {
+  return new Promise((resolve) => {
+    const marks = container.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
+    const parentsToNormalize = new Set<Node>();
 
-  marks.forEach(mark => {
-    const parent = mark.parentNode;
-    if (parent) {
-      parentsToNormalize.add(parent);
-      while (mark.firstChild) {
-        parent.insertBefore(mark.firstChild, mark);
-      }
-      mark.remove();
+    if (animated && marks.length > 0) {
+      // Add dehighlight animation class
+      marks.forEach(mark => {
+        (mark as HTMLElement).classList.add('dehighlight-animation');
+      });
+
+      // Wait for animation to complete before removing
+      setTimeout(() => {
+        marks.forEach(mark => {
+          const parent = mark.parentNode;
+          if (parent) {
+            parentsToNormalize.add(parent);
+            while (mark.firstChild) {
+              parent.insertBefore(mark.firstChild, mark);
+            }
+            mark.remove();
+          }
+        });
+
+        // Normalize all affected parents to merge adjacent text nodes
+        parentsToNormalize.forEach(parent => {
+          parent.normalize();
+        });
+
+        resolve();
+      }, 200); // Match animation duration
+    } else {
+      // Immediate removal
+      marks.forEach(mark => {
+        const parent = mark.parentNode;
+        if (parent) {
+          parentsToNormalize.add(parent);
+          while (mark.firstChild) {
+            parent.insertBefore(mark.firstChild, mark);
+          }
+          mark.remove();
+        }
+      });
+
+      // Normalize all affected parents to merge adjacent text nodes
+      parentsToNormalize.forEach(parent => {
+        parent.normalize();
+      });
+
+      resolve();
     }
-  });
-
-  // Normalize all affected parents to merge adjacent text nodes
-  parentsToNormalize.forEach(parent => {
-    parent.normalize();
   });
 };
 
@@ -474,11 +508,101 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   const isScrollingRef = useRef<boolean>(false);
   const scrollStartYRef = useRef<number | null>(null);
 
+  // Store pending selection for restoration after app resume (Android)
+  const pendingSelectionRef = useRef<{
+    startOffset: number;
+    endOffset: number;
+    text: string;
+  } | null>(null);
+
   // Detect mobile on client side to avoid hydration mismatch
   useEffect(() => {
     setIsMobileDevice(isTouchDevice());
     setIsIOSDevice(isIOS());
   }, []);
+
+  // Android: Restore selection state when app resumes from being backgrounded/frozen
+  // This ensures the blue drag handles can be used again after phone freezes
+  useEffect(() => {
+    if (isIOSDevice || !isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
+
+    const container = contentRef.current;
+    if (!container) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // App has resumed - check if we had a pending selection
+        const pending = pendingSelectionRef.current;
+        if (pending && pending.text) {
+          // Small delay to ensure DOM is ready
+          setTimeout(() => {
+            // Check if the text still exists in container
+            const fullText = getTextContent(container);
+            const textIndex = fullText.indexOf(pending.text);
+
+            if (textIndex !== -1) {
+              // Try to programmatically restore selection with native handles
+              try {
+                const boundaries = getTextNodeBoundaries(container);
+                const startBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.startOffset);
+                const endBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.endOffset);
+
+                if (startBoundary && endBoundary) {
+                  const range = document.createRange();
+                  const startLocalOffset = pending.startOffset - startBoundary.startOffset;
+                  const endLocalOffset = pending.endOffset - endBoundary.startOffset;
+
+                  range.setStart(startBoundary.node, Math.min(startLocalOffset, startBoundary.node.length));
+                  range.setEnd(endBoundary.node, Math.min(endLocalOffset, endBoundary.node.length));
+
+                  const selection = window.getSelection();
+                  if (selection) {
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+
+                    // Mark that user can continue dragging handles
+                    isHandleDraggingRef.current = true;
+                    lastSelectionTextRef.current = pending.text;
+
+                    // Show highlight button after a short delay
+                    setTimeout(() => {
+                      const sel = window.getSelection();
+                      if (sel && sel.toString().trim().length >= 2) {
+                        processSelection(true); // Keep native selection visible
+                      }
+                    }, 300);
+                  }
+                }
+              } catch (e) {
+                console.warn('Could not restore selection:', e);
+              }
+            }
+          }, 100);
+        }
+      } else if (document.visibilityState === 'hidden') {
+        // App is being backgrounded - store current selection
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim().length >= 2) {
+          const range = selection.getRangeAt(0);
+          if (container.contains(range.commonAncestorContainer)) {
+            const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
+            const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
+            pendingSelectionRef.current = {
+              startOffset,
+              endOffset,
+              text: selection.toString().trim(),
+            };
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isIOSDevice, highlightModeEnabled, isLoggedIn, processSelection]);
 
   // Apply highlights to the DOM after render
   useEffect(() => {
@@ -535,21 +659,26 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     }
 
     // Check if clicking on an existing highlight FIRST (before selection length check)
-    // This allows tapping on highlights to remove them
+    // This allows tapping on highlights to remove them with animation on mobile
     const clickedMark = (range.startContainer.parentElement?.closest('[data-highlight-id]') ||
                         range.endContainer.parentElement?.closest('[data-highlight-id]')) as HTMLElement | null;
 
     if (clickedMark) {
       const highlightId = clickedMark.getAttribute('data-highlight-id');
       if (highlightId) {
-        removeHighlight(highlightId);
-        removeHighlightFromDOM(container, highlightId);
-        appliedHighlightsRef.current.delete(highlightId);
         window.getSelection()?.removeAllRanges();
         setShowColorPicker(false);
         setShowMobileHighlightButton(false);
         setSelectedText("");
         setSelectionInfo(null);
+        pendingSelectionRef.current = null;
+
+        // Use animated removal on mobile for better UX
+        const useAnimation = isTouchDevice();
+        removeHighlightFromDOM(container, highlightId, useAnimation).then(() => {
+          removeHighlight(highlightId);
+          appliedHighlightsRef.current.delete(highlightId);
+        });
         return;
       }
     }
@@ -837,6 +966,21 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       isSelectingRef.current = selText.length > 0;
       lastSelectionLengthRef.current = selText.length;
 
+      // Store selection for potential restoration after app resume
+      if (selText && selText.length >= 2 && container) {
+        try {
+          const startOffset = getTextOffset(container, selRange.startContainer, selRange.startOffset);
+          const endOffset = getTextOffset(container, selRange.endContainer, selRange.endOffset);
+          pendingSelectionRef.current = {
+            startOffset,
+            endOffset,
+            text: selText,
+          };
+        } catch (e) {
+          // Ignore errors during selection tracking
+        }
+      }
+
       // If selection changed, user is dragging handles - RESET ALL TIMERS
       if (selText !== prevSelText) {
         isHandleDraggingRef.current = true;
@@ -1072,17 +1216,25 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             Math.pow(touch.clientX - startPos.x, 2) +
             Math.pow(touch.clientY - startPos.y, 2)
           );
-          // If it was a tap (not a drag), remove the highlight
-          if (moveDistance < 10) {
+          // If it was a tap (not a drag), remove the highlight with animation
+          // Increased threshold to 15px for easier tapping on mobile
+          if (moveDistance < 15) {
             const highlightId = pendingRemoval.getAttribute('data-highlight-id');
             if (highlightId) {
-              removeHighlight(highlightId);
-              removeHighlightFromDOM(container, highlightId);
-              appliedHighlightsRef.current.delete(highlightId);
+              // Clear any existing selection first
               window.getSelection()?.removeAllRanges();
+
+              // Use animated removal for better UX feedback
+              removeHighlightFromDOM(container, highlightId, true).then(() => {
+                removeHighlight(highlightId);
+                appliedHighlightsRef.current.delete(highlightId);
+              });
+
               (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
               isSelectingRef.current = false;
               isHandleDraggingRef.current = false;
+              // Clear pending selection since we're removing a highlight
+              pendingSelectionRef.current = null;
               return;
             }
           }
@@ -1146,6 +1298,74 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       document.removeEventListener('cut', handleCopy, { capture: true });
     };
   }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, processSelection, removeHighlight, isIOSDevice]);
+
+  // iOS: Restore selection state when app resumes from being backgrounded/frozen
+  useEffect(() => {
+    if (!isIOSDevice || !highlightModeEnabled || !isLoggedIn) return;
+
+    const container = contentRef.current;
+    if (!container) return;
+
+    const handleIOSVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // App has resumed - check if we had a pending selection
+        const pending = pendingSelectionRef.current;
+        if (pending && pending.text) {
+          setTimeout(() => {
+            const fullText = getTextContent(container);
+            const textIndex = fullText.indexOf(pending.text);
+
+            if (textIndex !== -1) {
+              try {
+                const boundaries = getTextNodeBoundaries(container);
+                const startBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.startOffset);
+                const endBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.endOffset);
+
+                if (startBoundary && endBoundary) {
+                  const range = document.createRange();
+                  const startLocalOffset = pending.startOffset - startBoundary.startOffset;
+                  const endLocalOffset = pending.endOffset - endBoundary.startOffset;
+
+                  range.setStart(startBoundary.node, Math.min(startLocalOffset, startBoundary.node.length));
+                  range.setEnd(endBoundary.node, Math.min(endLocalOffset, endBoundary.node.length));
+
+                  const selection = window.getSelection();
+                  if (selection) {
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    isHandleDraggingRef.current = true;
+                    lastSelectionTextRef.current = pending.text;
+                  }
+                }
+              } catch (e) {
+                console.warn('Could not restore iOS selection:', e);
+              }
+            }
+          }, 150);
+        }
+      } else if (document.visibilityState === 'hidden') {
+        // Store current selection
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim().length >= 2) {
+          const range = selection.getRangeAt(0);
+          if (container.contains(range.commonAncestorContainer)) {
+            const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
+            const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
+            pendingSelectionRef.current = {
+              startOffset,
+              endOffset,
+              text: selection.toString().trim(),
+            };
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleIOSVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleIOSVisibilityChange);
+    };
+  }, [isIOSDevice, highlightModeEnabled, isLoggedIn]);
 
   // iOS-specific: Allow native drag selection with blue handles
   // Aggressively suppress iOS context menu while allowing selection
@@ -1336,21 +1556,29 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const touch = e.changedTouches[0];
       if (!touch) return;
 
-      // Check if it was a tap on existing highlight (for removal)
+      // Check if it was a tap on existing highlight (for removal with animation)
       if (startPos) {
         const moveDistance = Math.sqrt(
           Math.pow(touch.clientX - startPos.x, 2) +
           Math.pow(touch.clientY - startPos.y, 2)
         );
 
+        // Use 15px threshold for easier tapping on mobile
         if (moveDistance < 15) {
           const pendingRemoval = (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval;
           if (pendingRemoval) {
-            removeHighlight(pendingRemoval);
-            removeHighlightFromDOM(container, pendingRemoval);
-            appliedHighlightsRef.current.delete(pendingRemoval);
-            (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval = undefined;
+            // Clear selection first
             window.getSelection()?.removeAllRanges();
+
+            // Use animated removal for better UX feedback
+            removeHighlightFromDOM(container, pendingRemoval, true).then(() => {
+              removeHighlight(pendingRemoval);
+              appliedHighlightsRef.current.delete(pendingRemoval);
+            });
+
+            (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval = undefined;
+            // Clear pending selection
+            pendingSelectionRef.current = null;
             return;
           }
         }
@@ -1432,6 +1660,21 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       // Track selection changes
       const prevSelText = lastSelectionTextRef.current;
       lastSelectionTextRef.current = selText;
+
+      // Store selection for potential restoration after app resume (iOS)
+      if (selText && selText.length >= 2 && container) {
+        try {
+          const startOffset = getTextOffset(container, selRange.startContainer, selRange.startOffset);
+          const endOffset = getTextOffset(container, selRange.endContainer, selRange.endOffset);
+          pendingSelectionRef.current = {
+            startOffset,
+            endOffset,
+            text: selText,
+          };
+        } catch (e) {
+          // Ignore errors during selection tracking
+        }
+      }
 
       // If selection changed, user is dragging handles - reset timers
       if (selText !== prevSelText && selText.length > 0) {
@@ -1929,6 +2172,43 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             -webkit-touch-callout: none !important;
             -webkit-user-select: text !important;
             user-select: text !important;
+          }
+        }
+
+        /* Dehighlight animation - fade out effect for user feedback */
+        @keyframes dehighlight-fade {
+          0% {
+            opacity: 1;
+            background-color: inherit;
+          }
+          50% {
+            background-color: rgba(239, 68, 68, 0.4); /* Red flash to indicate removal */
+          }
+          100% {
+            opacity: 0.3;
+            background-color: transparent;
+          }
+        }
+
+        .dehighlight-animation {
+          animation: dehighlight-fade 0.2s ease-out forwards;
+          pointer-events: none; /* Prevent double-taps during animation */
+        }
+
+        /* Make highlighted text easier to tap on mobile */
+        @media (pointer: coarse) {
+          mark[data-highlight-id] {
+            /* Increase touch target slightly */
+            padding: 2px 0 !important;
+            margin: -2px 0 !important;
+            /* Ensure it's tappable */
+            cursor: pointer;
+            -webkit-tap-highlight-color: rgba(239, 68, 68, 0.3);
+          }
+
+          /* Visual feedback on touch */
+          mark[data-highlight-id]:active {
+            opacity: 0.7;
           }
         }
 
