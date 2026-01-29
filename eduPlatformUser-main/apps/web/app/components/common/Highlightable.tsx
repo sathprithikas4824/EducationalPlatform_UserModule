@@ -564,6 +564,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const highlightId = clickedMark.getAttribute('data-highlight-id');
       if (highlightId) {
         window.getSelection()?.removeAllRanges();
+        // Remove any temp highlights that might be showing
+        removeTempHighlights(container);
         setShowColorPicker(false);
         setShowMobileHighlightButton(false);
         setSelectedText("");
@@ -643,6 +645,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         if (overlapRatioWithHighlight >= 0.5 || overlapRatioWithSelection >= 0.5) {
           // Auto-dehighlight: remove highlight without showing any UI
           window.getSelection()?.removeAllRanges();
+          // Remove any temp highlights that might be showing
+          removeTempHighlights(container);
           setShowColorPicker(false);
           setShowMobileHighlightButton(false);
           setSelectedText("");
@@ -1281,6 +1285,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
               // Clear any existing selection first
               window.getSelection()?.removeAllRanges();
 
+              // Remove any temp highlights that might be showing
+              removeTempHighlights(container);
+
               // Mark that we just dehighlighted to prevent UI from showing
               justDehighlightedRef.current = true;
               buttonPositionedRef.current = false;
@@ -1524,6 +1531,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         if (overlapRatioWithHighlight >= 0.5 || overlapRatioWithSelection >= 0.5) {
           // Auto-dehighlight: remove highlight without showing any UI
           window.getSelection()?.removeAllRanges();
+          // Remove any temp highlights that might be showing
+          removeTempHighlights(container);
           setShowColorPicker(false);
           setShowMobileHighlightButton(false);
           setSelectedText("");
@@ -1710,6 +1719,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           if (pendingRemoval) {
             // Clear selection first
             window.getSelection()?.removeAllRanges();
+
+            // Remove any temp highlights that might be showing
+            removeTempHighlights(container);
 
             // Mark that we just dehighlighted to prevent UI from showing
             justDehighlightedRef.current = true;
