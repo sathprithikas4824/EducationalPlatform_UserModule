@@ -1177,12 +1177,17 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
     };
 
+    // Track long press for custom selection trigger
+    let longPressTimer: NodeJS.Timeout | null = null;
+    let initialTouchPos: { x: number; y: number } | null = null;
+
     // Handle touch start
     const handleIOSTouchStart = (e: TouchEvent) => {
       const touch = e.touches[0];
       if (!touch) return;
 
       isTouchActive = true;
+      initialTouchPos = { x: touch.clientX, y: touch.clientY };
       iosTouchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
       scrollStartYRef.current = touch.clientY;
       isScrollingRef.current = false;
@@ -1198,6 +1203,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         clearTimeout(selectionStableTimeoutRef.current);
         selectionStableTimeoutRef.current = null;
       }
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
 
       // Check if there's an existing selection - user might be dragging handles
       const sel = window.getSelection();
@@ -1209,6 +1218,43 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         if (showMobileHighlightButton) {
           setShowMobileHighlightButton(false);
         }
+      } else {
+        // Start long press timer for new selection
+        longPressTimer = setTimeout(() => {
+          // Clear any native selection that iOS might have started
+          window.getSelection()?.removeAllRanges();
+
+          // Use caretRangeFromPoint to get position and create selection
+          if (initialTouchPos && document.caretRangeFromPoint) {
+            const range = document.caretRangeFromPoint(initialTouchPos.x, initialTouchPos.y);
+            if (range && container.contains(range.startContainer)) {
+              // Expand to word
+              const textNode = range.startContainer;
+              if (textNode.nodeType === Node.TEXT_NODE) {
+                const text = textNode.textContent || '';
+                let startOffset = range.startOffset;
+                let endOffset = range.startOffset;
+
+                // Find word boundaries
+                while (startOffset > 0 && !/\s/.test(text[startOffset - 1])) {
+                  startOffset--;
+                }
+                while (endOffset < text.length && !/\s/.test(text[endOffset])) {
+                  endOffset++;
+                }
+
+                // Create selection for the word
+                const newRange = document.createRange();
+                newRange.setStart(textNode, startOffset);
+                newRange.setEnd(textNode, endOffset);
+
+                const selection = window.getSelection();
+                selection?.removeAllRanges();
+                selection?.addRange(newRange);
+              }
+            }
+          }
+        }, 400);
       }
 
       // Check if tapping on an existing highlight (for removal)
@@ -1231,9 +1277,26 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const startY = scrollStartYRef.current;
       if (startY !== null && !isScrollingRef.current) {
         const deltaY = Math.abs(touch.clientY - startY);
-        if (deltaY > 30) {
+        if (deltaY > 20) {
           isScrollingRef.current = true;
+          // Cancel long press timer on scroll
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
           return;
+        }
+      }
+
+      // Cancel long press if moved too far horizontally
+      if (initialTouchPos && longPressTimer) {
+        const moveDistance = Math.sqrt(
+          Math.pow(touch.clientX - initialTouchPos.x, 2) +
+          Math.pow(touch.clientY - initialTouchPos.y, 2)
+        );
+        if (moveDistance > 10) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
         }
       }
 
@@ -1253,6 +1316,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const startPos = iosTouchStartPosRef.current;
       iosTouchStartPosRef.current = null;
       scrollStartYRef.current = null;
+      initialTouchPos = null;
+
+      // Clear long press timer
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
 
       // Check for tap on existing highlight (for removal)
       const pendingRemoval = (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval;
@@ -1464,6 +1534,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       iosTouchStartPosRef.current = null;
       scrollStartYRef.current = null;
       isScrollingRef.current = false;
+      initialTouchPos = null;
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
       if (selectionStableTimeoutRef.current) {
         clearTimeout(selectionStableTimeoutRef.current);
         selectionStableTimeoutRef.current = null;
@@ -1484,16 +1559,57 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     document.addEventListener('copy', preventContextMenu, { capture: true });
     document.addEventListener('cut', preventContextMenu, { capture: true });
 
+    // iOS specific: prevent gesture events that can trigger menus
+    const preventGesture = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+    container.addEventListener('gesturestart', preventGesture, { capture: true });
+    container.addEventListener('gesturechange', preventGesture, { capture: true });
+    container.addEventListener('gestureend', preventGesture, { capture: true });
+
+    // Prevent selectstart from bubbling up to trigger iOS menu
+    const handleSelectStart = (e: Event) => {
+      // Allow selection but suppress any default behavior
+      e.stopPropagation();
+    };
+    container.addEventListener('selectstart', handleSelectStart, { capture: false });
+
     // CSS to suppress iOS callout but allow selection - apply to container
     (container.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
     (container.style as CSSStyleDeclaration & { webkitUserModify: string }).webkitUserModify = 'read-only';
 
     // Apply callout suppression to ALL child elements (including black text)
-    const allElements = container.querySelectorAll('*');
-    allElements.forEach((el) => {
-      const htmlEl = el as HTMLElement;
-      (htmlEl.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
+    const applyCalloutSuppressionToAll = () => {
+      const allElements = container.querySelectorAll('*');
+      allElements.forEach((el) => {
+        const htmlEl = el as HTMLElement;
+        (htmlEl.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
+        (htmlEl.style as CSSStyleDeclaration & { webkitTapHighlightColor: string }).webkitTapHighlightColor = 'transparent';
+      });
+    };
+    applyCalloutSuppressionToAll();
+
+    // Watch for new elements and apply suppression to them too
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node as HTMLElement;
+            (el.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
+            (el.style as CSSStyleDeclaration & { webkitTapHighlightColor: string }).webkitTapHighlightColor = 'transparent';
+            // Also apply to any children
+            el.querySelectorAll('*').forEach((child) => {
+              const childEl = child as HTMLElement;
+              (childEl.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
+              (childEl.style as CSSStyleDeclaration & { webkitTapHighlightColor: string }).webkitTapHighlightColor = 'transparent';
+            });
+          }
+        });
+      });
     });
+    observer.observe(container, { childList: true, subtree: true });
 
     return () => {
       container.removeEventListener('touchstart', handleIOSTouchStart);
@@ -1503,6 +1619,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       container.removeEventListener('contextmenu', preventContextMenu, { capture: true });
       container.removeEventListener('copy', preventContextMenu, { capture: true });
       container.removeEventListener('cut', preventContextMenu, { capture: true });
+      container.removeEventListener('gesturestart', preventGesture, { capture: true });
+      container.removeEventListener('gesturechange', preventGesture, { capture: true });
+      container.removeEventListener('gestureend', preventGesture, { capture: true });
+      container.removeEventListener('selectstart', handleSelectStart, { capture: false });
       document.removeEventListener('selectionchange', handleSelectionChange);
       document.removeEventListener('contextmenu', preventContextMenu, { capture: true });
       document.removeEventListener('copy', preventContextMenu, { capture: true });
@@ -1511,6 +1631,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       if (selectionStableTimeoutRef.current) {
         clearTimeout(selectionStableTimeoutRef.current);
       }
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+      }
+      observer.disconnect();
     };
   }, [isIOSDevice, highlightModeEnabled, isLoggedIn, removeHighlight, showColorPicker, showMobileHighlightButton]);
 
@@ -1768,21 +1892,23 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             background-color: rgba(147, 51, 234, 0.4) !important;
           }
 
-          /* iOS specific styles - ALLOW native selection with handles */
-          /* Suppress context menu but keep selection functionality */
+          /* iOS specific styles - Custom selection approach */
+          /* We handle selection programmatically to prevent iOS menu */
           .ios-highlight-mode {
-            /* ALLOW native text selection on iOS for draggable handles */
+            /* Allow selection but suppress ALL native iOS behaviors */
             -webkit-user-select: text !important;
             user-select: text !important;
-            /* AGGRESSIVELY suppress callout menu (Copy/Lookup/Share) */
+            /* CRITICAL: Suppress callout menu completely */
             -webkit-touch-callout: none !important;
-            -webkit-tap-highlight-color: transparent !important;
+            -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
             -webkit-user-modify: read-only !important;
-            /* Allow both scrolling and selection */
-            touch-action: manipulation !important;
+            /* Prevent any touch action that might trigger menus */
+            touch-action: pan-x pan-y !important;
             -webkit-text-size-adjust: 100%;
             pointer-events: auto;
             cursor: text;
+            /* Prevent long-press from triggering iOS menu */
+            -webkit-touch-callout: none !important;
           }
 
           /* iOS: Apply to ALL elements including black text, code blocks, etc */
@@ -1816,13 +1942,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           .ios-highlight-mode aside,
           .ios-highlight-mode header,
           .ios-highlight-mode footer {
-            /* ALLOW native selection on ALL elements for handles */
+            /* Allow selection on ALL elements */
             -webkit-user-select: text !important;
             user-select: text !important;
             /* CRITICAL: Suppress iOS callout on EVERY element */
             -webkit-touch-callout: none !important;
-            -webkit-tap-highlight-color: transparent !important;
-            touch-action: manipulation !important;
+            -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
+            touch-action: pan-x pan-y !important;
             pointer-events: auto;
             cursor: text;
           }
@@ -1843,6 +1969,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           /* iOS: AGGRESSIVE suppression at body level when highlight mode active */
           body.highlight-mode-active {
             -webkit-touch-callout: none !important;
+            -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
           }
 
           body.highlight-mode-active .ios-highlight-mode,
