@@ -1296,7 +1296,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         node: caretPos.node,
       };
 
-      // Long press (400ms) to start word selection with drag capability
+      // Short delay (150ms) to distinguish tap from scroll, then select word
+      // This is much faster and more intuitive than long press
       longPressTimer = setTimeout(() => {
         if (!iosTouchStartRef.current || !initialCaretPos) return;
 
@@ -1324,7 +1325,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           // Clear native selection
           window.getSelection()?.removeAllRanges();
         }
-      }, 400);
+      }, 150);
     };
 
     const handleIOSTouchMove = (e: TouchEvent) => {
@@ -1423,7 +1424,40 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
       (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
 
-      // Handle long press selection (word or drag-extended selection)
+      // Quick tap (not a scroll) - select the word immediately
+      if (moveDistance < 10 && !isLongPressActive && initialCaretPos) {
+        // Select the word at tap point
+        const nodeText = initialCaretPos.node.textContent || "";
+        const nodeOffset = initialCaretPos.offset;
+        const boundaries = getWordBoundaries(nodeText, nodeOffset);
+
+        // Calculate global offsets
+        const nodeStartOffset = getTextOffset(container, initialCaretPos.node, 0);
+        const wordStartOffset = nodeStartOffset + boundaries.start;
+        const wordEndOffset = nodeStartOffset + boundaries.end;
+
+        if (wordEndOffset > wordStartOffset) {
+          // Remove any existing temp highlights
+          removeTempHighlights(container);
+
+          // Apply temp highlight for the word
+          applyTempHighlight(container, wordStartOffset, wordEndOffset);
+          iosSelectionRef.current = { startOffset: wordStartOffset, endOffset: wordEndOffset };
+
+          // Show highlight button immediately
+          showHighlightButtonForSelection(wordStartOffset, wordEndOffset, e);
+        }
+
+        // Clean up
+        iosTouchStartRef.current = null;
+        touchStartPosRef.current = null;
+        initialCaretPos = null;
+        isDraggingRef.current = false;
+        isLongPressActive = false;
+        return;
+      }
+
+      // Handle hold + drag selection
       const selection = iosSelectionRef.current;
 
       iosTouchStartRef.current = null;
