@@ -703,15 +703,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     // Only update position if button hasn't been positioned yet for this selection session
     // This prevents the button from jumping around as user adjusts selection
     if (!buttonPositionedRef.current) {
-      // Get the position of the START of the selection (where user started dragging)
-      // Create a collapsed range at the start to get its exact position
-      const startRange = document.createRange();
-      startRange.setStart(range.startContainer, range.startOffset);
-      startRange.setEnd(range.startContainer, range.startOffset);
-      const startRect = startRange.getBoundingClientRect();
-
-      // Use the start position for X, and the top of the full selection for Y
-      const startX = startRect.left - containerRect.left;
+      // Center the button above the selected text
+      const centerX = rect.left + rect.width / 2 - containerRect.left;
       const topRelativeToContainer = rect.top - containerRect.top;
 
       // Color picker/button dimensions
@@ -723,7 +716,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const containerWidth = containerRect.width;
       const minX = pickerHalfWidth + 10;
       const maxX = containerWidth - pickerHalfWidth - 10;
-      const xPos = Math.max(minX, Math.min(maxX, startX));
+      const xPos = Math.max(minX, Math.min(maxX, centerX));
 
       // Always show ABOVE the selection on mobile (no jumping)
       setPickerPosition({
@@ -1579,17 +1572,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       // Only update position if button hasn't been positioned yet for this selection session
       // This prevents the button from jumping around as user adjusts selection
       if (!buttonPositionedRef.current) {
-        // Get the position of the START of the selection (where user started dragging)
-        const startRange = document.createRange();
-        startRange.setStart(range.startContainer, range.startOffset);
-        startRange.setEnd(range.startContainer, range.startOffset);
-        const startRect = startRange.getBoundingClientRect();
-
         const rect = range.getBoundingClientRect();
         const containerRect = containerRef.current?.getBoundingClientRect();
         if (containerRect) {
-          // Use the start position for X, and the top of the full selection for Y
-          const startX = startRect.left - containerRect.left;
+          // Center the button above the selected text
+          const centerX = rect.left + rect.width / 2 - containerRect.left;
           const topRelativeToContainer = rect.top - containerRect.top;
 
           const isMobileView = window.innerWidth < 640;
@@ -1599,7 +1586,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           const containerWidth = containerRect.width;
           const minX = pickerHalfWidth + 10;
           const maxX = containerWidth - pickerHalfWidth - 10;
-          const xPos = Math.max(minX, Math.min(maxX, startX));
+          const xPos = Math.max(minX, Math.min(maxX, centerX));
 
           setPickerPosition({
             x: xPos,
