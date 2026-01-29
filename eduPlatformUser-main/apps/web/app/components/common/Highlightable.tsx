@@ -574,6 +574,75 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       return;
     }
 
+    // MOBILE ONLY: Check if the selected text overlaps with an existing highlight
+    // If so, automatically dehighlight it (user-friendly toggle behavior)
+    if (isTouchDevice()) {
+      const fullText = getTextContent(container);
+      const selStartOffset = getTextOffset(container, range.startContainer, range.startOffset);
+      const selEndOffset = getTextOffset(container, range.endContainer, range.endOffset);
+
+      // Find any existing highlight that significantly overlaps with the selection
+      for (const highlight of highlights) {
+        // Find the highlight's actual position in the text
+        let highlightStart = -1;
+        let highlightEnd = -1;
+
+        // Try to find exact position using context (same logic as applyHighlightToDOM)
+        if (highlight.prefixContext && highlight.suffixContext) {
+          const searchPattern = highlight.prefixContext + highlight.text + highlight.suffixContext;
+          const patternIndex = fullText.indexOf(searchPattern);
+          if (patternIndex !== -1) {
+            highlightStart = patternIndex + highlight.prefixContext.length;
+            highlightEnd = highlightStart + highlight.text.length;
+          }
+        }
+
+        if (highlightStart === -1 && highlight.prefixContext) {
+          const searchPattern = highlight.prefixContext + highlight.text;
+          const patternIndex = fullText.indexOf(searchPattern);
+          if (patternIndex !== -1) {
+            highlightStart = patternIndex + highlight.prefixContext.length;
+            highlightEnd = highlightStart + highlight.text.length;
+          }
+        }
+
+        if (highlightStart === -1) {
+          // Fallback to stored offsets
+          highlightStart = highlight.startOffset;
+          highlightEnd = highlight.endOffset;
+        }
+
+        // Check for significant overlap
+        const overlapStart = Math.max(selStartOffset, highlightStart);
+        const overlapEnd = Math.min(selEndOffset, highlightEnd);
+        const overlapLength = Math.max(0, overlapEnd - overlapStart);
+
+        const selectionLength = selEndOffset - selStartOffset;
+        const highlightLength = highlightEnd - highlightStart;
+
+        // If selection overlaps with 50%+ of the highlight OR the highlight overlaps with 50%+ of selection
+        // This makes it easy to dehighlight by just selecting the highlighted text
+        const overlapRatioWithHighlight = highlightLength > 0 ? overlapLength / highlightLength : 0;
+        const overlapRatioWithSelection = selectionLength > 0 ? overlapLength / selectionLength : 0;
+
+        if (overlapRatioWithHighlight >= 0.5 || overlapRatioWithSelection >= 0.5) {
+          // Auto-dehighlight: remove highlight without showing any UI
+          window.getSelection()?.removeAllRanges();
+          setShowColorPicker(false);
+          setShowMobileHighlightButton(false);
+          setSelectedText("");
+          setSelectionInfo(null);
+          pendingSelectionRef.current = null;
+
+          // Instant removal
+          removeHighlightFromDOM(container, highlight.id);
+          removeHighlight(highlight.id);
+          appliedHighlightsRef.current.delete(highlight.id);
+          return;
+        }
+      }
+    }
+
     // Calculate offsets and get context using TreeWalker-based text
     // This ensures consistency when highlighting across block elements
     const fullText = getTextContent(container);
@@ -651,7 +720,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       setShowColorPicker(true);
       setShowMobileHighlightButton(false);
     }
-  }, [isLoggedIn, highlightModeEnabled, removeHighlight]);
+  }, [isLoggedIn, highlightModeEnabled, removeHighlight, highlights]);
 
   // Handle mouse selection (desktop)
   const handleMouseUp = useCallback(() => {
@@ -1365,11 +1434,74 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const range = sel.getRangeAt(0);
       if (!container.contains(range.commonAncestorContainer)) return;
 
-      lastProcessedSelection = selText;
-
       const fullText = getTextContent(container);
       const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
       const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
+
+      // iOS: Check if the selected text overlaps with an existing highlight
+      // If so, automatically dehighlight it (user-friendly toggle behavior)
+      for (const highlight of highlights) {
+        // Find the highlight's actual position in the text
+        let highlightStart = -1;
+        let highlightEnd = -1;
+
+        // Try to find exact position using context (same logic as applyHighlightToDOM)
+        if (highlight.prefixContext && highlight.suffixContext) {
+          const searchPattern = highlight.prefixContext + highlight.text + highlight.suffixContext;
+          const patternIndex = fullText.indexOf(searchPattern);
+          if (patternIndex !== -1) {
+            highlightStart = patternIndex + highlight.prefixContext.length;
+            highlightEnd = highlightStart + highlight.text.length;
+          }
+        }
+
+        if (highlightStart === -1 && highlight.prefixContext) {
+          const searchPattern = highlight.prefixContext + highlight.text;
+          const patternIndex = fullText.indexOf(searchPattern);
+          if (patternIndex !== -1) {
+            highlightStart = patternIndex + highlight.prefixContext.length;
+            highlightEnd = highlightStart + highlight.text.length;
+          }
+        }
+
+        if (highlightStart === -1) {
+          // Fallback to stored offsets
+          highlightStart = highlight.startOffset;
+          highlightEnd = highlight.endOffset;
+        }
+
+        // Check for significant overlap
+        const overlapStart = Math.max(startOffset, highlightStart);
+        const overlapEnd = Math.min(endOffset, highlightEnd);
+        const overlapLength = Math.max(0, overlapEnd - overlapStart);
+
+        const selectionLength = endOffset - startOffset;
+        const highlightLength = highlightEnd - highlightStart;
+
+        // If selection overlaps with 50%+ of the highlight OR the highlight overlaps with 50%+ of selection
+        const overlapRatioWithHighlight = highlightLength > 0 ? overlapLength / highlightLength : 0;
+        const overlapRatioWithSelection = selectionLength > 0 ? overlapLength / selectionLength : 0;
+
+        if (overlapRatioWithHighlight >= 0.5 || overlapRatioWithSelection >= 0.5) {
+          // Auto-dehighlight: remove highlight without showing any UI
+          window.getSelection()?.removeAllRanges();
+          setShowColorPicker(false);
+          setShowMobileHighlightButton(false);
+          setSelectedText("");
+          setSelectionInfo(null);
+          pendingSelectionRef.current = null;
+          lastProcessedSelection = "";
+
+          // Instant removal
+          removeHighlightFromDOM(container, highlight.id);
+          removeHighlight(highlight.id);
+          appliedHighlightsRef.current.delete(highlight.id);
+          return;
+        }
+      }
+
+      lastProcessedSelection = selText;
+
       const text = fullText.substring(startOffset, endOffset);
 
       if (!text || text.length < 2) return;
@@ -1734,7 +1866,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         clearTimeout(selectionCheckTimer);
       }
     };
-  }, [isIOSDevice, highlightModeEnabled, isLoggedIn, removeHighlight, showColorPicker, showMobileHighlightButton]);
+  }, [isIOSDevice, highlightModeEnabled, isLoggedIn, removeHighlight, showColorPicker, showMobileHighlightButton, highlights]);
 
   // Native selection is now used for iOS (same as Android)
   // No custom touch selection needed
