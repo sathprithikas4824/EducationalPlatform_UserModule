@@ -713,11 +713,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     });
 
     if (isTouchDevice()) {
-      // Mobile: Apply temporary visual highlight and clear native selection
-      // This removes the blue drag handles when Highlight button appears
-      applyTempHighlight(container, startOffset, endOffset);
-      window.getSelection()?.removeAllRanges();
-      // Show the highlight button (it will appear above/below the selection)
+      // Mobile: Show highlight button but KEEP native selection visible
+      // This allows users to continue dragging selection handles (blue drag lines)
+      // Native selection will be cleared when user taps the highlight button
       setShowMobileHighlightButton(true);
       setShowColorPicker(false);
     } else {
@@ -1568,10 +1566,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         });
       }
 
-      // Apply temp highlight and clear native selection when showing highlight button
-      applyTempHighlight(container, startOffset, endOffset);
-      window.getSelection()?.removeAllRanges();
-
+      // Keep native selection visible for handle dragging (blue drag lines)
+      // Temp highlight will be applied when user taps the Highlight button
       setShowMobileHighlightButton(true);
       setShowColorPicker(false);
     };
