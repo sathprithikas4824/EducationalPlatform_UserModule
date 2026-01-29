@@ -405,58 +405,25 @@ const applyHighlightToDOM = (
 };
 
 // Remove highlight from DOM - handles multiple marks with same ID (cross-element highlights)
-// Optional animated removal for better UX feedback
-const removeHighlightFromDOM = (container: HTMLElement, highlightId: string, animated: boolean = false): Promise<void> => {
-  return new Promise((resolve) => {
-    const marks = container.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
-    const parentsToNormalize = new Set<Node>();
+// Instant removal for smooth user experience
+const removeHighlightFromDOM = (container: HTMLElement, highlightId: string): void => {
+  const marks = container.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
+  const parentsToNormalize = new Set<Node>();
 
-    if (animated && marks.length > 0) {
-      // Add dehighlight animation class
-      marks.forEach(mark => {
-        (mark as HTMLElement).classList.add('dehighlight-animation');
-      });
-
-      // Wait for animation to complete before removing
-      setTimeout(() => {
-        marks.forEach(mark => {
-          const parent = mark.parentNode;
-          if (parent) {
-            parentsToNormalize.add(parent);
-            while (mark.firstChild) {
-              parent.insertBefore(mark.firstChild, mark);
-            }
-            mark.remove();
-          }
-        });
-
-        // Normalize all affected parents to merge adjacent text nodes
-        parentsToNormalize.forEach(parent => {
-          parent.normalize();
-        });
-
-        resolve();
-      }, 150); // Match animation duration
-    } else {
-      // Immediate removal
-      marks.forEach(mark => {
-        const parent = mark.parentNode;
-        if (parent) {
-          parentsToNormalize.add(parent);
-          while (mark.firstChild) {
-            parent.insertBefore(mark.firstChild, mark);
-          }
-          mark.remove();
-        }
-      });
-
-      // Normalize all affected parents to merge adjacent text nodes
-      parentsToNormalize.forEach(parent => {
-        parent.normalize();
-      });
-
-      resolve();
+  marks.forEach(mark => {
+    const parent = mark.parentNode;
+    if (parent) {
+      parentsToNormalize.add(parent);
+      while (mark.firstChild) {
+        parent.insertBefore(mark.firstChild, mark);
+      }
+      mark.remove();
     }
+  });
+
+  // Normalize all affected parents to merge adjacent text nodes
+  parentsToNormalize.forEach(parent => {
+    parent.normalize();
   });
 };
 
@@ -590,12 +557,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         setSelectionInfo(null);
         pendingSelectionRef.current = null;
 
-        // Use animated removal on mobile for better UX
-        const useAnimation = isTouchDevice();
-        removeHighlightFromDOM(container, highlightId, useAnimation).then(() => {
-          removeHighlight(highlightId);
-          appliedHighlightsRef.current.delete(highlightId);
-        });
+        // Instant removal - no animation
+        removeHighlightFromDOM(container, highlightId);
+        removeHighlight(highlightId);
+        appliedHighlightsRef.current.delete(highlightId);
         return;
       }
     }
@@ -1224,11 +1189,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
               // Clear any existing selection first
               window.getSelection()?.removeAllRanges();
 
-              // Use animated removal for better UX feedback
-              removeHighlightFromDOM(container, highlightId, true).then(() => {
-                removeHighlight(highlightId);
-                appliedHighlightsRef.current.delete(highlightId);
-              });
+              // Instant removal - no animation
+              removeHighlightFromDOM(container, highlightId);
+              removeHighlight(highlightId);
+              appliedHighlightsRef.current.delete(highlightId);
 
               (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
               isSelectingRef.current = false;
@@ -1570,11 +1534,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             // Clear selection first
             window.getSelection()?.removeAllRanges();
 
-            // Use animated removal for better UX feedback
-            removeHighlightFromDOM(container, pendingRemoval, true).then(() => {
-              removeHighlight(pendingRemoval);
-              appliedHighlightsRef.current.delete(pendingRemoval);
-            });
+            // Instant removal - no animation
+            removeHighlightFromDOM(container, pendingRemoval);
+            removeHighlight(pendingRemoval);
+            appliedHighlightsRef.current.delete(pendingRemoval);
 
             (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval = undefined;
             // Clear pending selection
@@ -2175,13 +2138,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           }
         }
 
-        /* Dehighlight animation - smooth fade out */
-        .dehighlight-animation {
-          opacity: 0 !important;
-          transition: opacity 0.12s ease-out;
-          pointer-events: none;
-        }
-
         /* Make highlighted text easier to tap on mobile - NO color feedback */
         @media (pointer: coarse) {
           mark[data-highlight-id] {
@@ -2192,14 +2148,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             /* Completely disable any tap color feedback */
             -webkit-tap-highlight-color: transparent !important;
             -webkit-touch-callout: none !important;
+            outline: none !important;
           }
+        }
 
-          /* No visual feedback on touch - keep it clean */
-          mark[data-highlight-id]:active,
-          mark[data-highlight-id]:focus,
-          mark[data-highlight-id]:hover {
-            /* Keep original appearance, no color change */
-            opacity: 1;
+        /* Global: Disable all tap highlight colors on touch devices */
+        @media (pointer: coarse) {
+          * {
+            -webkit-tap-highlight-color: transparent !important;
           }
         }
 
