@@ -588,6 +588,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       setShowColorPicker(false);
       setSelectedText("");
       setSelectionInfo(null);
+      buttonPositionedRef.current = false;
       return;
     }
 
@@ -700,9 +701,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       suffixContext,
     });
 
-    // Only update position if button hasn't been positioned yet for this selection session
-    // This prevents the button from jumping around as user adjusts selection
-    if (!buttonPositionedRef.current) {
+    // Always recalculate position based on the current selection rect
+    // The button is hidden during handle dragging, so recalculating on each
+    // processSelection call ensures it appears at the correct position
+    {
       // Center the button above the selected text
       const centerX = rect.left + rect.width / 2 - containerRect.left;
       const topRelativeToContainer = rect.top - containerRect.top;
@@ -718,14 +720,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const maxX = containerWidth - pickerHalfWidth - 10;
       const xPos = Math.max(minX, Math.min(maxX, centerX));
 
-      // Always show ABOVE the selection on mobile (no jumping)
+      // Always show ABOVE the selection
       setPickerPosition({
         x: xPos,
         y: topRelativeToContainer,
         showBelow: false,
       });
 
-      // Mark button as positioned for this selection session
       buttonPositionedRef.current = true;
     }
 
@@ -1008,6 +1009,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         lastSelectionTextRef.current = "";
         lastSelectionLengthRef.current = 0;
         isSelectingRef.current = false;
+        buttonPositionedRef.current = false;
         return;
       }
 
@@ -1194,6 +1196,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         lastSelectionTextRef.current = "";
         lastSelectionLengthRef.current = 0;
         isHandleDraggingRef.current = false;
+        buttonPositionedRef.current = false;
       }
 
       // Clear any pending timeout - user is interacting again
@@ -1229,6 +1232,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           window.getSelection()?.removeAllRanges();
           setShowMobileHighlightButton(false);
           setShowColorPicker(false);
+          buttonPositionedRef.current = false;
           return;
         }
       }
@@ -1334,6 +1338,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       isSelectingRef.current = false;
       isHandleDraggingRef.current = false;
       lastSelectionLengthRef.current = 0;
+      buttonPositionedRef.current = false;
       if (selectionStableTimeoutRef.current) {
         clearTimeout(selectionStableTimeoutRef.current);
         selectionStableTimeoutRef.current = null;
@@ -1569,9 +1574,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         suffixContext,
       });
 
-      // Only update position if button hasn't been positioned yet for this selection session
-      // This prevents the button from jumping around as user adjusts selection
-      if (!buttonPositionedRef.current) {
+      // Always recalculate position based on the current selection rect
+      {
         const rect = range.getBoundingClientRect();
         const containerRect = containerRef.current?.getBoundingClientRect();
         if (containerRect) {
@@ -1595,7 +1599,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           });
         }
 
-        // Mark button as positioned for this selection session
         buttonPositionedRef.current = true;
       }
 
@@ -1995,6 +1998,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     setShowMobileHighlightButton(false);
     setSelectedText("");
     setSelectionInfo(null);
+    buttonPositionedRef.current = false;
   }, [selectedText, user, selectionInfo, addHighlight, pageId]);
 
   // Mobile: When user taps the highlight button, show color picker
