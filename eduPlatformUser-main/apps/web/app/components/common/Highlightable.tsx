@@ -99,6 +99,45 @@ const getTextOffset = (container: Node, targetNode: Node, targetOffset: number):
   return offset;
 };
 
+// Get text node boundaries within the container
+// Returns array of { startOffset, endOffset, node } for each text node
+const getTextNodeBoundaries = (container: Node): Array<{ startOffset: number; endOffset: number; node: Text }> => {
+  const boundaries: Array<{ startOffset: number; endOffset: number; node: Text }> = [];
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  let currentOffset = 0;
+
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    const nodeLength = node.textContent?.length || 0;
+    boundaries.push({
+      startOffset: currentOffset,
+      endOffset: currentOffset + nodeLength,
+      node
+    });
+    currentOffset += nodeLength;
+    node = walker.nextNode() as Text | null;
+  }
+
+  return boundaries;
+};
+
+// Find the text node boundary that contains the given offset
+const findTextNodeBoundaryAtOffset = (
+  boundaries: Array<{ startOffset: number; endOffset: number; node: Text }>,
+  offset: number
+): { startOffset: number; endOffset: number; node: Text } | null => {
+  for (const boundary of boundaries) {
+    if (offset >= boundary.startOffset && offset < boundary.endOffset) {
+      return boundary;
+    }
+  }
+  // If offset is at the very end, return the last boundary
+  if (boundaries.length > 0 && offset === boundaries[boundaries.length - 1].endOffset) {
+    return boundaries[boundaries.length - 1];
+  }
+  return null;
+};
+
 // Create a styled mark element for highlighting
 const createMarkElement = (highlightId: string, color: string): HTMLElement => {
   const mark = document.createElement("mark");
@@ -1195,19 +1234,33 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         const offset = getCharacterOffsetAtPoint(container, touch.clientX, touch.clientY);
         if (offset === null) return;
 
-        // Expand to word boundaries for initial selection
+        // Get text node boundaries to limit word expansion to the current text node
         const fullText = getTextContent(container);
+        const boundaries = getTextNodeBoundaries(container);
+        const currentNodeBoundary = findTextNodeBoundaryAtOffset(boundaries, offset);
+
         let wordStart = offset;
         let wordEnd = offset;
 
-        // Find word start (go backwards until whitespace or start)
-        while (wordStart > 0 && !/\s/.test(fullText[wordStart - 1])) {
-          wordStart--;
-        }
+        if (currentNodeBoundary) {
+          // Expand to word boundaries BUT stay within the current text node
+          // Find word start (go backwards until whitespace or text node start)
+          while (wordStart > currentNodeBoundary.startOffset && !/\s/.test(fullText[wordStart - 1])) {
+            wordStart--;
+          }
 
-        // Find word end (go forwards until whitespace or end)
-        while (wordEnd < fullText.length && !/\s/.test(fullText[wordEnd])) {
-          wordEnd++;
+          // Find word end (go forwards until whitespace or text node end)
+          while (wordEnd < currentNodeBoundary.endOffset && !/\s/.test(fullText[wordEnd])) {
+            wordEnd++;
+          }
+        } else {
+          // Fallback: expand to word boundaries using full text (original behavior)
+          while (wordStart > 0 && !/\s/.test(fullText[wordStart - 1])) {
+            wordStart--;
+          }
+          while (wordEnd < fullText.length && !/\s/.test(fullText[wordEnd])) {
+            wordEnd++;
+          }
         }
 
         // Start selection mode
