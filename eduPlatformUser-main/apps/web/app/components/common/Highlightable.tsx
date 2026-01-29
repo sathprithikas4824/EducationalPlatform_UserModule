@@ -58,6 +58,41 @@ const getWordBoundaries = (text: string, offset: number): { start: number; end: 
   return { start, end };
 };
 
+// Get sentence boundaries around a position in text (for iOS tap-to-select)
+const getSentenceBoundaries = (text: string, offset: number): { start: number; end: number } => {
+  // Sentence delimiters
+  const sentenceEnders = /[.!?。！？\n]/;
+
+  // Find sentence start - look backwards for sentence ender or start of text
+  let start = offset;
+  while (start > 0) {
+    if (sentenceEnders.test(text[start - 1])) {
+      break;
+    }
+    start--;
+  }
+  // Skip any whitespace after the sentence ender
+  while (start < offset && /\s/.test(text[start])) {
+    start++;
+  }
+
+  // Find sentence end - look forwards for sentence ender or end of text
+  let end = offset;
+  while (end < text.length) {
+    if (sentenceEnders.test(text[end])) {
+      end++; // Include the sentence ender
+      break;
+    }
+    end++;
+  }
+  // Trim trailing whitespace
+  while (end > start && /\s/.test(text[end - 1]) && !sentenceEnders.test(text[end - 1])) {
+    end--;
+  }
+
+  return { start, end };
+};
+
 const HIGHLIGHT_COLORS = [
   { name: "Yellow", value: "#fef08a" },
   { name: "Green", value: "#bbf7d0" },
@@ -1138,7 +1173,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   }, [isIOSDevice, highlightModeEnabled, isLoggedIn]);
 
   // iOS CUSTOM selection - completely bypasses native selection to avoid iOS menu
-  // This is ENABLED for iOS to prevent Copy/Look Up/Share menu from appearing
+  // TAP = select sentence, LONG PRESS = select word then drag to extend
+  // This prevents Copy/Look Up/Share menu from appearing
   useEffect(() => {
     // Only use custom selection on iOS
     if (!isIOSDevice || !highlightModeEnabled || !isLoggedIn) return;
@@ -1147,6 +1183,78 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     if (!container) return;
 
     let longPressTimer: NodeJS.Timeout | null = null;
+    let touchStartTime = 0;
+    let initialCaretPos: { node: Node; offset: number } | null = null;
+
+    // Helper to show highlight button with selection
+    const showHighlightButtonForSelection = (startOffset: number, endOffset: number, touchEvent?: TouchEvent) => {
+      const fullText = getTextContent(container);
+      const text = fullText.substring(startOffset, endOffset).trim();
+
+      if (!text || text.length < 2) {
+        iosSelectionRef.current = null;
+        removeTempHighlights(container);
+        return;
+      }
+
+      // Get context for matching
+      const prefixStart = Math.max(0, startOffset - CONTEXT_LENGTH);
+      const suffixEnd = Math.min(fullText.length, endOffset + CONTEXT_LENGTH);
+      const prefixContext = fullText.substring(prefixStart, startOffset);
+      const suffixContext = fullText.substring(endOffset, suffixEnd);
+
+      // Calculate picker position
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (!containerRect) {
+        iosSelectionRef.current = null;
+        return;
+      }
+
+      // Find the temp highlight element to position the button above it
+      const tempHighlight = container.querySelector('[data-temp-highlight="true"]');
+      let yPos: number;
+      let xPos: number;
+
+      if (tempHighlight) {
+        const highlightRect = tempHighlight.getBoundingClientRect();
+        yPos = highlightRect.top - containerRect.top;
+        xPos = highlightRect.left - containerRect.left + highlightRect.width / 2;
+      } else if (touchEvent) {
+        const touch = touchEvent.changedTouches[0];
+        yPos = (touch?.clientY || 0) - containerRect.top;
+        xPos = (touch?.clientX || 0) - containerRect.left;
+      } else {
+        yPos = 100;
+        xPos = containerRect.width / 2;
+      }
+
+      // Ensure x position is within bounds
+      const isMobileView = window.innerWidth < 640;
+      const pickerWidth = isMobileView ? 160 : 280;
+      const pickerHalfWidth = pickerWidth / 2;
+      const containerWidth = containerRect.width;
+      const minX = pickerHalfWidth + 10;
+      const maxX = containerWidth - pickerHalfWidth - 10;
+      const boundedX = Math.max(minX, Math.min(maxX, xPos));
+
+      setSelectedText(text);
+      setSelectionInfo({
+        startOffset,
+        endOffset,
+        prefixContext,
+        suffixContext,
+      });
+      setPickerPosition({
+        x: boundedX,
+        y: yPos,
+        showBelow: false,
+      });
+      setShowMobileHighlightButton(true);
+      setShowColorPicker(false);
+
+      // Clear native selection to prevent iOS menu
+      window.getSelection()?.removeAllRanges();
+    };
 
     const handleIOSTouchStart = (e: TouchEvent) => {
       if (showColorPicker || showMobileHighlightButton) return;
@@ -1154,9 +1262,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const touch = e.touches[0];
       if (!touch) return;
 
+      // Prevent default to stop iOS native selection
+      e.preventDefault();
+
+      touchStartTime = Date.now();
+
       // Get caret position from touch
       const caretPos = getCaretPositionFromPoint(touch.clientX, touch.clientY);
       if (!caretPos || !container.contains(caretPos.node)) return;
+
+      initialCaretPos = caretPos;
 
       // Check if tapping on existing highlight
       const target = e.target as HTMLElement;
@@ -1165,7 +1280,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         // Handle tap on existing highlight for removal
         const highlightId = highlightMark.getAttribute('data-highlight-id');
         if (highlightId) {
-          e.preventDefault();
           removeHighlight(highlightId);
           removeHighlightFromDOM(container, highlightId);
           appliedHighlightsRef.current.delete(highlightId);
@@ -1187,18 +1301,18 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         node: caretPos.node,
       };
 
-      // Long press to start selection (like iOS native word selection)
+      // Long press (300ms) to start word selection with drag capability
       longPressTimer = setTimeout(() => {
-        if (!iosTouchStartRef.current) return;
+        if (!iosTouchStartRef.current || !initialCaretPos) return;
         isDraggingRef.current = true;
 
         // Select the word at touch point
-        const nodeText = caretPos.node.textContent || "";
-        const nodeOffset = caretPos.offset;
+        const nodeText = initialCaretPos.node.textContent || "";
+        const nodeOffset = initialCaretPos.offset;
         const boundaries = getWordBoundaries(nodeText, nodeOffset);
 
         // Calculate global offsets
-        const nodeStartOffset = getTextOffset(container, caretPos.node, 0);
+        const nodeStartOffset = getTextOffset(container, initialCaretPos.node, 0);
         const wordStartOffset = nodeStartOffset + boundaries.start;
         const wordEndOffset = nodeStartOffset + boundaries.end;
 
@@ -1229,34 +1343,100 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         Math.pow(touch.clientY - startPos.y, 2)
       );
 
-      // If user moves significantly, they're scrolling - cancel everything
-      if (moveDistance > 15) {
-        // Cancel long press timer
-        if (longPressTimer) {
-          clearTimeout(longPressTimer);
-          longPressTimer = null;
+      // If user hasn't started dragging yet (long press hasn't fired)
+      if (!isDraggingRef.current) {
+        // If user moves significantly before long press fires, they're scrolling
+        if (moveDistance > 15) {
+          // Cancel long press timer
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+          // Reset tracking - user is scrolling
+          iosTouchStartRef.current = null;
+          touchStartPosRef.current = null;
+          initialCaretPos = null;
         }
-        // Reset ALL touch tracking - user is scrolling
-        iosTouchStartRef.current = null;
-        touchStartPosRef.current = null;
-        isDraggingRef.current = false;
-        iosSelectionRef.current = null;
-        // Remove any temp highlights
-        removeTempHighlights(container);
         return;
+      }
+
+      // User is dragging after long press - extend selection
+      e.preventDefault();
+
+      const caretPos = getCaretPositionFromPoint(touch.clientX, touch.clientY);
+      if (!caretPos || !container.contains(caretPos.node)) return;
+
+      const currentOffset = getTextOffset(container, caretPos.node, caretPos.offset);
+      const startRef = iosTouchStartRef.current;
+
+      if (!startRef) return;
+
+      // Calculate new selection range
+      const newStart = Math.min(startRef.startOffset, currentOffset);
+      const newEnd = Math.max(startRef.startOffset, currentOffset);
+
+      if (newEnd > newStart) {
+        // Update temp highlight
+        removeTempHighlights(container);
+        applyTempHighlight(container, newStart, newEnd);
+        iosSelectionRef.current = { startOffset: newStart, endOffset: newEnd };
       }
     };
 
     const handleIOSTouchEnd = (e: TouchEvent) => {
+      const touchDuration = Date.now() - touchStartTime;
+      const startPos = touchStartPosRef.current;
+
       if (longPressTimer) {
         clearTimeout(longPressTimer);
         longPressTimer = null;
       }
 
+      // Calculate movement distance
+      let moveDistance = 0;
+      if (startPos) {
+        const touch = e.changedTouches[0];
+        if (touch) {
+          moveDistance = Math.sqrt(
+            Math.pow(touch.clientX - startPos.x, 2) +
+            Math.pow(touch.clientY - startPos.y, 2)
+          );
+        }
+      }
+
+      // Quick tap (< 250ms with minimal movement) = select sentence
+      if (touchDuration < 250 && moveDistance < 10 && initialCaretPos && !isDraggingRef.current) {
+        // Get sentence boundaries using the full text
+        const fullText = getTextContent(container);
+        const touchOffset = getTextOffset(container, initialCaretPos.node, initialCaretPos.offset);
+        const sentenceBoundaries = getSentenceBoundaries(fullText, touchOffset);
+
+        if (sentenceBoundaries.end > sentenceBoundaries.start) {
+          // Remove any existing temp highlights
+          removeTempHighlights(container);
+
+          // Apply temp highlight for the sentence
+          applyTempHighlight(container, sentenceBoundaries.start, sentenceBoundaries.end);
+          iosSelectionRef.current = { startOffset: sentenceBoundaries.start, endOffset: sentenceBoundaries.end };
+
+          // Show highlight button
+          showHighlightButtonForSelection(sentenceBoundaries.start, sentenceBoundaries.end, e);
+        }
+
+        // Clean up
+        iosTouchStartRef.current = null;
+        touchStartPosRef.current = null;
+        initialCaretPos = null;
+        isDraggingRef.current = false;
+        return;
+      }
+
+      // Handle long press selection (word or drag-extended selection)
       const selection = iosSelectionRef.current;
 
       iosTouchStartRef.current = null;
       touchStartPosRef.current = null;
+      initialCaretPos = null;
 
       if (!selection || !isDraggingRef.current) {
         isDraggingRef.current = false;
@@ -1266,79 +1446,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       isDraggingRef.current = false;
 
-      // Check if we have a valid selection
-      const { startOffset, endOffset } = selection;
-      if (endOffset <= startOffset) {
-        iosSelectionRef.current = null;
-        removeTempHighlights(container);
-        return;
-      }
-
-      // Get the selected text
-      const fullText = getTextContent(container);
-      const text = fullText.substring(startOffset, endOffset).trim();
-
-      if (!text || text.length < 2) {
-        iosSelectionRef.current = null;
-        removeTempHighlights(container);
-        return;
-      }
-
-      // Get context for matching
-      const prefixStart = Math.max(0, startOffset - CONTEXT_LENGTH);
-      const suffixEnd = Math.min(fullText.length, endOffset + CONTEXT_LENGTH);
-      const prefixContext = fullText.substring(prefixStart, startOffset);
-      const suffixContext = fullText.substring(endOffset, suffixEnd);
-
-      // Calculate picker position - find the temp highlight position
-      const containerRect = containerRef.current?.getBoundingClientRect();
-      if (!containerRect) {
-        iosSelectionRef.current = null;
-        return;
-      }
-
-      // Find the temp highlight element to position the button above it
-      const tempHighlight = container.querySelector('[data-temp-highlight="true"]');
-      let yPos: number;
-      let xPos: number;
-
-      if (tempHighlight) {
-        const highlightRect = tempHighlight.getBoundingClientRect();
-        yPos = highlightRect.top - containerRect.top;
-        xPos = highlightRect.left - containerRect.left + highlightRect.width / 2;
-      } else {
-        // Fallback to touch position
-        const touch = e.changedTouches[0];
-        yPos = (touch?.clientY || 0) - containerRect.top;
-        xPos = (touch?.clientX || 0) - containerRect.left;
-      }
-
-      // Ensure x position is within bounds
-      const isMobileView = window.innerWidth < 640;
-      const pickerWidth = isMobileView ? 160 : 280;
-      const pickerHalfWidth = pickerWidth / 2;
-      const containerWidth = containerRect.width;
-      const minX = pickerHalfWidth + 10;
-      const maxX = containerWidth - pickerHalfWidth - 10;
-      const boundedX = Math.max(minX, Math.min(maxX, xPos));
-
-      setSelectedText(text);
-      setSelectionInfo({
-        startOffset,
-        endOffset,
-        prefixContext,
-        suffixContext,
-      });
-      setPickerPosition({
-        x: boundedX,
-        y: yPos,
-        showBelow: false, // Always show above on iOS
-      });
-      setShowMobileHighlightButton(true);
-      setShowColorPicker(false);
-
-      // Clear native selection to prevent iOS menu
-      window.getSelection()?.removeAllRanges();
+      // Show highlight button for the selection
+      showHighlightButtonForSelection(selection.startOffset, selection.endOffset, e);
     };
 
     const handleIOSTouchCancel = () => {
@@ -1348,6 +1457,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
       iosTouchStartRef.current = null;
       touchStartPosRef.current = null;
+      initialCaretPos = null;
       isDraggingRef.current = false;
       iosSelectionRef.current = null;
       removeTempHighlights(container);
@@ -1356,23 +1466,30 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     // Prevent ALL native selection behavior on iOS
     const preventNativeSelection = (e: Event) => {
       e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
       return false;
+    };
+
+    // Aggressively clear any native selection that appears
+    const clearNativeSelectionHandler = () => {
+      // Always clear native selection on iOS in highlight mode
+      const sel = window.getSelection();
+      if (sel && sel.toString().length > 0) {
+        sel.removeAllRanges();
+      }
     };
 
     // Add iOS-specific listeners
     container.addEventListener('touchstart', handleIOSTouchStart, { passive: false });
     container.addEventListener('touchmove', handleIOSTouchMove, { passive: false });
-    container.addEventListener('touchend', handleIOSTouchEnd, { passive: true });
+    container.addEventListener('touchend', handleIOSTouchEnd, { passive: false });
     container.addEventListener('touchcancel', handleIOSTouchCancel, { passive: true });
 
     // Aggressively prevent native selection on iOS
     container.addEventListener('selectstart', preventNativeSelection, { capture: true });
     container.addEventListener('contextmenu', preventNativeSelection, { capture: true });
-    document.addEventListener('selectionchange', () => {
-      if (isDraggingRef.current) {
-        window.getSelection()?.removeAllRanges();
-      }
-    });
+    document.addEventListener('selectionchange', clearNativeSelectionHandler);
 
     return () => {
       if (longPressTimer) clearTimeout(longPressTimer);
@@ -1382,6 +1499,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       container.removeEventListener('touchcancel', handleIOSTouchCancel);
       container.removeEventListener('selectstart', preventNativeSelection, { capture: true });
       container.removeEventListener('contextmenu', preventNativeSelection, { capture: true });
+      document.removeEventListener('selectionchange', clearNativeSelectionHandler);
     };
   }, [isIOSDevice, highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, removeHighlight]);
 
@@ -1625,10 +1743,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             -webkit-user-select: none !important;
             user-select: none !important;
             -webkit-tap-highlight-color: transparent !important;
-            touch-action: manipulation !important;
+            touch-action: pan-y !important;
             -webkit-text-size-adjust: 100%;
             pointer-events: auto;
             cursor: text;
+            /* Prevent iOS magnifying glass and selection */
+            -webkit-user-modify: read-only !important;
           }
 
           .ios-highlight-mode *,
@@ -1646,9 +1766,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             -webkit-user-select: none !important;
             user-select: none !important;
             -webkit-user-drag: none !important;
-            touch-action: manipulation !important;
+            touch-action: pan-y !important;
             pointer-events: auto;
             cursor: text;
+            -webkit-user-modify: read-only !important;
           }
 
           /* iOS: No native selection means no selection color needed */
@@ -1660,6 +1781,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             -webkit-touch-callout: none !important;
             -webkit-user-select: none !important;
             user-select: none !important;
+            -webkit-user-modify: read-only !important;
+          }
+
+          /* iOS: Hide any native selection that might slip through */
+          .ios-highlight-mode::selection,
+          .ios-highlight-mode *::selection {
+            background-color: transparent !important;
+            color: inherit !important;
           }
 
           /* Temp highlights */
