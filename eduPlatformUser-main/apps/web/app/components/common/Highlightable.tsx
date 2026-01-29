@@ -2003,30 +2003,28 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       </div>
 
       {/* Mobile: Floating highlight button - always appears ABOVE the selected text */}
+      {/* NO overlay here - allows user to continue dragging selection handles */}
       {showMobileHighlightButton && isLoggedIn && selectedText && (
-        <>
-          <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
-          <div
-            className="absolute z-[100]"
-            style={{
-              left: pickerPosition.x,
-              top: pickerPosition.y,
-              transform: "translateX(-50%) translateY(-100%) translateY(-12px)",
-            }}
+        <div
+          className="absolute z-[100]"
+          style={{
+            left: pickerPosition.x,
+            top: pickerPosition.y,
+            transform: "translateX(-50%) translateY(-100%) translateY(-12px)",
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleMobileHighlightTap}
+            className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-full shadow-lg active:scale-95 transition-transform font-medium text-sm"
           >
-            <button
-              type="button"
-              onClick={handleMobileHighlightTap}
-              className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-full shadow-lg active:scale-95 transition-transform font-medium text-sm"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
-              Highlight
-            </button>
-          </div>
-        </>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+            Highlight
+          </button>
+        </div>
       )}
 
 
