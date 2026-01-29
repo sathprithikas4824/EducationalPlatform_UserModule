@@ -928,8 +928,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       isTouchActive = false;
       touchEndTime = Date.now();
 
-      // Don't process if UI is already showing
-      if (showColorPicker || showMobileHighlightButton) return;
+      // Don't process if color picker is showing (user is picking a color)
+      if (showColorPicker) return;
 
       const sel = window.getSelection();
       const selText = sel?.toString().trim() || "";
@@ -983,8 +983,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       // Skip if we just dehighlighted
       if (justDehighlightedRef.current) return;
 
-      // Don't process if UI is already showing
-      if (showColorPicker || showMobileHighlightButton) return;
+      // Don't process if color picker is showing (user is picking a color)
+      if (showColorPicker) return;
 
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) {
@@ -1056,7 +1056,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           const currentText = currentSel.toString().trim();
           if (!currentText || currentText.length < 2) return;
           if (currentText === lastProcessedSelection) return;
-          if (showColorPicker || showMobileHighlightButton) return;
+          // Only skip if color picker is showing (user is picking a color)
+          // Don't skip for showMobileHighlightButton - we need to update selectionInfo when user adjusts selection
+          if (showColorPicker) return;
 
           // Check selection hasn't changed recently
           const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
@@ -1666,8 +1668,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         return;
       }
 
-      // Don't process if UI already showing
-      if (showColorPicker || showMobileHighlightButton) return;
+      // Only skip if color picker is showing (user is picking a color)
+      // Don't skip for showMobileHighlightButton - we need to update selectionInfo when user adjusts selection
+      if (showColorPicker) return;
 
       const touch = e.changedTouches[0];
       if (!touch) return;
@@ -1767,8 +1770,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       // Skip if we just dehighlighted
       if (justDehighlightedRef.current) return;
 
-      // Don't process if UI is already showing
-      if (showColorPicker || showMobileHighlightButton) return;
+      // Only skip if color picker is showing (user is picking a color)
+      // Don't skip for showMobileHighlightButton - we need to update selectionInfo when user adjusts selection
+      if (showColorPicker) return;
 
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) {
@@ -1828,7 +1832,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         // Wait 800ms after last selection change before showing button
         selectionCheckTimer = setTimeout(() => {
           if (isTouchActive) return;
-          if (showColorPicker || showMobileHighlightButton) return;
+          // Only skip if color picker is showing (user is picking a color)
+          // Don't skip for showMobileHighlightButton - we need to update selectionInfo when user adjusts selection
+          if (showColorPicker) return;
 
           const currentSel = window.getSelection();
           if (!currentSel || currentSel.rangeCount === 0) return;
