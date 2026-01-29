@@ -1168,6 +1168,15 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       return false;
     };
 
+    // Apply callout suppression to an element and its ancestors
+    const suppressCalloutOnElement = (el: HTMLElement | null) => {
+      while (el && el !== document.body) {
+        (el.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
+        (el.style as CSSStyleDeclaration & { webkitUserModify: string }).webkitUserModify = 'read-only';
+        el = el.parentElement;
+      }
+    };
+
     // Handle touch start
     const handleIOSTouchStart = (e: TouchEvent) => {
       const touch = e.touches[0];
@@ -1177,6 +1186,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       iosTouchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
       scrollStartYRef.current = touch.clientY;
       isScrollingRef.current = false;
+
+      // IMMEDIATELY suppress callout on touched element to prevent iOS menu
+      const target = e.target as HTMLElement;
+      if (target) {
+        suppressCalloutOnElement(target);
+      }
 
       // Clear any pending timers
       if (selectionStableTimeoutRef.current) {
@@ -1197,7 +1212,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
 
       // Check if tapping on an existing highlight (for removal)
-      const target = e.target as HTMLElement;
       const highlightMark = target.closest('[data-highlight-id]') as HTMLElement | null;
       if (highlightMark) {
         const highlightId = highlightMark.getAttribute('data-highlight-id');
@@ -1470,8 +1484,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     document.addEventListener('copy', preventContextMenu, { capture: true });
     document.addEventListener('cut', preventContextMenu, { capture: true });
 
-    // CSS to suppress iOS callout but allow selection
+    // CSS to suppress iOS callout but allow selection - apply to container
     (container.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
+    (container.style as CSSStyleDeclaration & { webkitUserModify: string }).webkitUserModify = 'read-only';
+
+    // Apply callout suppression to ALL child elements (including black text)
+    const allElements = container.querySelectorAll('*');
+    allElements.forEach((el) => {
+      const htmlEl = el as HTMLElement;
+      (htmlEl.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
+    });
 
     return () => {
       container.removeEventListener('touchstart', handleIOSTouchStart);
@@ -1658,6 +1680,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       {/* Mobile styles to contain selection within content area and suppress native menus */}
       <style>{`
+        /* CRITICAL: Global iOS callout suppression when highlight mode is active */
+        /* This must be at the top to ensure highest specificity */
+        body.highlight-mode-active * {
+          -webkit-touch-callout: none !important;
+        }
+
         /* Mobile only: Allow native text selection with drag handles */
         @media (pointer: coarse) {
           /* Container styles - allow scrolling and selection to work inside */
@@ -1683,7 +1711,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             pointer-events: auto;
           }
 
-          /* All child elements must allow selection for handle dragging */
+          /* All child elements must allow selection for handle dragging - ALL text types */
           .mobile-highlight-mode *,
           .mobile-highlight-mode p,
           .mobile-highlight-mode span,
@@ -1691,9 +1719,26 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           .mobile-highlight-mode h1,
           .mobile-highlight-mode h2,
           .mobile-highlight-mode h3,
+          .mobile-highlight-mode h4,
+          .mobile-highlight-mode h5,
+          .mobile-highlight-mode h6,
           .mobile-highlight-mode li,
+          .mobile-highlight-mode ol,
+          .mobile-highlight-mode ul,
           .mobile-highlight-mode a,
-          .mobile-highlight-mode mark {
+          .mobile-highlight-mode mark,
+          .mobile-highlight-mode strong,
+          .mobile-highlight-mode em,
+          .mobile-highlight-mode b,
+          .mobile-highlight-mode i,
+          .mobile-highlight-mode code,
+          .mobile-highlight-mode pre,
+          .mobile-highlight-mode blockquote,
+          .mobile-highlight-mode td,
+          .mobile-highlight-mode th,
+          .mobile-highlight-mode label,
+          .mobile-highlight-mode article,
+          .mobile-highlight-mode section {
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-touch-callout: none !important;
@@ -1729,9 +1774,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             /* ALLOW native text selection on iOS for draggable handles */
             -webkit-user-select: text !important;
             user-select: text !important;
-            /* Suppress callout menu (Copy/Lookup/Share) */
+            /* AGGRESSIVELY suppress callout menu (Copy/Lookup/Share) */
             -webkit-touch-callout: none !important;
             -webkit-tap-highlight-color: transparent !important;
+            -webkit-user-modify: read-only !important;
             /* Allow both scrolling and selection */
             touch-action: manipulation !important;
             -webkit-text-size-adjust: 100%;
@@ -1739,6 +1785,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             cursor: text;
           }
 
+          /* iOS: Apply to ALL elements including black text, code blocks, etc */
           .ios-highlight-mode *,
           .ios-highlight-mode p,
           .ios-highlight-mode span,
@@ -1746,19 +1793,41 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           .ios-highlight-mode h1,
           .ios-highlight-mode h2,
           .ios-highlight-mode h3,
+          .ios-highlight-mode h4,
+          .ios-highlight-mode h5,
+          .ios-highlight-mode h6,
           .ios-highlight-mode li,
+          .ios-highlight-mode ol,
+          .ios-highlight-mode ul,
           .ios-highlight-mode a,
-          .ios-highlight-mode mark {
-            /* ALLOW native selection on all elements for handles */
+          .ios-highlight-mode mark,
+          .ios-highlight-mode strong,
+          .ios-highlight-mode em,
+          .ios-highlight-mode b,
+          .ios-highlight-mode i,
+          .ios-highlight-mode code,
+          .ios-highlight-mode pre,
+          .ios-highlight-mode blockquote,
+          .ios-highlight-mode td,
+          .ios-highlight-mode th,
+          .ios-highlight-mode label,
+          .ios-highlight-mode article,
+          .ios-highlight-mode section,
+          .ios-highlight-mode aside,
+          .ios-highlight-mode header,
+          .ios-highlight-mode footer {
+            /* ALLOW native selection on ALL elements for handles */
             -webkit-user-select: text !important;
             user-select: text !important;
+            /* CRITICAL: Suppress iOS callout on EVERY element */
             -webkit-touch-callout: none !important;
+            -webkit-tap-highlight-color: transparent !important;
             touch-action: manipulation !important;
             pointer-events: auto;
             cursor: text;
           }
 
-          /* iOS: Purple selection color for native selection */
+          /* iOS: Purple selection color for native selection - ALL text */
           .ios-highlight-mode::selection,
           .ios-highlight-mode *::selection {
             background-color: rgba(147, 51, 234, 0.4) !important;
@@ -1771,7 +1840,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             background-color: rgba(147, 51, 234, 0.4) !important;
           }
 
-          /* iOS: Suppress callout but allow selection */
+          /* iOS: AGGRESSIVE suppression at body level when highlight mode active */
+          body.highlight-mode-active {
+            -webkit-touch-callout: none !important;
+          }
+
           body.highlight-mode-active .ios-highlight-mode,
           body.highlight-mode-active .ios-highlight-mode * {
             -webkit-touch-callout: none !important;
