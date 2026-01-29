@@ -436,7 +436,7 @@ const removeHighlightFromDOM = (container: HTMLElement, highlightId: string, ani
         });
 
         resolve();
-      }, 200); // Match animation duration
+      }, 150); // Match animation duration
     } else {
       // Immediate removal
       marks.forEach(mark => {
@@ -2175,23 +2175,18 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           }
         }
 
-        /* Dehighlight animation - fade out effect for user feedback */
+        /* Dehighlight animation - smooth fade out */
         @keyframes dehighlight-fade {
           0% {
             opacity: 1;
-            background-color: inherit;
-          }
-          50% {
-            background-color: rgba(239, 68, 68, 0.4); /* Red flash to indicate removal */
           }
           100% {
-            opacity: 0.3;
-            background-color: transparent;
+            opacity: 0;
           }
         }
 
         .dehighlight-animation {
-          animation: dehighlight-fade 0.2s ease-out forwards;
+          animation: dehighlight-fade 0.15s ease-out forwards;
           pointer-events: none; /* Prevent double-taps during animation */
         }
 
@@ -2203,7 +2198,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             margin: -2px 0 !important;
             /* Ensure it's tappable */
             cursor: pointer;
-            -webkit-tap-highlight-color: rgba(239, 68, 68, 0.3);
+            -webkit-tap-highlight-color: transparent;
           }
 
           /* Visual feedback on touch */
