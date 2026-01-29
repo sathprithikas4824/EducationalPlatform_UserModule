@@ -521,89 +521,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     setIsIOSDevice(isIOS());
   }, []);
 
-  // Android: Restore selection state when app resumes from being backgrounded/frozen
-  // This ensures the blue drag handles can be used again after phone freezes
-  useEffect(() => {
-    if (isIOSDevice || !isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
-
-    const container = contentRef.current;
-    if (!container) return;
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // App has resumed - check if we had a pending selection
-        const pending = pendingSelectionRef.current;
-        if (pending && pending.text) {
-          // Small delay to ensure DOM is ready
-          setTimeout(() => {
-            // Check if the text still exists in container
-            const fullText = getTextContent(container);
-            const textIndex = fullText.indexOf(pending.text);
-
-            if (textIndex !== -1) {
-              // Try to programmatically restore selection with native handles
-              try {
-                const boundaries = getTextNodeBoundaries(container);
-                const startBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.startOffset);
-                const endBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.endOffset);
-
-                if (startBoundary && endBoundary) {
-                  const range = document.createRange();
-                  const startLocalOffset = pending.startOffset - startBoundary.startOffset;
-                  const endLocalOffset = pending.endOffset - endBoundary.startOffset;
-
-                  range.setStart(startBoundary.node, Math.min(startLocalOffset, startBoundary.node.length));
-                  range.setEnd(endBoundary.node, Math.min(endLocalOffset, endBoundary.node.length));
-
-                  const selection = window.getSelection();
-                  if (selection) {
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-
-                    // Mark that user can continue dragging handles
-                    isHandleDraggingRef.current = true;
-                    lastSelectionTextRef.current = pending.text;
-
-                    // Show highlight button after a short delay
-                    setTimeout(() => {
-                      const sel = window.getSelection();
-                      if (sel && sel.toString().trim().length >= 2) {
-                        processSelection(true); // Keep native selection visible
-                      }
-                    }, 300);
-                  }
-                }
-              } catch (e) {
-                console.warn('Could not restore selection:', e);
-              }
-            }
-          }, 100);
-        }
-      } else if (document.visibilityState === 'hidden') {
-        // App is being backgrounded - store current selection
-        const selection = window.getSelection();
-        if (selection && selection.toString().trim().length >= 2) {
-          const range = selection.getRangeAt(0);
-          if (container.contains(range.commonAncestorContainer)) {
-            const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
-            const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
-            pendingSelectionRef.current = {
-              startOffset,
-              endOffset,
-              text: selection.toString().trim(),
-            };
-          }
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [isIOSDevice, highlightModeEnabled, isLoggedIn, processSelection]);
-
   // Apply highlights to the DOM after render
   useEffect(() => {
     if (!isLoggedIn || !contentRef.current) return;
@@ -776,6 +693,89 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     if (isTouchDevice()) return;
     processSelection();
   }, [processSelection]);
+
+  // Android: Restore selection state when app resumes from being backgrounded/frozen
+  // This ensures the blue drag handles can be used again after phone freezes
+  useEffect(() => {
+    if (isIOSDevice || !isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
+
+    const container = contentRef.current;
+    if (!container) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // App has resumed - check if we had a pending selection
+        const pending = pendingSelectionRef.current;
+        if (pending && pending.text) {
+          // Small delay to ensure DOM is ready
+          setTimeout(() => {
+            // Check if the text still exists in container
+            const fullText = getTextContent(container);
+            const textIndex = fullText.indexOf(pending.text);
+
+            if (textIndex !== -1) {
+              // Try to programmatically restore selection with native handles
+              try {
+                const boundaries = getTextNodeBoundaries(container);
+                const startBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.startOffset);
+                const endBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.endOffset);
+
+                if (startBoundary && endBoundary) {
+                  const range = document.createRange();
+                  const startLocalOffset = pending.startOffset - startBoundary.startOffset;
+                  const endLocalOffset = pending.endOffset - endBoundary.startOffset;
+
+                  range.setStart(startBoundary.node, Math.min(startLocalOffset, startBoundary.node.length));
+                  range.setEnd(endBoundary.node, Math.min(endLocalOffset, endBoundary.node.length));
+
+                  const selection = window.getSelection();
+                  if (selection) {
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+
+                    // Mark that user can continue dragging handles
+                    isHandleDraggingRef.current = true;
+                    lastSelectionTextRef.current = pending.text;
+
+                    // Show highlight button after a short delay
+                    setTimeout(() => {
+                      const sel = window.getSelection();
+                      if (sel && sel.toString().trim().length >= 2) {
+                        processSelection(true); // Keep native selection visible
+                      }
+                    }, 300);
+                  }
+                }
+              } catch (e) {
+                console.warn('Could not restore selection:', e);
+              }
+            }
+          }, 100);
+        }
+      } else if (document.visibilityState === 'hidden') {
+        // App is being backgrounded - store current selection
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim().length >= 2) {
+          const range = selection.getRangeAt(0);
+          if (container.contains(range.commonAncestorContainer)) {
+            const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
+            const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
+            pendingSelectionRef.current = {
+              startOffset,
+              endOffset,
+              text: selection.toString().trim(),
+            };
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isIOSDevice, highlightModeEnabled, isLoggedIn, processSelection]);
 
   // Prevent native context menu and browser quick actions on desktop when highlight mode is enabled
   useEffect(() => {
