@@ -1173,7 +1173,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   }, [isIOSDevice, highlightModeEnabled, isLoggedIn]);
 
   // iOS CUSTOM selection - completely bypasses native selection to avoid iOS menu
-  // TAP = select sentence, LONG PRESS = select word then drag to extend
+  // LONG PRESS = select word, then drag to extend selection
+  // Scrolling works normally - only selection activates on long press
   // This prevents Copy/Look Up/Share menu from appearing
   useEffect(() => {
     // Only use custom selection on iOS
@@ -1183,8 +1184,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     if (!container) return;
 
     let longPressTimer: NodeJS.Timeout | null = null;
-    let touchStartTime = 0;
     let initialCaretPos: { node: Node; offset: number } | null = null;
+    let isLongPressActive = false;
 
     // Helper to show highlight button with selection
     const showHighlightButtonForSelection = (startOffset: number, endOffset: number, touchEvent?: TouchEvent) => {
@@ -1262,30 +1263,24 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const touch = e.touches[0];
       if (!touch) return;
 
-      // Prevent default to stop iOS native selection
-      e.preventDefault();
-
-      touchStartTime = Date.now();
+      // DON'T prevent default here - allow scrolling to work normally
+      // We only prevent default after long press activates
 
       // Get caret position from touch
       const caretPos = getCaretPositionFromPoint(touch.clientX, touch.clientY);
       if (!caretPos || !container.contains(caretPos.node)) return;
 
       initialCaretPos = caretPos;
+      isLongPressActive = false;
 
       // Check if tapping on existing highlight
       const target = e.target as HTMLElement;
       const highlightMark = target.closest('[data-highlight-id]') as HTMLElement | null;
       if (highlightMark) {
-        // Handle tap on existing highlight for removal
-        const highlightId = highlightMark.getAttribute('data-highlight-id');
-        if (highlightId) {
-          removeHighlight(highlightId);
-          removeHighlightFromDOM(container, highlightId);
-          appliedHighlightsRef.current.delete(highlightId);
-          window.getSelection()?.removeAllRanges();
-          return;
-        }
+        // Store for potential removal on touch end (if it's a tap, not scroll)
+        (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = highlightMark;
+      } else {
+        (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
       }
 
       touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
@@ -1301,9 +1296,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         node: caretPos.node,
       };
 
-      // Long press (300ms) to start word selection with drag capability
+      // Long press (400ms) to start word selection with drag capability
       longPressTimer = setTimeout(() => {
         if (!iosTouchStartRef.current || !initialCaretPos) return;
+
+        isLongPressActive = true;
         isDraggingRef.current = true;
 
         // Select the word at touch point
@@ -1327,7 +1324,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           // Clear native selection
           window.getSelection()?.removeAllRanges();
         }
-      }, 300);
+      }, 400);
     };
 
     const handleIOSTouchMove = (e: TouchEvent) => {
@@ -1343,11 +1340,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         Math.pow(touch.clientY - startPos.y, 2)
       );
 
-      // If user hasn't started dragging yet (long press hasn't fired)
-      if (!isDraggingRef.current) {
-        // If user moves significantly before long press fires, they're scrolling
-        if (moveDistance > 15) {
-          // Cancel long press timer
+      // If long press hasn't activated yet
+      if (!isLongPressActive) {
+        // If user moves before long press fires, they're scrolling - cancel long press
+        if (moveDistance > 10) {
           if (longPressTimer) {
             clearTimeout(longPressTimer);
             longPressTimer = null;
@@ -1356,11 +1352,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           iosTouchStartRef.current = null;
           touchStartPosRef.current = null;
           initialCaretPos = null;
+          (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
         }
+        // Let scrolling happen naturally - don't prevent default
         return;
       }
 
-      // User is dragging after long press - extend selection
+      // Long press is active - user is dragging to extend selection
+      // NOW we prevent default to stop scrolling while selecting
       e.preventDefault();
 
       const caretPos = getCaretPositionFromPoint(touch.clientX, touch.clientY);
@@ -1384,7 +1383,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     const handleIOSTouchEnd = (e: TouchEvent) => {
-      const touchDuration = Date.now() - touchStartTime;
       const startPos = touchStartPosRef.current;
 
       if (longPressTimer) {
@@ -1404,32 +1402,26 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         }
       }
 
-      // Quick tap (< 250ms with minimal movement) = select sentence
-      if (touchDuration < 250 && moveDistance < 10 && initialCaretPos && !isDraggingRef.current) {
-        // Get sentence boundaries using the full text
-        const fullText = getTextContent(container);
-        const touchOffset = getTextOffset(container, initialCaretPos.node, initialCaretPos.offset);
-        const sentenceBoundaries = getSentenceBoundaries(fullText, touchOffset);
-
-        if (sentenceBoundaries.end > sentenceBoundaries.start) {
-          // Remove any existing temp highlights
-          removeTempHighlights(container);
-
-          // Apply temp highlight for the sentence
-          applyTempHighlight(container, sentenceBoundaries.start, sentenceBoundaries.end);
-          iosSelectionRef.current = { startOffset: sentenceBoundaries.start, endOffset: sentenceBoundaries.end };
-
-          // Show highlight button
-          showHighlightButtonForSelection(sentenceBoundaries.start, sentenceBoundaries.end, e);
+      // Check if this was a tap on an existing highlight (for removal)
+      const pendingRemoval = (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval;
+      if (pendingRemoval && moveDistance < 10 && !isLongPressActive) {
+        const highlightId = pendingRemoval.getAttribute('data-highlight-id');
+        if (highlightId) {
+          removeHighlight(highlightId);
+          removeHighlightFromDOM(container, highlightId);
+          appliedHighlightsRef.current.delete(highlightId);
+          window.getSelection()?.removeAllRanges();
         }
-
         // Clean up
+        (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
         iosTouchStartRef.current = null;
         touchStartPosRef.current = null;
         initialCaretPos = null;
         isDraggingRef.current = false;
+        isLongPressActive = false;
         return;
       }
+      (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
 
       // Handle long press selection (word or drag-extended selection)
       const selection = iosSelectionRef.current;
@@ -1438,13 +1430,15 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       touchStartPosRef.current = null;
       initialCaretPos = null;
 
-      if (!selection || !isDraggingRef.current) {
+      if (!selection || !isLongPressActive) {
         isDraggingRef.current = false;
+        isLongPressActive = false;
         iosSelectionRef.current = null;
         return;
       }
 
       isDraggingRef.current = false;
+      isLongPressActive = false;
 
       // Show highlight button for the selection
       showHighlightButtonForSelection(selection.startOffset, selection.endOffset, e);
@@ -1459,7 +1453,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       touchStartPosRef.current = null;
       initialCaretPos = null;
       isDraggingRef.current = false;
+      isLongPressActive = false;
       iosSelectionRef.current = null;
+      (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
       removeTempHighlights(container);
     };
 
@@ -1481,9 +1477,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     // Add iOS-specific listeners
-    container.addEventListener('touchstart', handleIOSTouchStart, { passive: false });
+    // touchstart is passive to allow scrolling - we only preventDefault after long press
+    container.addEventListener('touchstart', handleIOSTouchStart, { passive: true });
+    // touchmove needs to be non-passive so we can preventDefault during drag-selection
     container.addEventListener('touchmove', handleIOSTouchMove, { passive: false });
-    container.addEventListener('touchend', handleIOSTouchEnd, { passive: false });
+    container.addEventListener('touchend', handleIOSTouchEnd, { passive: true });
     container.addEventListener('touchcancel', handleIOSTouchCancel, { passive: true });
 
     // Aggressively prevent native selection on iOS
@@ -1673,11 +1671,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       <style>{`
         /* Mobile only: Allow native text selection with drag handles */
         @media (pointer: coarse) {
-          /* Container styles - allow selection to work inside */
+          /* Container styles - allow scrolling and selection to work inside */
           .highlight-container-mobile {
             -webkit-touch-callout: none !important;
             -webkit-text-size-adjust: 100%;
-            touch-action: manipulation;
+            /* Allow scrolling - don't use manipulation which can block scroll */
+            touch-action: pan-x pan-y !important;
             position: relative;
           }
 
@@ -1737,13 +1736,15 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
           /* iOS specific styles - COMPLETELY DISABLE native selection */
           /* We use custom touch handling on iOS to avoid native Copy/Look Up menu */
+          /* IMPORTANT: touch-action allows scrolling, we handle selection via JS */
           .ios-highlight-mode {
             -webkit-touch-callout: none !important;
             /* DISABLE native selection on iOS - we handle it ourselves */
             -webkit-user-select: none !important;
             user-select: none !important;
             -webkit-tap-highlight-color: transparent !important;
-            touch-action: pan-y !important;
+            /* Allow scrolling in all directions */
+            touch-action: pan-x pan-y !important;
             -webkit-text-size-adjust: 100%;
             pointer-events: auto;
             cursor: text;
@@ -1766,7 +1767,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             -webkit-user-select: none !important;
             user-select: none !important;
             -webkit-user-drag: none !important;
-            touch-action: pan-y !important;
+            /* Allow scrolling */
+            touch-action: pan-x pan-y !important;
             pointer-events: auto;
             cursor: text;
             -webkit-user-modify: read-only !important;
