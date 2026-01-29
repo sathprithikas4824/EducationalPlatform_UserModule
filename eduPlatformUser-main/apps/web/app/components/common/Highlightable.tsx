@@ -530,9 +530,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   }, [children, isLoggedIn]);
 
   // Process selection - handles both mobile and desktop
-  // On mobile: keeps native selection visible for handle dragging, doesn't apply temp highlight yet
+  // On mobile: applies temp highlight and clears native selection when showing highlight button
   // On desktop: applies temp highlight immediately and shows color picker
-  const processSelection = useCallback((keepNativeSelection: boolean = false) => {
+  const processSelection = useCallback(() => {
     if (!isLoggedIn || !highlightModeEnabled) return;
 
     // Skip if we just dehighlighted (prevents highlight button from appearing after dehighlight)
@@ -713,14 +713,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     });
 
     if (isTouchDevice()) {
-      // Mobile: Show highlight button but DON'T clear native selection yet
-      // This allows users to continue dragging selection handles
-      // Native selection will be cleared when user taps the highlight button
-      if (!keepNativeSelection) {
-        // Apply temporary visual highlight and clear native selection
-        applyTempHighlight(container, startOffset, endOffset);
-        window.getSelection()?.removeAllRanges();
-      }
+      // Mobile: Apply temporary visual highlight and clear native selection
+      // This removes the blue drag handles when Highlight button appears
+      applyTempHighlight(container, startOffset, endOffset);
+      window.getSelection()?.removeAllRanges();
       // Show the highlight button (it will appear above/below the selection)
       setShowMobileHighlightButton(true);
       setShowColorPicker(false);
@@ -786,7 +782,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                     setTimeout(() => {
                       const sel = window.getSelection();
                       if (sel && sel.toString().trim().length >= 2) {
-                        processSelection(true); // Keep native selection visible
+                        processSelection();
                       }
                     }, 300);
                   }
@@ -977,7 +973,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           isSelectingRef.current = false;
           isHandleDraggingRef.current = false;
           lastProcessedSelection = currentText;
-          processSelection(true); // true = keep native selection
+          processSelection();
         }, delay);
       }
     };
@@ -1074,7 +1070,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           isSelectingRef.current = false;
           isHandleDraggingRef.current = false;
           lastProcessedSelection = currentText;
-          processSelection(true); // Keep native selection
+          processSelection();
         }, 1000);
       }
     };
@@ -1446,7 +1442,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     // Process and show highlight button for current selection
-    const processIOSSelection = (keepNativeSelection: boolean = true) => {
+    const processIOSSelection = () => {
       // Skip if we just dehighlighted (prevents highlight button from appearing)
       if (justDehighlightedRef.current) {
         justDehighlightedRef.current = false;
@@ -1572,11 +1568,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         });
       }
 
-      // Keep native selection visible for handle dragging, apply temp highlight when finalizing
-      if (!keepNativeSelection) {
-        applyTempHighlight(container, startOffset, endOffset);
-        window.getSelection()?.removeAllRanges();
-      }
+      // Apply temp highlight and clear native selection when showing highlight button
+      applyTempHighlight(container, startOffset, endOffset);
+      window.getSelection()?.removeAllRanges();
 
       setShowMobileHighlightButton(true);
       setShowColorPicker(false);
@@ -1748,7 +1742,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           if (timeSinceLastChange < 400) return;
 
           isHandleDraggingRef.current = false;
-          processIOSSelection(true); // Keep native selection visible
+          processIOSSelection();
         }, 800);
       }
     };
@@ -1854,7 +1848,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           if (!container.contains(currentRange.commonAncestorContainer)) return;
 
           isHandleDraggingRef.current = false;
-          processIOSSelection(true);
+          processIOSSelection();
         }, 800);
       }
     };
