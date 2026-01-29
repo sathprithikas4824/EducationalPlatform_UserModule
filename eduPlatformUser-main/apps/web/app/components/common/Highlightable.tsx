@@ -482,6 +482,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     text: string;
   } | null>(null);
 
+  // Track when we just dehighlighted to prevent highlight button from showing
+  const justDehighlightedRef = useRef<boolean>(false);
+
   // Detect mobile on client side to avoid hydration mismatch
   useEffect(() => {
     setIsMobileDevice(isTouchDevice());
@@ -532,6 +535,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   const processSelection = useCallback((keepNativeSelection: boolean = false) => {
     if (!isLoggedIn || !highlightModeEnabled) return;
 
+    // Skip if we just dehighlighted (prevents highlight button from appearing after dehighlight)
+    if (justDehighlightedRef.current) {
+      justDehighlightedRef.current = false;
+      return;
+    }
+
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
@@ -556,6 +565,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         setSelectedText("");
         setSelectionInfo(null);
         pendingSelectionRef.current = null;
+        justDehighlightedRef.current = true;
 
         // Instant removal - no animation
         removeHighlightFromDOM(container, highlightId);
@@ -633,6 +643,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           setSelectedText("");
           setSelectionInfo(null);
           pendingSelectionRef.current = null;
+          justDehighlightedRef.current = true;
 
           // Instant removal
           removeHighlightFromDOM(container, highlight.id);
@@ -975,6 +986,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const handleSelectionChange = () => {
       lastSelectionChangeTime = Date.now();
 
+      // Skip if we just dehighlighted
+      if (justDehighlightedRef.current) return;
+
       // Don't process if UI is already showing
       if (showColorPicker || showMobileHighlightButton) return;
 
@@ -1250,13 +1264,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             Math.pow(touch.clientX - startPos.x, 2) +
             Math.pow(touch.clientY - startPos.y, 2)
           );
-          // If it was a tap (not a drag), remove the highlight with animation
+          // If it was a tap (not a drag), remove the highlight instantly
           // Increased threshold to 15px for easier tapping on mobile
           if (moveDistance < 15) {
             const highlightId = pendingRemoval.getAttribute('data-highlight-id');
             if (highlightId) {
               // Clear any existing selection first
               window.getSelection()?.removeAllRanges();
+
+              // Mark that we just dehighlighted to prevent UI from showing
+              justDehighlightedRef.current = true;
 
               // Instant removal - no animation
               removeHighlightFromDOM(container, highlightId);
@@ -1268,6 +1285,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
               isHandleDraggingRef.current = false;
               // Clear pending selection since we're removing a highlight
               pendingSelectionRef.current = null;
+
+              // Clear any pending timers to prevent highlight button from showing
+              if (selectionStableTimeoutRef.current) {
+                clearTimeout(selectionStableTimeoutRef.current);
+                selectionStableTimeoutRef.current = null;
+              }
               return;
             }
           }
@@ -1424,6 +1447,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
     // Process and show highlight button for current selection
     const processIOSSelection = (keepNativeSelection: boolean = true) => {
+      // Skip if we just dehighlighted (prevents highlight button from appearing)
+      if (justDehighlightedRef.current) {
+        justDehighlightedRef.current = false;
+        return;
+      }
+
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) return;
 
@@ -1491,6 +1520,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           setSelectionInfo(null);
           pendingSelectionRef.current = null;
           lastProcessedSelection = "";
+          justDehighlightedRef.current = true;
 
           // Instant removal
           removeHighlightFromDOM(container, highlight.id);
@@ -1666,6 +1696,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             // Clear selection first
             window.getSelection()?.removeAllRanges();
 
+            // Mark that we just dehighlighted to prevent UI from showing
+            justDehighlightedRef.current = true;
+
             // Instant removal - no animation
             removeHighlightFromDOM(container, pendingRemoval);
             removeHighlight(pendingRemoval);
@@ -1674,6 +1707,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval = undefined;
             // Clear pending selection
             pendingSelectionRef.current = null;
+            isHandleDraggingRef.current = false;
+
+            // Clear any pending timers to prevent highlight button from showing
+            if (selectionStableTimeoutRef.current) {
+              clearTimeout(selectionStableTimeoutRef.current);
+              selectionStableTimeoutRef.current = null;
+            }
             return;
           }
         }
@@ -1733,6 +1773,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     // Track selection changes - this fires when user drags handles on iOS
     const handleIOSSelectionChange = () => {
       lastSelectionChangeTime = Date.now();
+
+      // Skip if we just dehighlighted
+      if (justDehighlightedRef.current) return;
 
       // Don't process if UI is already showing
       if (showColorPicker || showMobileHighlightButton) return;
