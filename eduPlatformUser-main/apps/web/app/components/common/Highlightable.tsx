@@ -1488,7 +1488,37 @@ export const Highlightable: React.FC<HighlightableProps> = ({
               const highlight = highlights.find(h => h.id === highlightId);
               if (highlight) {
                 const fullText = getTextContent(container);
-                const tapOffset = getCharacterOffsetAtPoint(container, touch.clientX, touch.clientY);
+
+                // Robust fallback chain to find the tap offset
+                let tapOffset: number | null = null;
+
+                // Method 1: caretRangeFromPoint with touch end position
+                tapOffset = getCharacterOffsetAtPoint(container, touch.clientX, touch.clientY);
+
+                // Method 2: try with touch start position
+                if (tapOffset === null && startPos) {
+                  tapOffset = getCharacterOffsetAtPoint(container, startPos.x, startPos.y);
+                }
+
+                // Method 3: use current selection/caret position
+                if (tapOffset === null) {
+                  const sel = window.getSelection();
+                  if (sel && sel.rangeCount > 0) {
+                    const selRange = sel.getRangeAt(0);
+                    if (container.contains(selRange.startContainer)) {
+                      tapOffset = getTextOffset(container, selRange.startContainer, selRange.startOffset);
+                    }
+                  }
+                }
+
+                // Method 4: use the tapped mark element's position in the DOM
+                if (tapOffset === null && pendingRemoval.firstChild) {
+                  const markTextNode = pendingRemoval.firstChild;
+                  if (markTextNode.nodeType === Node.TEXT_NODE) {
+                    tapOffset = getTextOffset(container, markTextNode as Text, 0);
+                  }
+                }
+
                 if (tapOffset !== null) {
                   const wordBounds = getWordBoundariesAtOffset(fullText, tapOffset);
                   const subHighlights = computeSubHighlights(fullText, highlight, wordBounds.start, wordBounds.end);
@@ -1500,7 +1530,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                   // Re-highlight remaining portions
                   subHighlights.forEach(sub => addHighlight(sub));
                 } else {
-                  // Fallback: remove entire highlight if tap offset can't be determined
+                  // Absolute last resort: remove entire highlight
                   removeHighlightFromDOM(container, highlightId);
                   removeHighlight(highlightId);
                   appliedHighlightsRef.current.delete(highlightId);
@@ -1955,7 +1985,38 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             const highlight = highlights.find(h => h.id === pendingRemoval);
             if (highlight) {
               const fullText = getTextContent(container);
-              const tapOffset = getCharacterOffsetAtPoint(container, touch.clientX, touch.clientY);
+
+              // Robust fallback chain to find the tap offset
+              let tapOffset: number | null = null;
+
+              // Method 1: caretRangeFromPoint with touch end position
+              tapOffset = getCharacterOffsetAtPoint(container, touch.clientX, touch.clientY);
+
+              // Method 2: try with touch start position
+              if (tapOffset === null && startPos) {
+                tapOffset = getCharacterOffsetAtPoint(container, startPos.x, startPos.y);
+              }
+
+              // Method 3: use current selection/caret position
+              if (tapOffset === null) {
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0) {
+                  const selRange = sel.getRangeAt(0);
+                  if (container.contains(selRange.startContainer)) {
+                    tapOffset = getTextOffset(container, selRange.startContainer, selRange.startOffset);
+                  }
+                }
+              }
+
+              // Method 4: use the mark element's position in the DOM
+              if (tapOffset === null) {
+                const markElements = container.querySelectorAll(`[data-highlight-id="${pendingRemoval}"]`);
+                const firstMark = markElements[0];
+                if (firstMark && firstMark.firstChild && firstMark.firstChild.nodeType === Node.TEXT_NODE) {
+                  tapOffset = getTextOffset(container, firstMark.firstChild as Text, 0);
+                }
+              }
+
               if (tapOffset !== null) {
                 const wordBounds = getWordBoundariesAtOffset(fullText, tapOffset);
                 const subHighlights = computeSubHighlights(fullText, highlight, wordBounds.start, wordBounds.end);
@@ -1967,7 +2028,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                 // Re-highlight remaining portions
                 subHighlights.forEach(sub => addHighlight(sub));
               } else {
-                // Fallback: remove entire highlight if tap offset can't be determined
+                // Absolute last resort: remove entire highlight
                 removeHighlightFromDOM(container, pendingRemoval);
                 removeHighlight(pendingRemoval);
                 appliedHighlightsRef.current.delete(pendingRemoval);
