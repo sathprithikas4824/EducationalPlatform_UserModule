@@ -958,8 +958,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           clearTimeout(selectionStableTimeoutRef.current);
         }
 
-        // 1 second delay to allow user to drag handles if needed
-        const delay = 1000;
+        // Short delay to allow user to drag handles if needed
+        const delay = 300;
 
         selectionStableTimeoutRef.current = setTimeout(() => {
           // Check if user touched again during the wait
@@ -978,9 +978,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           const currentRange = currentSel.getRangeAt(0);
           if (!container || !container.contains(currentRange.commonAncestorContainer)) return;
 
-          // Only process if selection hasn't changed in the last 500ms
+          // Only process if selection hasn't changed in the last 150ms
           const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
-          if (timeSinceLastChange < 500) {
+          if (timeSinceLastChange < 150) {
             // Selection is still changing, wait more
             return;
           }
@@ -1064,7 +1064,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           clearTimeout(selectionCheckTimer);
         }
 
-        // Wait 1 second after last selection change before showing button
+        // Wait 300ms after last selection change before showing button
         selectionCheckTimer = setTimeout(() => {
           // Double-check user isn't touching
           if (isTouchActive) return;
@@ -1081,7 +1081,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
           // Check selection hasn't changed recently
           const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
-          if (timeSinceLastChange < 600) return;
+          if (timeSinceLastChange < 200) return;
 
           const currentRange = currentSel.getRangeAt(0);
           if (!container || !container.contains(currentRange.commonAncestorContainer)) return;
@@ -1090,7 +1090,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           isHandleDraggingRef.current = false;
           lastProcessedSelection = currentText;
           processSelection();
-        }, 1000);
+        }, 300);
       }
     };
 
