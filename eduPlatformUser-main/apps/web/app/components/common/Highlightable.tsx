@@ -578,12 +578,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         removeHighlightFromDOM(container, highlightId);
         removeHighlight(highlightId);
         appliedHighlightsRef.current.delete(highlightId);
-
-        // Clear native selection again after a brief delay
-        // to catch word-selection created asynchronously after touchend on Android
-        setTimeout(() => {
-          window.getSelection()?.removeAllRanges();
-        }, 50);
         return;
       }
     }
@@ -666,12 +660,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           removeHighlightFromDOM(container, highlight.id);
           removeHighlight(highlight.id);
           appliedHighlightsRef.current.delete(highlight.id);
-
-          // Clear native selection again after a brief delay
-          // to catch word-selection created asynchronously after touchend on Android
-          setTimeout(() => {
-            window.getSelection()?.removeAllRanges();
-          }, 50);
           return;
         }
       }
@@ -1010,11 +998,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const handleSelectionChange = () => {
       lastSelectionChangeTime = Date.now();
 
-      // Skip if we just dehighlighted - also clear any native selection Android may have created
-      if (justDehighlightedRef.current) {
-        window.getSelection()?.removeAllRanges();
-        return;
-      }
+      // Skip if we just dehighlighted
+      if (justDehighlightedRef.current) return;
 
       // Don't process if color picker is showing (user is picking a color)
       if (showColorPicker) return;
@@ -1327,12 +1312,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                 clearTimeout(selectionStableTimeoutRef.current);
                 selectionStableTimeoutRef.current = null;
               }
-
-              // Android: clear native selection again after a brief delay
-              // to catch word-selection that Android creates asynchronously after touchend
-              setTimeout(() => {
-                window.getSelection()?.removeAllRanges();
-              }, 50);
               return;
             }
           }
@@ -1572,12 +1551,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           removeHighlightFromDOM(container, highlight.id);
           removeHighlight(highlight.id);
           appliedHighlightsRef.current.delete(highlight.id);
-
-          // Clear native selection again after a brief delay
-          // to catch word-selection created asynchronously after touchend
-          setTimeout(() => {
-            window.getSelection()?.removeAllRanges();
-          }, 50);
           return;
         }
       }
@@ -1772,12 +1745,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
               clearTimeout(selectionStableTimeoutRef.current);
               selectionStableTimeoutRef.current = null;
             }
-
-            // Clear native selection again after a brief delay
-            // to catch word-selection created asynchronously after touchend
-            setTimeout(() => {
-              window.getSelection()?.removeAllRanges();
-            }, 50);
             return;
           }
         }
@@ -1838,11 +1805,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const handleIOSSelectionChange = () => {
       lastSelectionChangeTime = Date.now();
 
-      // Skip if we just dehighlighted - also clear any native selection Android may have created
-      if (justDehighlightedRef.current) {
-        window.getSelection()?.removeAllRanges();
-        return;
-      }
+      // Skip if we just dehighlighted
+      if (justDehighlightedRef.current) return;
 
       // Only skip if color picker is showing (user is picking a color)
       // Don't skip for showMobileHighlightButton - we need to update selectionInfo when user adjusts selection
