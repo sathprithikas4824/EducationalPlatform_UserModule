@@ -1270,9 +1270,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       // If was scrolling, don't process anything
       if (wasScrolling) return;
 
-      if (showColorPicker || showMobileHighlightButton) return;
-
       // Check if this was a tap on an existing highlight (for de-highlighting)
+      // IMPORTANT: This must run BEFORE the showColorPicker/showMobileHighlightButton guard
+      // because those are React state values that may be stale in this closure
+      // (e.g. handleTouchStart called setShowMobileHighlightButton(false) but it hasn't re-rendered yet)
       const pendingRemoval = (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval;
       if (pendingRemoval && startPos) {
         const touch = e.changedTouches[0];
@@ -1291,6 +1292,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
               // Remove any temp highlights that might be showing
               removeTempHighlights(container);
+
+              // Hide any visible UI
+              setShowColorPicker(false);
+              setShowMobileHighlightButton(false);
+              setSelectedText("");
+              setSelectionInfo(null);
 
               // Mark that we just dehighlighted to prevent UI from showing
               justDehighlightedRef.current = true;
@@ -1318,6 +1325,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         }
       }
       (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
+
+      if (showColorPicker || showMobileHighlightButton) return;
 
       // Selection processing is now handled by the selectionchange event listener
       // Just reset the handle dragging state after a short delay
