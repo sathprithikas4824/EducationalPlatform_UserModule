@@ -5,7 +5,8 @@
       "Bash(findstr:*)",
       "Bash(git checkout:*)",
       "Bash(git ls-tree:*)",
-      "Bash(git rev-parse:*)"
+      "Bash(git rev-parse:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

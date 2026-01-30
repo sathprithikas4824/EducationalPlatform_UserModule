@@ -707,52 +707,52 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       return;
     }
 
-    // Check if clicking on an existing highlight FIRST (before selection length check)
-    // This allows tapping on highlights to remove them with animation on mobile
-    const clickedMark = (range.startContainer.parentElement?.closest('[data-highlight-id]') ||
-                        range.endContainer.parentElement?.closest('[data-highlight-id]')) as HTMLElement | null;
-
-    if (clickedMark) {
-      const highlightId = clickedMark.getAttribute('data-highlight-id');
-      if (highlightId) {
-        window.getSelection()?.removeAllRanges();
-        // Remove any temp highlights that might be showing
-        removeTempHighlights(container);
-        setShowColorPicker(false);
-        setShowMobileHighlightButton(false);
-        setSelectedText("");
-        setSelectionInfo(null);
-        pendingSelectionRef.current = null;
-        justDehighlightedRef.current = true;
-        buttonPositionedRef.current = false;
-
-        // Partial unhighlight: only remove the tapped word, keep the rest highlighted
-        const highlight = highlights.find(h => h.id === highlightId);
-        if (highlight) {
-          const fullText = getTextContent(container);
-          const clickOffset = getTextOffset(container, range.startContainer, range.startOffset);
-          const wordBounds = getWordBoundariesAtOffset(fullText, clickOffset);
-          const subHighlights = computeSubHighlights(fullText, highlight, wordBounds.start, wordBounds.end);
-
-          removeHighlightFromDOM(container, highlightId);
-          removeHighlight(highlightId);
-          appliedHighlightsRef.current.delete(highlightId);
-
-          // Re-highlight remaining portions
-          subHighlights.forEach(sub => addHighlight(sub));
-        } else {
-          // Fallback: remove entire highlight if object not found
-          removeHighlightFromDOM(container, highlightId);
-          removeHighlight(highlightId);
-          appliedHighlightsRef.current.delete(highlightId);
-        }
-        return;
-      }
-    }
-
-    // Now check if there's enough selection for new highlight
+    // Get selected text to distinguish taps (no selection) from drag selections
     const selectionText = selection.toString().trim();
+
+    // STEP 1: TAP/CLICK on a highlight (no drag selection) → word-level unhighlight
+    // Only runs when there's no meaningful text selected (tap, not drag)
     if (!selectionText || selectionText.length < 2) {
+      const clickedMark = (range.startContainer.parentElement?.closest('[data-highlight-id]') ||
+                          range.endContainer.parentElement?.closest('[data-highlight-id]')) as HTMLElement | null;
+
+      if (clickedMark) {
+        const highlightId = clickedMark.getAttribute('data-highlight-id');
+        if (highlightId) {
+          window.getSelection()?.removeAllRanges();
+          removeTempHighlights(container);
+          setShowColorPicker(false);
+          setShowMobileHighlightButton(false);
+          setSelectedText("");
+          setSelectionInfo(null);
+          pendingSelectionRef.current = null;
+          justDehighlightedRef.current = true;
+          buttonPositionedRef.current = false;
+
+          // Partial unhighlight: only remove the tapped word, keep the rest highlighted
+          const highlight = highlights.find(h => h.id === highlightId);
+          if (highlight) {
+            const fullText = getTextContent(container);
+            const clickOffset = getTextOffset(container, range.startContainer, range.startOffset);
+            const wordBounds = getWordBoundariesAtOffset(fullText, clickOffset);
+            const subHighlights = computeSubHighlights(fullText, highlight, wordBounds.start, wordBounds.end);
+
+            removeHighlightFromDOM(container, highlightId);
+            removeHighlight(highlightId);
+            appliedHighlightsRef.current.delete(highlightId);
+
+            // Re-highlight remaining portions
+            subHighlights.forEach(sub => addHighlight(sub));
+          } else {
+            removeHighlightFromDOM(container, highlightId);
+            removeHighlight(highlightId);
+            appliedHighlightsRef.current.delete(highlightId);
+          }
+          return;
+        }
+      }
+
+      // No highlight clicked and no selection — nothing to do
       setShowColorPicker(false);
       setSelectedText("");
       setSelectionInfo(null);
@@ -760,9 +760,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       return;
     }
 
-    // MOBILE ONLY: Check if the selected text overlaps with an existing highlight
-    // If so, automatically dehighlight it (user-friendly toggle behavior)
-    if (isTouchDevice()) {
+    // STEP 2: DRAG SELECTION overlapping a highlight → selection-range unhighlight
+    // Works on both mobile AND desktop
+    {
       const fullText = getTextContent(container);
       const selStartOffset = getTextOffset(container, range.startContainer, range.startOffset);
       const selEndOffset = getTextOffset(container, range.endContainer, range.endOffset);
@@ -770,33 +770,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       // Find any existing highlight that significantly overlaps with the selection
       for (const highlight of highlights) {
         // Find the highlight's actual position in the text
-        let highlightStart = -1;
-        let highlightEnd = -1;
+        const pos = findHighlightPosition(fullText, highlight);
+        if (!pos) continue;
 
-        // Try to find exact position using context (same logic as applyHighlightToDOM)
-        if (highlight.prefixContext && highlight.suffixContext) {
-          const searchPattern = highlight.prefixContext + highlight.text + highlight.suffixContext;
-          const patternIndex = fullText.indexOf(searchPattern);
-          if (patternIndex !== -1) {
-            highlightStart = patternIndex + highlight.prefixContext.length;
-            highlightEnd = highlightStart + highlight.text.length;
-          }
-        }
-
-        if (highlightStart === -1 && highlight.prefixContext) {
-          const searchPattern = highlight.prefixContext + highlight.text;
-          const patternIndex = fullText.indexOf(searchPattern);
-          if (patternIndex !== -1) {
-            highlightStart = patternIndex + highlight.prefixContext.length;
-            highlightEnd = highlightStart + highlight.text.length;
-          }
-        }
-
-        if (highlightStart === -1) {
-          // Fallback to stored offsets
-          highlightStart = highlight.startOffset;
-          highlightEnd = highlight.endOffset;
-        }
+        const highlightStart = pos.start;
+        const highlightEnd = pos.end;
 
         // Check for significant overlap
         const overlapStart = Math.max(selStartOffset, highlightStart);
@@ -814,7 +792,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         if (overlapRatioWithHighlight >= 0.5 || overlapRatioWithSelection >= 0.5) {
           // Partial dehighlight: only remove the selected portion, keep the rest
           window.getSelection()?.removeAllRanges();
-          // Remove any temp highlights that might be showing
           removeTempHighlights(container);
           setShowColorPicker(false);
           setShowMobileHighlightButton(false);
