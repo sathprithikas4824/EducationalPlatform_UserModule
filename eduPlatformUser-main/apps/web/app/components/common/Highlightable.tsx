@@ -924,6 +924,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const handleTouchStartForSelection = () => {
       isTouchActive = true;
 
+      // Reset dehighlight flag - new touch gesture means user wants to interact again
+      // This prevents the flag from blocking the next selection attempt
+      justDehighlightedRef.current = false;
+
       // Clear ALL pending processing - user is touching again
       if (selectionStableTimeoutRef.current) {
         clearTimeout(selectionStableTimeoutRef.current);
@@ -1177,6 +1181,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
       scrollStartYRef.current = touch.clientY;
       isScrollingRef.current = false; // Reset scroll detection
+
+      // Reset dehighlight flag on new touch - ensures next selection works after dehighlight
+      justDehighlightedRef.current = false;
 
       // Check if there's an existing selection - user might be about to drag handles
       const sel = window.getSelection();
@@ -1626,6 +1633,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       iosTouchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
       scrollStartYRef.current = touch.clientY;
       isScrollingRef.current = false;
+
+      // Reset dehighlight flag on new touch - ensures next selection works after dehighlight
+      justDehighlightedRef.current = false;
 
       // Clear any pending timers
       if (selectionStableTimeoutRef.current) {
