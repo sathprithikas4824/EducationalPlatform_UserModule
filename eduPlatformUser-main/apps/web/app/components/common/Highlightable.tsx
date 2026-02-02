@@ -2444,34 +2444,36 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         selectionCheckTimer = null;
       }
     };
-const handleIOSSelectionChange = () => {
-  lastSelectionChangeTime = Date.now();
-  if (justDehighlightedRef.current || showColorPicker) return;
+    const handleIOSSelectionChange = () => {
+      const sel = window.getSelection();
 
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-    // If user tapped away, hide button
-    if (!isTouchActive) setShowMobileHighlightButton(false);
-    return;
-  }
+      // LOGIC FIX: iOS needs to know we are still interested even if the text is 'clean'
+      if (!sel || sel.rangeCount === 0) return;
 
-  const selText = sel.toString().trim();
-  if (selText.length < 2) return;
+      const selText = sel.toString().trim();
 
-  // 1. Capture the range immediately before it's lost
-  const range = sel.getRangeAt(0);
-  
-  // 2. Start the "Stability Timer" 
-  // We wait 600-800ms to ensure the user stopped dragging handles
-  if (selectionCheckTimer) clearTimeout(selectionCheckTimer);
-  
-  selectionCheckTimer = setTimeout(() => {
-    if (isTouchActive) return; // Still moving? Don't show yet.
-    
-    // Process the selection for the UI
-    processIOSSelection(); 
-  }, 700); 
-};
+      // Ensure we check if the selection is INSIDE your container
+      // even if it's just raw text nodes
+      const range = sel.getRangeAt(0);
+      if (!container.contains(range.commonAncestorContainer)) {
+        return;
+      }
+      if (selText.length < 2) return;
+
+      // // 1. Capture the range immediately before it's lost
+      // const range = sel.getRangeAt(0);
+
+      // 2. Start the "Stability Timer"
+      // We wait 600-800ms to ensure the user stopped dragging handles
+      if (selectionCheckTimer) clearTimeout(selectionCheckTimer);
+
+      selectionCheckTimer = setTimeout(() => {
+        if (isTouchActive) return; // Still moving? Don't show yet.
+
+        // Process the selection for the UI
+        processIOSSelection();
+      }, 700);
+    };
     // Add event listeners
     container.addEventListener("touchstart", handleIOSTouchStart, {
       passive: true,
@@ -2597,31 +2599,34 @@ const handleIOSSelectionChange = () => {
     };
   }, [highlightModeEnabled, isLoggedIn]);
 
-  const saveHighlight = useCallback((color: string) => {
-  // 1. Validate data from our Provider's user state
-  if (!selectedText || !user || !selectionInfo) return;
+  const saveHighlight = useCallback(
+    (color: string) => {
+      // 1. Validate data from our Provider's user state
+      if (!selectedText || !user || !selectionInfo) return;
 
-  // 2. Call the provider's addHighlight 
-  // (This will automatically trigger the cookie save in AnnotationProvider)
-  addHighlight({
-    text: selectedText,
-    startOffset: selectionInfo.startOffset,
-    endOffset: selectionInfo.endOffset,
-    color: color,
-    pageId: pageId,
-    prefixContext: selectionInfo.prefixContext,
-    suffixContext: selectionInfo.suffixContext,
-  });
+      // 2. Call the provider's addHighlight
+      // (This will automatically trigger the cookie save in AnnotationProvider)
+      addHighlight({
+        text: selectedText,
+        startOffset: selectionInfo.startOffset,
+        endOffset: selectionInfo.endOffset,
+        color: color,
+        pageId: pageId,
+        prefixContext: selectionInfo.prefixContext,
+        suffixContext: selectionInfo.suffixContext,
+      });
 
-  // 3. CLEANUP FOR IOS: 
-  // iOS handles often get "stuck" visually. This forces them to disappear.
-  window.getSelection()?.removeAllRanges();
-  setShowColorPicker(false);
-  
-  // Reset local state
-  setSelectedText("");
-  setSelectionInfo(null);
-}, [selectedText, user, selectionInfo, addHighlight, pageId]);
+      // 3. CLEANUP FOR IOS:
+      // iOS handles often get "stuck" visually. This forces them to disappear.
+      window.getSelection()?.removeAllRanges();
+      setShowColorPicker(false);
+
+      // Reset local state
+      setSelectedText("");
+      setSelectionInfo(null);
+    },
+    [selectedText, user, selectionInfo, addHighlight, pageId],
+  );
 
   // Mobile: When user taps the highlight button, show color picker
   // Apply temp highlight and clear native selection
@@ -2901,6 +2906,26 @@ const handleIOSSelectionChange = () => {
             background-color: rgba(147, 51, 234, 0.4) !important;
             color: inherit !important;
           }
+            /* 1. Ensure the base container allows selection but blocks the OS menu */
+.ios-highlight-mode {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: none !important; /* Hide the Copy/Paste menu */
+}
+
+/* 2. FORCE every child (p, span, div, etc.) to be selectable */
+/* This is likely why "normal" text isn't working for you right now */
+.ios-highlight-mode * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: none !important;
+  pointer-events: auto !important; /* Ensure the text can receive touch */
+}
+
+/* 3. Disable the native "tap highlight" which can interfere with dragging handles */
+.ios-highlight-mode, .ios-highlight-mode * {
+  -webkit-tap-highlight-color: transparent !important;
+}
           
           /* Aggressive iOS callout suppression */
 body.highlight-mode-active {
