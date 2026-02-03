@@ -642,6 +642,15 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   // This prevents the button from jumping when user adjusts selection
   const buttonPositionedRef = useRef<boolean>(false);
 
+  // iOS custom touch selection refs (persist across effect re-runs)
+  const iosSelectionActiveRef = useRef<boolean>(false);
+  const iosSelectionStartRef = useRef<number | null>(null);
+  const iosSelectionEndRef = useRef<number | null>(null);
+  const iosLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const iosPendingDehighlightRef = useRef<string | null>(null);
+  const iosLastMoveOffsetRef = useRef<number | null>(null);
+  const iosUpdateRafRef = useRef<number | null>(null);
+
   // Detect mobile on client side to avoid hydration mismatch
   useEffect(() => {
     setIsMobileDevice(isTouchDevice());
@@ -1540,638 +1549,498 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
   }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, processSelection, removeHighlight, addHighlight, highlights, isIOSDevice]);
 
-  // iOS: Restore selection state when app resumes from being backgrounded/frozen
+  // iOS visibility handler removed - custom touch selection doesn't need restoration
+
+  // iOS-specific: Custom touch-based selection system
+  // Completely disables native selection (via CSS user-select: none) to prevent
+  // iOS Copy/Look Up/Share menu. Uses touch events + caretRangeFromPoint for
+  // custom text selection. Long press (400ms) initiates word selection,
+  // drag extends selection. Shows highlight button immediately on release.
   useEffect(() => {
     if (!isIOSDevice || !highlightModeEnabled || !isLoggedIn) return;
 
     const container = contentRef.current;
     if (!container) return;
 
-    const handleIOSVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // App has resumed - check if we had a pending selection
-        const pending = pendingSelectionRef.current;
-        if (pending && pending.text) {
-          setTimeout(() => {
-            const fullText = getTextContent(container);
-            const textIndex = fullText.indexOf(pending.text);
-
-            if (textIndex !== -1) {
-              try {
-                const boundaries = getTextNodeBoundaries(container);
-                const startBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.startOffset);
-                const endBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.endOffset);
-
-                if (startBoundary && endBoundary) {
-                  const range = document.createRange();
-                  const startLocalOffset = pending.startOffset - startBoundary.startOffset;
-                  const endLocalOffset = pending.endOffset - endBoundary.startOffset;
-
-                  range.setStart(startBoundary.node, Math.min(startLocalOffset, startBoundary.node.length));
-                  range.setEnd(endBoundary.node, Math.min(endLocalOffset, endBoundary.node.length));
-
-                  const selection = window.getSelection();
-                  if (selection) {
-                    selection.removeAllRanges();
-                    selection.addRange(range);
-                    isHandleDraggingRef.current = true;
-                    lastSelectionTextRef.current = pending.text;
-                  }
-                }
-              } catch (e) {
-                console.warn('Could not restore iOS selection:', e);
-              }
-            }
-          }, 150);
-        }
-      } else if (document.visibilityState === 'hidden') {
-        // Store current selection
-        const selection = window.getSelection();
-        if (selection && selection.toString().trim().length >= 2) {
-          const range = selection.getRangeAt(0);
-          if (container.contains(range.commonAncestorContainer)) {
-            const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
-            const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
-            pendingSelectionRef.current = {
-              startOffset,
-              endOffset,
-              text: selection.toString().trim(),
-            };
-          }
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleIOSVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleIOSVisibilityChange);
-    };
-  }, [isIOSDevice, highlightModeEnabled, isLoggedIn]);
-
-  // iOS-specific: Allow native drag selection with blue handles
-  // Aggressively suppress iOS context menu while allowing selection
-  useEffect(() => {
-    if (!isIOSDevice || !highlightModeEnabled || !isLoggedIn) return;
-
-    const container = contentRef.current;
-    if (!container) return;
-
-    // Track touch state for iOS
-    let isTouchActive = false;
-    let lastProcessedSelection = "";
-    let selectionCheckTimer: NodeJS.Timeout | null = null;
-    let lastSelectionChangeTime = 0;
-
-    // Aggressively prevent context menu and copy actions
-    const preventContextMenu = (e: Event) => {
+    // Prevent native context menu, copy, cut
+    const preventNative = (e: Event) => {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
       return false;
     };
 
-    // Process and show highlight button for current selection
-    const processIOSSelection = () => {
-      // Skip if we just dehighlighted (prevents highlight button from appearing)
-      if (justDehighlightedRef.current) {
-        justDehighlightedRef.current = false;
-        return;
+    // Prevent native selection from starting
+    const preventSelect = (e: Event) => {
+      e.preventDefault();
+    };
+
+    // Update visual selection via temp highlights
+    const updateVisualSelection = (startOff: number, endOff: number) => {
+      removeTempHighlights(container);
+      const actualStart = Math.min(startOff, endOff);
+      const actualEnd = Math.max(startOff, endOff);
+      if (actualStart < actualEnd) {
+        applyTempHighlight(container, actualStart, actualEnd);
       }
+    };
 
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-
-      const selText = sel.toString().trim();
-      if (!selText || selText.length < 2) return;
-      if (selText === lastProcessedSelection) return;
-
-      const range = sel.getRangeAt(0);
-      if (!container.contains(range.commonAncestorContainer)) return;
-
+    // Get word boundaries at a touch point
+    const getWordAtPoint = (x: number, y: number): { start: number; end: number } | null => {
+      const offset = getCharacterOffsetAtPoint(container, x, y);
+      if (offset === null) return null;
       const fullText = getTextContent(container);
-      const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
-      const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
+      return getWordBoundariesAtOffset(fullText, offset);
+    };
 
-      // iOS: Check if the selected text overlaps with an existing highlight
-      // If so, automatically dehighlight it (user-friendly toggle behavior)
-      for (const highlight of highlights) {
-        // Find the highlight's actual position in the text
-        let highlightStart = -1;
-        let highlightEnd = -1;
+    // Position and show the highlight button above the temp highlight marks
+    const showHighlightButtonAtSelection = (actualStart: number, actualEnd: number) => {
+      const fullText = getTextContent(container);
+      const text = fullText.substring(actualStart, actualEnd);
+      if (!text || text.trim().length < 2) return;
 
-        // Try to find exact position using context (same logic as applyHighlightToDOM)
-        if (highlight.prefixContext && highlight.suffixContext) {
-          const searchPattern = highlight.prefixContext + highlight.text + highlight.suffixContext;
-          const patternIndex = fullText.indexOf(searchPattern);
-          if (patternIndex !== -1) {
-            highlightStart = patternIndex + highlight.prefixContext.length;
-            highlightEnd = highlightStart + highlight.text.length;
-          }
-        }
-
-        if (highlightStart === -1 && highlight.prefixContext) {
-          const searchPattern = highlight.prefixContext + highlight.text;
-          const patternIndex = fullText.indexOf(searchPattern);
-          if (patternIndex !== -1) {
-            highlightStart = patternIndex + highlight.prefixContext.length;
-            highlightEnd = highlightStart + highlight.text.length;
-          }
-        }
-
-        if (highlightStart === -1) {
-          // Fallback to stored offsets
-          highlightStart = highlight.startOffset;
-          highlightEnd = highlight.endOffset;
-        }
-
-        // Check for significant overlap
-        const overlapStart = Math.max(startOffset, highlightStart);
-        const overlapEnd = Math.min(endOffset, highlightEnd);
-        const overlapLength = Math.max(0, overlapEnd - overlapStart);
-
-        const selectionLength = endOffset - startOffset;
-        const highlightLength = highlightEnd - highlightStart;
-
-        // If selection overlaps with 50%+ of the highlight OR the highlight overlaps with 50%+ of selection
-        const overlapRatioWithHighlight = highlightLength > 0 ? overlapLength / highlightLength : 0;
-        const overlapRatioWithSelection = selectionLength > 0 ? overlapLength / selectionLength : 0;
-
-        if (overlapRatioWithHighlight >= 0.5 || overlapRatioWithSelection >= 0.5) {
-          // Partial dehighlight: only remove the selected portion, keep the rest
-          window.getSelection()?.removeAllRanges();
-          // Remove any temp highlights that might be showing
-          removeTempHighlights(container);
-          setShowColorPicker(false);
-          setShowMobileHighlightButton(false);
-          setSelectedText("");
-          setSelectionInfo(null);
-          pendingSelectionRef.current = null;
-          lastProcessedSelection = "";
-          justDehighlightedRef.current = true;
-          buttonPositionedRef.current = false;
-
-          // Compute sub-highlights for remaining portions
-          const subHighlights = computeSubHighlights(fullText, highlight, startOffset, endOffset);
-
-          // Remove original highlight
-          removeHighlightFromDOM(container, highlight.id);
-          removeHighlight(highlight.id);
-          appliedHighlightsRef.current.delete(highlight.id);
-
-          // Re-highlight remaining portions
-          subHighlights.forEach(sub => addHighlight(sub));
-          return;
-        }
-      }
-
-      lastProcessedSelection = selText;
-
-      const text = fullText.substring(startOffset, endOffset);
-
-      if (!text || text.length < 2) return;
-
-      const prefixStart = Math.max(0, startOffset - CONTEXT_LENGTH);
-      const suffixEnd = Math.min(fullText.length, endOffset + CONTEXT_LENGTH);
-      const prefixContext = fullText.substring(prefixStart, startOffset);
-      const suffixContext = fullText.substring(endOffset, suffixEnd);
+      const prefixStart = Math.max(0, actualStart - CONTEXT_LENGTH);
+      const suffixEnd = Math.min(fullText.length, actualEnd + CONTEXT_LENGTH);
+      const prefixContext = fullText.substring(prefixStart, actualStart);
+      const suffixContext = fullText.substring(actualEnd, suffixEnd);
 
       setSelectedText(text);
       setSelectionInfo({
-        startOffset,
-        endOffset,
+        startOffset: actualStart,
+        endOffset: actualEnd,
         prefixContext,
         suffixContext,
       });
 
-      // Always recalculate position based on the current selection rect
-      {
-        const rect = range.getBoundingClientRect();
-        const containerRect = containerRef.current?.getBoundingClientRect();
-        if (containerRect) {
-          // Center the button above the selected text
-          const centerX = rect.left + rect.width / 2 - containerRect.left;
-          const topRelativeToContainer = rect.top - containerRect.top;
+      // Position the button above the temp highlights
+      const tempMarks = container.querySelectorAll('[data-temp-highlight="true"]');
+      if (tempMarks.length > 0) {
+        const firstRect = tempMarks[0].getBoundingClientRect();
+        const lastRect = tempMarks[tempMarks.length - 1].getBoundingClientRect();
+        const cRect = containerRef.current?.getBoundingClientRect();
+
+        if (cRect) {
+          const combinedLeft = Math.min(firstRect.left, lastRect.left);
+          const combinedRight = Math.max(firstRect.right, lastRect.right);
+          const centerX = (combinedLeft + combinedRight) / 2 - cRect.left;
+          const topRel = firstRect.top - cRect.top;
 
           const isMobileView = window.innerWidth < 640;
           const pickerWidth = isMobileView ? 160 : 280;
-          const pickerHalfWidth = pickerWidth / 2;
-
-          const containerWidth = containerRect.width;
-          const minX = pickerHalfWidth + 10;
-          const maxX = containerWidth - pickerHalfWidth - 10;
+          const halfW = pickerWidth / 2;
+          const minX = halfW + 10;
+          const maxX = cRect.width - halfW - 10;
           const xPos = Math.max(minX, Math.min(maxX, centerX));
 
-          setPickerPosition({
-            x: xPos,
-            y: topRelativeToContainer,
-            showBelow: false,
-          });
+          setPickerPosition({ x: xPos, y: topRel, showBelow: false });
         }
-
-        buttonPositionedRef.current = true;
       }
 
-      // Keep native selection visible for handle dragging (blue drag lines)
-      // Temp highlight will be applied when user taps the Highlight button
+      buttonPositionedRef.current = true;
       setShowMobileHighlightButton(true);
       setShowColorPicker(false);
     };
 
-    // Handle touch start - track position
-    const handleIOSTouchStart = (e: TouchEvent) => {
+    // Check if selection overlaps a highlight and dehighlight if so
+    const checkAndDehighlight = (actualStart: number, actualEnd: number): boolean => {
+      const fullText = getTextContent(container);
+
+      for (const highlight of highlights) {
+        const pos = findHighlightPosition(fullText, highlight);
+        if (!pos) continue;
+
+        const overlapStart = Math.max(actualStart, pos.start);
+        const overlapEnd = Math.min(actualEnd, pos.end);
+        const overlapLength = Math.max(0, overlapEnd - overlapStart);
+
+        const highlightLength = pos.end - pos.start;
+        const selectionLength = actualEnd - actualStart;
+
+        const ratioHL = highlightLength > 0 ? overlapLength / highlightLength : 0;
+        const ratioSel = selectionLength > 0 ? overlapLength / selectionLength : 0;
+
+        if (ratioHL >= 0.5 || ratioSel >= 0.5) {
+          // Dehighlight by drag
+          removeTempHighlights(container);
+          const subHighlights = computeSubHighlights(fullText, highlight, actualStart, actualEnd);
+
+          removeHighlightFromDOM(container, highlight.id);
+          removeHighlight(highlight.id);
+          appliedHighlightsRef.current.delete(highlight.id);
+
+          subHighlights.forEach(sub => addHighlight(sub));
+
+          justDehighlightedRef.current = true;
+          setShowMobileHighlightButton(false);
+          setShowColorPicker(false);
+          setSelectedText("");
+          setSelectionInfo(null);
+          buttonPositionedRef.current = false;
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // --- Touch handlers ---
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // Multi-touch: cancel selection
+      if (e.touches.length > 1) {
+        if (iosSelectionActiveRef.current) {
+          iosSelectionActiveRef.current = false;
+          removeTempHighlights(container);
+          iosSelectionStartRef.current = null;
+          iosSelectionEndRef.current = null;
+        }
+        if (iosLongPressTimerRef.current) {
+          clearTimeout(iosLongPressTimerRef.current);
+          iosLongPressTimerRef.current = null;
+        }
+        return;
+      }
+
       const touch = e.touches[0];
       if (!touch) return;
 
-      isTouchActive = true;
       iosTouchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
       scrollStartYRef.current = touch.clientY;
       isScrollingRef.current = false;
+      iosLastMoveOffsetRef.current = null;
 
-      // Reset dehighlight flag on new touch - ensures next selection works after dehighlight
+      // Reset dehighlight flag
       justDehighlightedRef.current = false;
 
       // Clear any pending timers
-      if (selectionStableTimeoutRef.current) {
-        clearTimeout(selectionStableTimeoutRef.current);
-        selectionStableTimeoutRef.current = null;
+      if (iosLongPressTimerRef.current) {
+        clearTimeout(iosLongPressTimerRef.current);
+        iosLongPressTimerRef.current = null;
       }
-      if (selectionCheckTimer) {
-        clearTimeout(selectionCheckTimer);
-        selectionCheckTimer = null;
-      }
-
-      // Check if there's an existing selection - user might be about to drag handles
-      const sel = window.getSelection();
-      const hasExistingSelection = sel && sel.toString().trim().length > 0;
-
-      if (hasExistingSelection) {
-        isHandleDraggingRef.current = true;
-        // Hide highlight button if showing - user is adjusting selection
-        if (showMobileHighlightButton) {
-          setShowMobileHighlightButton(false);
-        }
-      } else {
-        isHandleDraggingRef.current = false;
-        lastSelectionTextRef.current = "";
+      if (iosUpdateRafRef.current !== null) {
+        cancelAnimationFrame(iosUpdateRafRef.current);
+        iosUpdateRafRef.current = null;
       }
 
-      // Check if tapping on an existing highlight (for removal)
+      // If color picker is showing, don't interfere (overlay handles dismissal)
+      if (showColorPicker) return;
+
+      // If highlight button is showing and user taps content, dismiss it
+      if (showMobileHighlightButton) {
+        removeTempHighlights(container);
+        setShowMobileHighlightButton(false);
+        setSelectedText("");
+        setSelectionInfo(null);
+        buttonPositionedRef.current = false;
+        iosSelectionActiveRef.current = false;
+        iosSelectionStartRef.current = null;
+        iosSelectionEndRef.current = null;
+        // Don't start new selection on this touch
+        return;
+      }
+
+      // If a previous selection is active (user taps elsewhere), clear it
+      if (iosSelectionActiveRef.current) {
+        removeTempHighlights(container);
+        iosSelectionActiveRef.current = false;
+        iosSelectionStartRef.current = null;
+        iosSelectionEndRef.current = null;
+      }
+
+      // Check if tapping on existing highlight (for dehighlight)
       const target = e.target as HTMLElement;
       const highlightMark = target.closest('[data-highlight-id]') as HTMLElement | null;
-      if (highlightMark) {
-        const highlightId = highlightMark.getAttribute('data-highlight-id');
-        if (highlightId) {
-          (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval = highlightId;
-        }
-      } else {
-        (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval = undefined;
-      }
+      iosPendingDehighlightRef.current = highlightMark
+        ? highlightMark.getAttribute('data-highlight-id')
+        : null;
 
-      // Hide highlight button and remove temp highlights if showing
-      if (showMobileHighlightButton) {
-        setShowMobileHighlightButton(false);
-        removeTempHighlights(container);
-      }
+      // Start long press timer (400ms) to initiate selection
+      const startX = touch.clientX;
+      const startY = touch.clientY;
+      iosLongPressTimerRef.current = setTimeout(() => {
+        if (isScrollingRef.current) return;
+        if (!iosTouchStartPosRef.current) return;
+
+        // Enter selection mode: select the word at touch point
+        const wordBounds = getWordAtPoint(startX, startY);
+        if (wordBounds && wordBounds.end > wordBounds.start) {
+          iosSelectionActiveRef.current = true;
+          iosSelectionStartRef.current = wordBounds.start;
+          iosSelectionEndRef.current = wordBounds.end;
+
+          // Show visual selection for the word
+          updateVisualSelection(wordBounds.start, wordBounds.end);
+
+          // Clear pending dehighlight (this is a long press, not a tap)
+          iosPendingDehighlightRef.current = null;
+        }
+      }, 400);
     };
 
-    // Handle touch move - detect scrolling
-    const handleIOSTouchMove = (e: TouchEvent) => {
-      const touch = e.touches[0];
-      if (!touch) return;
+    const handleTouchMove = (e: TouchEvent) => {
+      // Multi-touch: cancel selection
+      if (e.touches.length > 1) {
+        if (iosSelectionActiveRef.current) {
+          iosSelectionActiveRef.current = false;
+          removeTempHighlights(container);
+          iosSelectionStartRef.current = null;
+          iosSelectionEndRef.current = null;
+        }
+        return;
+      }
 
-      const startY = scrollStartYRef.current;
-      if (startY !== null && !isScrollingRef.current) {
-        const deltaY = Math.abs(touch.clientY - startY);
+      const touch = e.touches[0];
+      if (!touch || !iosTouchStartPosRef.current) return;
+
+      const deltaX = Math.abs(touch.clientX - iosTouchStartPosRef.current.x);
+      const deltaY = Math.abs(touch.clientY - iosTouchStartPosRef.current.y);
+
+      if (!iosSelectionActiveRef.current) {
+        // Not in selection mode yet
+        // Detect scrolling
         if (deltaY > 30) {
           isScrollingRef.current = true;
-          // Clear selection if scrolling
-          window.getSelection()?.removeAllRanges();
-          setShowMobileHighlightButton(false);
+          if (iosLongPressTimerRef.current) {
+            clearTimeout(iosLongPressTimerRef.current);
+            iosLongPressTimerRef.current = null;
+          }
+          iosPendingDehighlightRef.current = null;
           return;
         }
-      }
 
-      // If there's active selection, user is dragging handles
-      const sel = window.getSelection();
-      if (sel && sel.toString().trim().length > 0) {
-        isHandleDraggingRef.current = true;
-        if (showMobileHighlightButton) {
-          setShowMobileHighlightButton(false);
+        // If movement > 10px, cancel long press
+        if (deltaX > 10 || deltaY > 10) {
+          if (iosLongPressTimerRef.current) {
+            clearTimeout(iosLongPressTimerRef.current);
+            iosLongPressTimerRef.current = null;
+          }
         }
+      } else {
+        // In selection mode - extend selection by dragging
+        const currentOffset = getCharacterOffsetAtPoint(container, touch.clientX, touch.clientY);
+        if (currentOffset !== null && currentOffset !== iosLastMoveOffsetRef.current) {
+          iosLastMoveOffsetRef.current = currentOffset;
+          iosSelectionEndRef.current = currentOffset;
+
+          // Throttle visual updates using rAF
+          if (iosUpdateRafRef.current !== null) {
+            cancelAnimationFrame(iosUpdateRafRef.current);
+          }
+          iosUpdateRafRef.current = requestAnimationFrame(() => {
+            const s = iosSelectionStartRef.current;
+            const en = iosSelectionEndRef.current;
+            if (s !== null && en !== null) {
+              updateVisualSelection(s, en);
+            }
+            iosUpdateRafRef.current = null;
+          });
+        }
+
+        // Prevent scrolling while in selection mode
+        e.preventDefault();
       }
     };
 
-    // Handle touch end - process selection after delay
-    const handleIOSTouchEnd = (e: TouchEvent) => {
-      isTouchActive = false;
+    const handleTouchEnd = (e: TouchEvent) => {
+      const touch = e.changedTouches[0];
       const startPos = iosTouchStartPosRef.current;
+      const touchDuration = iosTouchStartPosRef.current ? Date.now() : 0;
       iosTouchStartPosRef.current = null;
-      scrollStartYRef.current = null;
+      iosLastMoveOffsetRef.current = null;
 
-      // If scrolling, don't process
+      // Clear long press timer
+      if (iosLongPressTimerRef.current) {
+        clearTimeout(iosLongPressTimerRef.current);
+        iosLongPressTimerRef.current = null;
+      }
+      // Clear pending rAF
+      if (iosUpdateRafRef.current !== null) {
+        cancelAnimationFrame(iosUpdateRafRef.current);
+        iosUpdateRafRef.current = null;
+      }
+
+      // If scrolling, do nothing
       if (isScrollingRef.current) {
         isScrollingRef.current = false;
         return;
       }
 
-      // Only skip if color picker is showing (user is picking a color)
-      // Don't skip for showMobileHighlightButton - we need to update selectionInfo when user adjusts selection
+      // If color picker is showing, don't interfere
       if (showColorPicker) return;
 
-      const touch = e.changedTouches[0];
-      if (!touch) return;
-
-      // Check if it was a tap on existing highlight (for removal with animation)
-      if (startPos) {
-        const moveDistance = Math.sqrt(
+      // Determine if this was a tap (short press, small movement)
+      const isTap = startPos && touch &&
+        Math.sqrt(
           Math.pow(touch.clientX - startPos.x, 2) +
           Math.pow(touch.clientY - startPos.y, 2)
-        );
+        ) < 15;
 
-        // Use 15px threshold for easier tapping on mobile
-        if (moveDistance < 15) {
-          const pendingRemoval = (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval;
-          if (pendingRemoval) {
-            // Clear selection first
-            window.getSelection()?.removeAllRanges();
+      // --- TAP handling (not in selection mode) ---
+      if (isTap && !iosSelectionActiveRef.current) {
+        const pendingId = iosPendingDehighlightRef.current;
+        iosPendingDehighlightRef.current = null;
 
-            // Remove any temp highlights that might be showing
-            removeTempHighlights(container);
+        if (pendingId && touch) {
+          // Tap on existing highlight → dehighlight the tapped word
+          const highlight = highlights.find(h => h.id === pendingId);
+          if (highlight) {
+            const fullText = getTextContent(container);
 
-            // Mark that we just dehighlighted to prevent UI from showing
-            justDehighlightedRef.current = true;
-            buttonPositionedRef.current = false;
-
-            // Partial unhighlight: only remove the tapped word, keep the rest
-            const highlight = highlights.find(h => h.id === pendingRemoval);
-            if (highlight) {
-              const fullText = getTextContent(container);
-
-              // Robust fallback chain to find the tap offset
-              let tapOffset: number | null = null;
-
-              // Method 1: caretRangeFromPoint with touch end position
-              tapOffset = getCharacterOffsetAtPoint(container, touch.clientX, touch.clientY);
-
-              // Method 2: try with touch start position
-              if (tapOffset === null && startPos) {
-                tapOffset = getCharacterOffsetAtPoint(container, startPos.x, startPos.y);
+            // Find tap offset using multiple fallback methods
+            let tapOffset: number | null = getCharacterOffsetAtPoint(container, touch.clientX, touch.clientY);
+            if (tapOffset === null && startPos) {
+              tapOffset = getCharacterOffsetAtPoint(container, startPos.x, startPos.y);
+            }
+            if (tapOffset === null) {
+              // Fallback: use the mark element's position
+              const markEls = container.querySelectorAll(`[data-highlight-id="${pendingId}"]`);
+              const firstMark = markEls[0];
+              if (firstMark?.firstChild?.nodeType === Node.TEXT_NODE) {
+                tapOffset = getTextOffset(container, firstMark.firstChild as Text, 0);
               }
+            }
 
-              // Method 3: use current selection/caret position
-              if (tapOffset === null) {
-                const sel = window.getSelection();
-                if (sel && sel.rangeCount > 0) {
-                  const selRange = sel.getRangeAt(0);
-                  if (container.contains(selRange.startContainer)) {
-                    tapOffset = getTextOffset(container, selRange.startContainer, selRange.startOffset);
-                  }
-                }
-              }
+            if (tapOffset !== null) {
+              const wordBounds = getWordBoundariesAtOffset(fullText, tapOffset);
+              const subHighlights = computeSubHighlights(fullText, highlight, wordBounds.start, wordBounds.end);
 
-              // Method 4: use the mark element's position in the DOM
-              if (tapOffset === null) {
-                const markElements = container.querySelectorAll(`[data-highlight-id="${pendingRemoval}"]`);
-                const firstMark = markElements[0];
-                if (firstMark && firstMark.firstChild && firstMark.firstChild.nodeType === Node.TEXT_NODE) {
-                  tapOffset = getTextOffset(container, firstMark.firstChild as Text, 0);
-                }
-              }
+              removeHighlightFromDOM(container, pendingId);
+              removeHighlight(pendingId);
+              appliedHighlightsRef.current.delete(pendingId);
 
-              if (tapOffset !== null) {
-                const wordBounds = getWordBoundariesAtOffset(fullText, tapOffset);
-                const subHighlights = computeSubHighlights(fullText, highlight, wordBounds.start, wordBounds.end);
-
-                removeHighlightFromDOM(container, pendingRemoval);
-                removeHighlight(pendingRemoval);
-                appliedHighlightsRef.current.delete(pendingRemoval);
-
-                // Re-highlight remaining portions
-                subHighlights.forEach(sub => addHighlight(sub));
-              } else {
-                // Absolute last resort: remove entire highlight
-                removeHighlightFromDOM(container, pendingRemoval);
-                removeHighlight(pendingRemoval);
-                appliedHighlightsRef.current.delete(pendingRemoval);
-              }
+              subHighlights.forEach(sub => addHighlight(sub));
             } else {
-              removeHighlightFromDOM(container, pendingRemoval);
-              removeHighlight(pendingRemoval);
-              appliedHighlightsRef.current.delete(pendingRemoval);
+              // Last resort: remove entire highlight
+              removeHighlightFromDOM(container, pendingId);
+              removeHighlight(pendingId);
+              appliedHighlightsRef.current.delete(pendingId);
             }
 
-            (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval = undefined;
-            // Clear pending selection
-            pendingSelectionRef.current = null;
-            isHandleDraggingRef.current = false;
-
-            // Clear any pending timers to prevent highlight button from showing
-            if (selectionStableTimeoutRef.current) {
-              clearTimeout(selectionStableTimeoutRef.current);
-              selectionStableTimeoutRef.current = null;
-            }
+            justDehighlightedRef.current = true;
+            setShowMobileHighlightButton(false);
+            setShowColorPicker(false);
+            setSelectedText("");
+            setSelectionInfo(null);
+            buttonPositionedRef.current = false;
             return;
           }
         }
+
+        // Tap on empty area - clear any showing UI
+        removeTempHighlights(container);
+        setShowMobileHighlightButton(false);
+        setSelectedText("");
+        setSelectionInfo(null);
+        buttonPositionedRef.current = false;
+        return;
       }
 
-      // Check if there's a selection to process
-      const sel = window.getSelection();
-      const selText = sel?.toString().trim() || "";
+      // --- Selection mode ended ---
+      if (iosSelectionActiveRef.current) {
+        const s = iosSelectionStartRef.current;
+        const en = iosSelectionEndRef.current;
+        iosSelectionActiveRef.current = false;
+        iosSelectionStartRef.current = null;
+        iosSelectionEndRef.current = null;
 
-      if (selText && selText.length >= 2) {
-        // Wait for user to finish adjusting selection (800ms delay)
-        if (selectionStableTimeoutRef.current) {
-          clearTimeout(selectionStableTimeoutRef.current);
+        if (s !== null && en !== null) {
+          const actualStart = Math.min(s, en);
+          const actualEnd = Math.max(s, en);
+
+          if (actualEnd > actualStart) {
+            // Final visual update
+            updateVisualSelection(actualStart, actualEnd);
+
+            // Check for dehighlight-by-drag first
+            const didDehighlight = checkAndDehighlight(actualStart, actualEnd);
+
+            if (!didDehighlight) {
+              // Show highlight button immediately
+              showHighlightButtonAtSelection(actualStart, actualEnd);
+            }
+          } else {
+            removeTempHighlights(container);
+          }
+        } else {
+          removeTempHighlights(container);
         }
-
-        selectionStableTimeoutRef.current = setTimeout(() => {
-          // Check if user touched again
-          if (isTouchActive) return;
-
-          // Verify selection is still valid
-          const currentSel = window.getSelection();
-          if (!currentSel || currentSel.rangeCount === 0) return;
-
-          const currentText = currentSel.toString().trim();
-          if (!currentText || currentText.length < 2) return;
-
-          const currentRange = currentSel.getRangeAt(0);
-          if (!container.contains(currentRange.commonAncestorContainer)) return;
-
-          // Check selection hasn't changed recently
-          const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
-          if (timeSinceLastChange < 400) return;
-
-          isHandleDraggingRef.current = false;
-          processIOSSelection();
-        }, 800);
       }
+
+      iosPendingDehighlightRef.current = null;
     };
 
-    // Handle touch cancel
-    const handleIOSTouchCancel = () => {
-      isTouchActive = false;
+    const handleTouchCancel = () => {
       iosTouchStartPosRef.current = null;
-      scrollStartYRef.current = null;
       isScrollingRef.current = false;
-      isHandleDraggingRef.current = false;
-      if (selectionStableTimeoutRef.current) {
-        clearTimeout(selectionStableTimeoutRef.current);
-        selectionStableTimeoutRef.current = null;
+      iosSelectionActiveRef.current = false;
+      iosSelectionStartRef.current = null;
+      iosSelectionEndRef.current = null;
+      iosLastMoveOffsetRef.current = null;
+      iosPendingDehighlightRef.current = null;
+      if (iosLongPressTimerRef.current) {
+        clearTimeout(iosLongPressTimerRef.current);
+        iosLongPressTimerRef.current = null;
       }
-      if (selectionCheckTimer) {
-        clearTimeout(selectionCheckTimer);
-        selectionCheckTimer = null;
+      if (iosUpdateRafRef.current !== null) {
+        cancelAnimationFrame(iosUpdateRafRef.current);
+        iosUpdateRafRef.current = null;
       }
+      removeTempHighlights(container);
+      setShowMobileHighlightButton(false);
+      buttonPositionedRef.current = false;
     };
 
-    // Track selection changes - this fires when user drags handles on iOS
-    const handleIOSSelectionChange = () => {
-      lastSelectionChangeTime = Date.now();
-
-      // Skip if we just dehighlighted
-      if (justDehighlightedRef.current) return;
-
-      // Only skip if color picker is showing (user is picking a color)
-      // Don't skip for showMobileHighlightButton - we need to update selectionInfo when user adjusts selection
-      if (showColorPicker) return;
-
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) {
-        lastSelectionTextRef.current = "";
-        isHandleDraggingRef.current = false;
-        return;
-      }
-
-      const selText = sel.toString().trim();
-      const selRange = sel.getRangeAt(0);
-
-      // Check if selection is within our container
-      if (!container.contains(selRange.commonAncestorContainer)) {
-        return;
-      }
-
-      // Track selection changes
-      const prevSelText = lastSelectionTextRef.current;
-      lastSelectionTextRef.current = selText;
-
-      // Store selection for potential restoration after app resume (iOS)
-      if (selText && selText.length >= 2 && container) {
-        try {
-          const startOffset = getTextOffset(container, selRange.startContainer, selRange.startOffset);
-          const endOffset = getTextOffset(container, selRange.endContainer, selRange.endOffset);
-          pendingSelectionRef.current = {
-            startOffset,
-            endOffset,
-            text: selText,
-          };
-        } catch (e) {
-          // Ignore errors during selection tracking
-        }
-      }
-
-      // If selection changed, user is dragging handles - reset timers
-      if (selText !== prevSelText && selText.length > 0) {
-        isHandleDraggingRef.current = true;
-
-        // Clear any pending processing timer
-        if (selectionStableTimeoutRef.current) {
-          clearTimeout(selectionStableTimeoutRef.current);
-          selectionStableTimeoutRef.current = null;
-        }
-        if (selectionCheckTimer) {
-          clearTimeout(selectionCheckTimer);
-          selectionCheckTimer = null;
-        }
-      }
-
-      // If not touching and selection exists, start stability check
-      if (!isTouchActive && selText && selText.length >= 2) {
-        if (selectionCheckTimer) {
-          clearTimeout(selectionCheckTimer);
-        }
-
-        // Wait 800ms after last selection change before showing button
-        selectionCheckTimer = setTimeout(() => {
-          if (isTouchActive) return;
-          // Only skip if color picker is showing (user is picking a color)
-          // Don't skip for showMobileHighlightButton - we need to update selectionInfo when user adjusts selection
-          if (showColorPicker) return;
-
-          const currentSel = window.getSelection();
-          if (!currentSel || currentSel.rangeCount === 0) return;
-
-          const currentText = currentSel.toString().trim();
-          if (!currentText || currentText.length < 2) return;
-          if (currentText === lastProcessedSelection) return;
-
-          const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
-          if (timeSinceLastChange < 500) return;
-
-          const currentRange = currentSel.getRangeAt(0);
-          if (!container.contains(currentRange.commonAncestorContainer)) return;
-
-          isHandleDraggingRef.current = false;
-          processIOSSelection();
-        }, 800);
-      }
-    };
-
-    // Add event listeners
-    container.addEventListener('touchstart', handleIOSTouchStart, { passive: true });
-    container.addEventListener('touchmove', handleIOSTouchMove, { passive: true });
-    container.addEventListener('touchend', handleIOSTouchEnd, { passive: true });
-    container.addEventListener('touchcancel', handleIOSTouchCancel, { passive: true });
-    container.addEventListener('contextmenu', preventContextMenu, { capture: true });
-    container.addEventListener('copy', preventContextMenu, { capture: true });
-    container.addEventListener('cut', preventContextMenu, { capture: true });
-    document.addEventListener('selectionchange', handleIOSSelectionChange);
-
-    document.addEventListener('contextmenu', preventContextMenu, { capture: true });
-    document.addEventListener('copy', preventContextMenu, { capture: true });
-    document.addEventListener('cut', preventContextMenu, { capture: true });
-
-    // Prevent iOS gesture events that might trigger menus
+    // Prevent gesture events (pinch zoom etc.) during selection
     const preventGesture = (e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
+      if (iosSelectionActiveRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
+
+    // --- Register event listeners ---
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    // touchmove uses passive:false so we can preventDefault during selection
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('touchcancel', handleTouchCancel, { passive: true });
+
+    container.addEventListener('contextmenu', preventNative, { capture: true });
+    container.addEventListener('copy', preventNative, { capture: true });
+    container.addEventListener('cut', preventNative, { capture: true });
+    container.addEventListener('selectstart', preventSelect);
     container.addEventListener('gesturestart', preventGesture, { capture: true });
     container.addEventListener('gesturechange', preventGesture, { capture: true });
     container.addEventListener('gestureend', preventGesture, { capture: true });
 
-    // DO NOT prevent selectstart - we WANT native selection to work
-    // Just suppress the callout menu via CSS
+    document.addEventListener('contextmenu', preventNative, { capture: true });
+    document.addEventListener('copy', preventNative, { capture: true });
+    document.addEventListener('cut', preventNative, { capture: true });
 
     return () => {
-      container.removeEventListener('touchstart', handleIOSTouchStart);
-      container.removeEventListener('touchmove', handleIOSTouchMove);
-      container.removeEventListener('touchend', handleIOSTouchEnd);
-      container.removeEventListener('touchcancel', handleIOSTouchCancel);
-      container.removeEventListener('contextmenu', preventContextMenu, { capture: true });
-      container.removeEventListener('copy', preventContextMenu, { capture: true });
-      container.removeEventListener('cut', preventContextMenu, { capture: true });
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('touchcancel', handleTouchCancel);
+      container.removeEventListener('contextmenu', preventNative, { capture: true });
+      container.removeEventListener('copy', preventNative, { capture: true });
+      container.removeEventListener('cut', preventNative, { capture: true });
+      container.removeEventListener('selectstart', preventSelect);
       container.removeEventListener('gesturestart', preventGesture, { capture: true });
       container.removeEventListener('gesturechange', preventGesture, { capture: true });
       container.removeEventListener('gestureend', preventGesture, { capture: true });
-      document.removeEventListener('selectionchange', handleIOSSelectionChange);
-      document.removeEventListener('contextmenu', preventContextMenu, { capture: true });
-      document.removeEventListener('copy', preventContextMenu, { capture: true });
-      document.removeEventListener('cut', preventContextMenu, { capture: true });
+      document.removeEventListener('contextmenu', preventNative, { capture: true });
+      document.removeEventListener('copy', preventNative, { capture: true });
+      document.removeEventListener('cut', preventNative, { capture: true });
 
-      if (selectionStableTimeoutRef.current) {
-        clearTimeout(selectionStableTimeoutRef.current);
+      if (iosLongPressTimerRef.current) {
+        clearTimeout(iosLongPressTimerRef.current);
       }
-      if (selectionCheckTimer) {
-        clearTimeout(selectionCheckTimer);
+      if (iosUpdateRafRef.current !== null) {
+        cancelAnimationFrame(iosUpdateRafRef.current);
       }
     };
   }, [isIOSDevice, highlightModeEnabled, isLoggedIn, removeHighlight, addHighlight, showColorPicker, showMobileHighlightButton, highlights]);
 
-  // Native selection is now used for iOS (same as Android)
-  // No custom touch selection needed
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -2229,8 +2098,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   // Mobile: When user taps the highlight button, show color picker
   // Apply temp highlight and clear native selection
   const handleMobileHighlightTap = useCallback(() => {
-    // Apply temp highlight before clearing native selection (for iOS)
+    // Remove existing temp highlights first (iOS may already have them from custom selection)
+    // then re-apply cleanly for the color picker view
     if (contentRef.current && selectionInfo) {
+      removeTempHighlights(contentRef.current);
       applyTempHighlight(contentRef.current, selectionInfo.startOffset, selectionInfo.endOffset);
     }
     window.getSelection()?.removeAllRanges();
@@ -2429,23 +2300,21 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             background-color: rgba(147, 51, 234, 0.4) !important;
           }
 
-          /* iOS specific styles - ALLOW native selection with drag handles */
-          /* BUT suppress the iOS context menu (Copy, Look Up, Share) */
+          /* iOS specific styles - DISABLE native selection completely */
+          /* This prevents the iOS Copy/Look Up/Share menu from appearing */
+          /* Custom touch-based selection is used instead via JavaScript */
           .ios-highlight-mode {
-            /* ALLOW native text selection with drag handles */
-            -webkit-user-select: text !important;
-            user-select: text !important;
-            /* CRITICAL: Suppress callout menu completely */
+            -webkit-user-select: none !important;
+            user-select: none !important;
             -webkit-touch-callout: none !important;
             -webkit-tap-highlight-color: transparent !important;
-            /* Allow both scrolling and selection */
             touch-action: manipulation !important;
             -webkit-text-size-adjust: 100%;
             pointer-events: auto;
             cursor: text;
           }
 
-          /* iOS: ALLOW native selection on ALL text elements for drag handles */
+          /* iOS: DISABLE native selection on ALL child elements */
           .ios-highlight-mode *,
           .ios-highlight-mode p,
           .ios-highlight-mode span,
@@ -2476,22 +2345,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           .ios-highlight-mode aside,
           .ios-highlight-mode header,
           .ios-highlight-mode footer {
-            /* ALLOW native selection for drag handles */
-            -webkit-user-select: text !important;
-            user-select: text !important;
-            /* CRITICAL: Suppress iOS callout menu on EVERY element */
+            -webkit-user-select: none !important;
+            user-select: none !important;
             -webkit-touch-callout: none !important;
             -webkit-tap-highlight-color: transparent !important;
             touch-action: manipulation !important;
             pointer-events: auto;
             cursor: text;
-          }
-
-          /* iOS: Purple selection color matching Android */
-          .ios-highlight-mode::selection,
-          .ios-highlight-mode *::selection {
-            background-color: rgba(147, 51, 234, 0.4) !important;
-            color: inherit !important;
           }
 
           /* iOS: AGGRESSIVE suppression at body level when highlight mode active */
@@ -2502,10 +2362,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
           body.highlight-mode-active .ios-highlight-mode,
           body.highlight-mode-active .ios-highlight-mode * {
-            /* Keep selection enabled but suppress callout */
             -webkit-touch-callout: none !important;
-            -webkit-user-select: text !important;
-            user-select: text !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
           }
 
           /* iOS: Temp highlight styling (purple) - this is our visual selection */

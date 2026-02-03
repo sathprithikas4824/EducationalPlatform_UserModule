@@ -616,12 +616,21 @@ const Contents: React.FC = () => {
             -webkit-tap-highlight-color: transparent !important;
           }
 
-          /* Ensure content wrapper allows selection on mobile */
+          /* Ensure content wrapper allows selection on mobile (Android) */
           body.highlight-mode-active .ai-content-wrapper,
           body.highlight-mode-active .ai-content-wrapper * {
             -webkit-user-select: text !important;
             user-select: text !important;
             touch-action: manipulation !important;
+          }
+
+          /* iOS: Override content wrapper - disable native selection for custom touch selection */
+          /* Higher specificity to override the rule above */
+          body.highlight-mode-active .ios-highlight-mode .ai-content-wrapper,
+          body.highlight-mode-active .ios-highlight-mode .ai-content-wrapper * {
+            -webkit-user-select: none !important;
+            user-select: none !important;
+            -webkit-touch-callout: none !important;
           }
         }
 
