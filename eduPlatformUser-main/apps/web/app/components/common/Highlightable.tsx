@@ -993,72 +993,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
   }, [isIOSDevice, highlightModeEnabled, isLoggedIn, processSelection]);
 
-  // Prevent native context menu and browser quick actions on desktop when highlight mode is enabled
-  useEffect(() => {
-    if (!highlightModeEnabled || !isLoggedIn) return;
-
-    const container = contentRef.current;
-    if (!container) return;
-
-    // Prevent right-click context menu
-    const handleContextMenu = (e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      return false;
-    };
-
-    // Prevent copy/cut keyboard shortcuts
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'x' || e.key === 'a')) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-    };
-
-    // Prevent copy event
-    const handleCopy = (e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    };
-
-    // Prevent cut event
-    const handleCut = (e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    };
-
-    // Prevent beforecopy (Chrome specific)
-    const handleBeforeCopy = (e: Event) => {
-      e.preventDefault();
-      return false;
-    };
-
-    container.addEventListener('contextmenu', handleContextMenu, { capture: true });
-    container.addEventListener('keydown', handleKeyDown);
-    container.addEventListener('copy', handleCopy, { capture: true });
-    container.addEventListener('cut', handleCut, { capture: true });
-    container.addEventListener('beforecopy', handleBeforeCopy, { capture: true });
-
-    // Also add to document to catch browser-level menus
-    document.addEventListener('contextmenu', handleContextMenu, { capture: true });
-    document.addEventListener('copy', handleCopy, { capture: true });
-    document.addEventListener('cut', handleCut, { capture: true });
-
-    return () => {
-      container.removeEventListener('contextmenu', handleContextMenu, { capture: true });
-      container.removeEventListener('keydown', handleKeyDown);
-      container.removeEventListener('copy', handleCopy, { capture: true });
-      container.removeEventListener('cut', handleCut, { capture: true });
-      container.removeEventListener('beforecopy', handleBeforeCopy, { capture: true });
-      document.removeEventListener('contextmenu', handleContextMenu, { capture: true });
-      document.removeEventListener('copy', handleCopy, { capture: true });
-      document.removeEventListener('cut', handleCut, { capture: true });
-    };
-  }, [highlightModeEnabled, isLoggedIn]);
+  // Desktop: Allow default OS context menu (copy, paste, etc.) to work normally
+  // The highlight feature (temp highlight + color picker) works alongside native OS options
 
   // Handle touch selection (mobile) using selectionchange event
   // Works on Android only - iOS uses custom programmatic selection
@@ -2631,7 +2567,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
           body.highlight-mode-active .highlightable-content,
           body.highlight-mode-active .highlightable-content * {
-            -webkit-touch-callout: none !important;
+            -webkit-touch-callout: auto !important;
             -webkit-user-select: text !important;
             user-select: text !important;
           }
