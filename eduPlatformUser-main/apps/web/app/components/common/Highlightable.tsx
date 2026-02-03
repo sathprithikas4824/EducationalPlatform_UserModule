@@ -23,20 +23,13 @@ const isMobileViewport = (): boolean => {
 
 // Detect iOS (iPhone, iPad, iPod)
 const isIOS = (): boolean => {
-  if (typeof window === "undefined" || typeof navigator === "undefined")
-    return false;
-  return (
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  );
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 };
 
 // Get character offset at a specific point using document.caretPositionFromPoint or caretRangeFromPoint
-const getCharacterOffsetAtPoint = (
-  container: HTMLElement,
-  x: number,
-  y: number,
-): number | null => {
+const getCharacterOffsetAtPoint = (container: HTMLElement, x: number, y: number): number | null => {
   try {
     let range: Range | null = null;
 
@@ -45,24 +38,8 @@ const getCharacterOffsetAtPoint = (
       range = document.caretRangeFromPoint(x, y);
     }
     // Fallback to caretPositionFromPoint (Firefox)
-    else if (
-      (
-        document as Document & {
-          caretPositionFromPoint?: (
-            x: number,
-            y: number,
-          ) => { offsetNode: Node; offset: number } | null;
-        }
-      ).caretPositionFromPoint
-    ) {
-      const pos = (
-        document as Document & {
-          caretPositionFromPoint: (
-            x: number,
-            y: number,
-          ) => { offsetNode: Node; offset: number } | null;
-        }
-      ).caretPositionFromPoint(x, y);
+    else if ((document as Document & { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null }).caretPositionFromPoint) {
+      const pos = (document as Document & { caretPositionFromPoint: (x: number, y: number) => { offsetNode: Node; offset: number } | null }).caretPositionFromPoint(x, y);
       if (pos) {
         range = document.createRange();
         range.setStart(pos.offsetNode, pos.offset);
@@ -82,6 +59,7 @@ const getCharacterOffsetAtPoint = (
   }
 };
 
+
 const HIGHLIGHT_COLORS = [
   { name: "Yellow", value: "#fef08a" },
   { name: "Green", value: "#bbf7d0" },
@@ -96,11 +74,7 @@ const CONTEXT_LENGTH = 30;
 // Get text content from a container
 const getTextContent = (container: Node): string => {
   let text = "";
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null,
-  );
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
   let node = walker.nextNode();
   while (node) {
     text += node.textContent || "";
@@ -110,17 +84,9 @@ const getTextContent = (container: Node): string => {
 };
 
 // Get the offset of a node within a container's text content
-const getTextOffset = (
-  container: Node,
-  targetNode: Node,
-  targetOffset: number,
-): number => {
+const getTextOffset = (container: Node, targetNode: Node, targetOffset: number): number => {
   let offset = 0;
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null,
-  );
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
 
   let node = walker.nextNode();
   while (node) {
@@ -135,19 +101,9 @@ const getTextOffset = (
 
 // Get text node boundaries within the container
 // Returns array of { startOffset, endOffset, node } for each text node
-const getTextNodeBoundaries = (
-  container: Node,
-): Array<{ startOffset: number; endOffset: number; node: Text }> => {
-  const boundaries: Array<{
-    startOffset: number;
-    endOffset: number;
-    node: Text;
-  }> = [];
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null,
-  );
+const getTextNodeBoundaries = (container: Node): Array<{ startOffset: number; endOffset: number; node: Text }> => {
+  const boundaries: Array<{ startOffset: number; endOffset: number; node: Text }> = [];
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
   let currentOffset = 0;
 
   let node = walker.nextNode() as Text | null;
@@ -156,7 +112,7 @@ const getTextNodeBoundaries = (
     boundaries.push({
       startOffset: currentOffset,
       endOffset: currentOffset + nodeLength,
-      node,
+      node
     });
     currentOffset += nodeLength;
     node = walker.nextNode() as Text | null;
@@ -168,7 +124,7 @@ const getTextNodeBoundaries = (
 // Find the text node boundary that contains the given offset
 const findTextNodeBoundaryAtOffset = (
   boundaries: Array<{ startOffset: number; endOffset: number; node: Text }>,
-  offset: number,
+  offset: number
 ): { startOffset: number; endOffset: number; node: Text } | null => {
   for (const boundary of boundaries) {
     if (offset >= boundary.startOffset && offset < boundary.endOffset) {
@@ -176,10 +132,7 @@ const findTextNodeBoundaryAtOffset = (
     }
   }
   // If offset is at the very end, return the last boundary
-  if (
-    boundaries.length > 0 &&
-    offset === boundaries[boundaries.length - 1].endOffset
-  ) {
+  if (boundaries.length > 0 && offset === boundaries[boundaries.length - 1].endOffset) {
     return boundaries[boundaries.length - 1];
   }
   return null;
@@ -196,9 +149,7 @@ const createMarkElement = (highlightId: string, color: string): HTMLElement => {
   mark.style.margin = "0";
   mark.style.display = "inline";
   mark.style.boxDecorationBreak = "clone";
-  (
-    mark.style as CSSStyleDeclaration & { webkitBoxDecorationBreak: string }
-  ).webkitBoxDecorationBreak = "clone";
+  (mark.style as CSSStyleDeclaration & { webkitBoxDecorationBreak: string }).webkitBoxDecorationBreak = "clone";
   return mark;
 };
 
@@ -212,26 +163,16 @@ const createTempMarkElement = (): HTMLElement => {
   mark.style.margin = "0";
   mark.style.display = "inline";
   mark.style.boxDecorationBreak = "clone";
-  (
-    mark.style as CSSStyleDeclaration & { webkitBoxDecorationBreak: string }
-  ).webkitBoxDecorationBreak = "clone";
+  (mark.style as CSSStyleDeclaration & { webkitBoxDecorationBreak: string }).webkitBoxDecorationBreak = "clone";
   return mark;
 };
 
 // Apply temporary highlight to show what user selected (before they pick a color)
-const applyTempHighlight = (
-  container: HTMLElement,
-  startOffset: number,
-  endOffset: number,
-): void => {
+const applyTempHighlight = (container: HTMLElement, startOffset: number, endOffset: number): void => {
   const fullText = getTextContent(container);
 
   // Collect all text nodes that need to be highlighted
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null,
-  );
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
   let currentOffset = 0;
 
   interface TextNodeInfo {
@@ -307,7 +248,7 @@ const removeTempHighlights = (container: HTMLElement): void => {
   const marks = container.querySelectorAll('[data-temp-highlight="true"]');
   const parentsToNormalize = new Set<Node>();
 
-  marks.forEach((mark) => {
+  marks.forEach(mark => {
     const parent = mark.parentNode;
     if (parent) {
       parentsToNormalize.add(parent);
@@ -319,7 +260,7 @@ const removeTempHighlights = (container: HTMLElement): void => {
   });
 
   // Normalize all affected parents to merge adjacent text nodes
-  parentsToNormalize.forEach((parent) => {
+  parentsToNormalize.forEach(parent => {
     parent.normalize();
   });
 };
@@ -327,7 +268,7 @@ const removeTempHighlights = (container: HTMLElement): void => {
 // Find and wrap text with highlight mark - handles cross-element selections
 const applyHighlightToDOM = (
   container: HTMLElement,
-  highlight: Highlight,
+  highlight: Highlight
 ): void => {
   const fullText = getTextContent(container);
 
@@ -336,8 +277,7 @@ const applyHighlightToDOM = (
 
   if (highlight.prefixContext && highlight.suffixContext) {
     // Search for text with matching context
-    const searchPattern =
-      highlight.prefixContext + highlight.text + highlight.suffixContext;
+    const searchPattern = highlight.prefixContext + highlight.text + highlight.suffixContext;
     const patternIndex = fullText.indexOf(searchPattern);
     if (patternIndex !== -1) {
       targetIndex = patternIndex + highlight.prefixContext.length;
@@ -364,10 +304,7 @@ const applyHighlightToDOM = (
 
   // Last resort: use stored offset, but verify text matches
   if (targetIndex === -1) {
-    const textAtOffset = fullText.substring(
-      highlight.startOffset,
-      highlight.endOffset,
-    );
+    const textAtOffset = fullText.substring(highlight.startOffset, highlight.endOffset);
     if (textAtOffset === highlight.text) {
       targetIndex = highlight.startOffset;
     }
@@ -381,11 +318,7 @@ const applyHighlightToDOM = (
   if (targetIndex === -1) return;
 
   // Collect all text nodes that need to be highlighted
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null,
-  );
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
   let currentOffset = 0;
   const targetEndIndex = targetIndex + highlight.text.length;
 
@@ -423,18 +356,12 @@ const applyHighlightToDOM = (
   if (nodesToHighlight.length === 0) return;
 
   // Check if already highlighted
-  const existingMark = nodesToHighlight[0].node.parentElement?.closest(
-    `[data-highlight-id="${highlight.id}"]`,
-  );
+  const existingMark = nodesToHighlight[0].node.parentElement?.closest(`[data-highlight-id="${highlight.id}"]`);
   if (existingMark) return;
 
   // Verify the collected text matches
   const collectedText = nodesToHighlight
-    .map(
-      (info) =>
-        info.node.textContent?.substring(info.startOffset, info.endOffset) ||
-        "",
-    )
+    .map(info => info.node.textContent?.substring(info.startOffset, info.endOffset) || "")
     .join("");
   if (collectedText !== highlight.text) {
     return;
@@ -479,16 +406,11 @@ const applyHighlightToDOM = (
 
 // Remove highlight from DOM - handles multiple marks with same ID (cross-element highlights)
 // Instant removal for smooth user experience
-const removeHighlightFromDOM = (
-  container: HTMLElement,
-  highlightId: string,
-): void => {
-  const marks = container.querySelectorAll(
-    `[data-highlight-id="${highlightId}"]`,
-  );
+const removeHighlightFromDOM = (container: HTMLElement, highlightId: string): void => {
+  const marks = container.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
   const parentsToNormalize = new Set<Node>();
 
-  marks.forEach((mark) => {
+  marks.forEach(mark => {
     const parent = mark.parentNode;
     if (parent) {
       parentsToNormalize.add(parent);
@@ -500,17 +422,14 @@ const removeHighlightFromDOM = (
   });
 
   // Normalize all affected parents to merge adjacent text nodes
-  parentsToNormalize.forEach((parent) => {
+  parentsToNormalize.forEach(parent => {
     parent.normalize();
   });
 };
 
 // Find word boundaries at a given character offset in text
 // Used to determine which word was tapped for partial unhighlight
-const getWordBoundariesAtOffset = (
-  text: string,
-  offset: number,
-): { start: number; end: number } => {
+const getWordBoundariesAtOffset = (text: string, offset: number): { start: number; end: number } => {
   const clampedOffset = Math.max(0, Math.min(offset, text.length - 1));
 
   // Find word start - go backwards until we hit whitespace
@@ -527,10 +446,7 @@ const getWordBoundariesAtOffset = (
 
   // If tapped on whitespace, use single character
   if (start === end) {
-    return {
-      start: clampedOffset,
-      end: Math.min(text.length, clampedOffset + 1),
-    };
+    return { start: clampedOffset, end: Math.min(text.length, clampedOffset + 1) };
   }
 
   return { start, end };
@@ -538,15 +454,11 @@ const getWordBoundariesAtOffset = (
 
 // Find the actual position of a highlight in the container's full text
 // Uses the same context-based matching logic as applyHighlightToDOM
-const findHighlightPosition = (
-  fullText: string,
-  highlight: Highlight,
-): { start: number; end: number } | null => {
+const findHighlightPosition = (fullText: string, highlight: Highlight): { start: number; end: number } | null => {
   let targetIndex = -1;
 
   if (highlight.prefixContext && highlight.suffixContext) {
-    const searchPattern =
-      highlight.prefixContext + highlight.text + highlight.suffixContext;
+    const searchPattern = highlight.prefixContext + highlight.text + highlight.suffixContext;
     const patternIndex = fullText.indexOf(searchPattern);
     if (patternIndex !== -1) {
       targetIndex = patternIndex + highlight.prefixContext.length;
@@ -570,10 +482,7 @@ const findHighlightPosition = (
   }
 
   if (targetIndex === -1) {
-    const textAtOffset = fullText.substring(
-      highlight.startOffset,
-      highlight.endOffset,
-    );
+    const textAtOffset = fullText.substring(highlight.startOffset, highlight.endOffset);
     if (textAtOffset === highlight.text) {
       targetIndex = highlight.startOffset;
     }
@@ -636,10 +545,7 @@ const computeSubHighlights = (
     const beforeText = fullText.substring(highlightStart, clampedStart);
     if (beforeText.trim().length > 0) {
       const prefixStart = Math.max(0, highlightStart - CONTEXT_LENGTH);
-      const suffixEnd = Math.min(
-        fullText.length,
-        clampedStart + CONTEXT_LENGTH,
-      );
+      const suffixEnd = Math.min(fullText.length, clampedStart + CONTEXT_LENGTH);
       result.push({
         text: beforeText,
         startOffset: highlightStart,
@@ -657,10 +563,7 @@ const computeSubHighlights = (
     const afterText = fullText.substring(clampedEnd, highlightEnd);
     if (afterText.trim().length > 0) {
       const prefixStart = Math.max(0, clampedEnd - CONTEXT_LENGTH);
-      const suffixEnd = Math.min(
-        fullText.length,
-        highlightEnd + CONTEXT_LENGTH,
-      );
+      const suffixEnd = Math.min(fullText.length, highlightEnd + CONTEXT_LENGTH);
       result.push({
         text: afterText,
         startOffset: clampedEnd,
@@ -693,14 +596,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   } = useAnnotation();
 
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [showMobileHighlightButton, setShowMobileHighlightButton] =
-    useState(false);
+  const [showMobileHighlightButton, setShowMobileHighlightButton] = useState(false);
   const [selectedText, setSelectedText] = useState("");
-  const [pickerPosition, setPickerPosition] = useState({
-    x: 0,
-    y: 0,
-    showBelow: false,
-  });
+  const [pickerPosition, setPickerPosition] = useState({ x: 0, y: 0, showBelow: false });
   const [selectionInfo, setSelectionInfo] = useState<{
     startOffset: number;
     endOffset: number;
@@ -716,6 +614,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   const selectionStableTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSelectionTextRef = useRef<string>("");
   const isSelectingRef = useRef<boolean>(false);
+  
   const lastSelectionLengthRef = useRef<number>(0);
   const isHandleDraggingRef = useRef<boolean>(false);
 
@@ -756,8 +655,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const container = contentRef.current;
 
     // Remove highlights that are no longer in the list
-    const currentHighlightIds = new Set(highlights.map((h) => h.id));
-    appliedHighlightsRef.current.forEach((id) => {
+    const currentHighlightIds = new Set(highlights.map(h => h.id));
+    appliedHighlightsRef.current.forEach(id => {
       if (!currentHighlightIds.has(id)) {
         removeHighlightFromDOM(container, id);
         appliedHighlightsRef.current.delete(id);
@@ -765,7 +664,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     });
 
     // Apply new highlights
-    highlights.forEach((highlight) => {
+    highlights.forEach(highlight => {
       if (!appliedHighlightsRef.current.has(highlight.id)) {
         applyHighlightToDOM(container, highlight);
         appliedHighlightsRef.current.add(highlight.id);
@@ -781,7 +680,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     appliedHighlightsRef.current.clear();
 
     const container = contentRef.current;
-    highlights.forEach((highlight) => {
+    highlights.forEach(highlight => {
       applyHighlightToDOM(container, highlight);
       appliedHighlightsRef.current.add(highlight.id);
     });
@@ -815,15 +714,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     // STEP 1: TAP/CLICK on a highlight (no drag selection) → word-level unhighlight
     // Only runs when there's no meaningful text selected (tap, not drag)
     if (!selectionText || selectionText.length < 2) {
-      const clickedMark = (range.startContainer.parentElement?.closest(
-        "[data-highlight-id]",
-      ) ||
-        range.endContainer.parentElement?.closest(
-          "[data-highlight-id]",
-        )) as HTMLElement | null;
+      const clickedMark = (range.startContainer.parentElement?.closest('[data-highlight-id]') ||
+                          range.endContainer.parentElement?.closest('[data-highlight-id]')) as HTMLElement | null;
 
       if (clickedMark) {
-        const highlightId = clickedMark.getAttribute("data-highlight-id");
+        const highlightId = clickedMark.getAttribute('data-highlight-id');
         if (highlightId) {
           window.getSelection()?.removeAllRanges();
           removeTempHighlights(container);
@@ -836,28 +731,19 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           buttonPositionedRef.current = false;
 
           // Partial unhighlight: only remove the tapped word, keep the rest highlighted
-          const highlight = highlights.find((h) => h.id === highlightId);
+          const highlight = highlights.find(h => h.id === highlightId);
           if (highlight) {
             const fullText = getTextContent(container);
-            const clickOffset = getTextOffset(
-              container,
-              range.startContainer,
-              range.startOffset,
-            );
+            const clickOffset = getTextOffset(container, range.startContainer, range.startOffset);
             const wordBounds = getWordBoundariesAtOffset(fullText, clickOffset);
-            const subHighlights = computeSubHighlights(
-              fullText,
-              highlight,
-              wordBounds.start,
-              wordBounds.end,
-            );
+            const subHighlights = computeSubHighlights(fullText, highlight, wordBounds.start, wordBounds.end);
 
             removeHighlightFromDOM(container, highlightId);
             removeHighlight(highlightId);
             appliedHighlightsRef.current.delete(highlightId);
 
             // Re-highlight remaining portions
-            subHighlights.forEach((sub) => addHighlight(sub));
+            subHighlights.forEach(sub => addHighlight(sub));
           } else {
             removeHighlightFromDOM(container, highlightId);
             removeHighlight(highlightId);
@@ -879,16 +765,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     // Works on both mobile AND desktop
     {
       const fullText = getTextContent(container);
-      const selStartOffset = getTextOffset(
-        container,
-        range.startContainer,
-        range.startOffset,
-      );
-      const selEndOffset = getTextOffset(
-        container,
-        range.endContainer,
-        range.endOffset,
-      );
+      const selStartOffset = getTextOffset(container, range.startContainer, range.startOffset);
+      const selEndOffset = getTextOffset(container, range.endContainer, range.endOffset);
 
       // Find any existing highlight that significantly overlaps with the selection
       for (const highlight of highlights) {
@@ -909,15 +787,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
         // If selection overlaps with 50%+ of the highlight OR the highlight overlaps with 50%+ of selection
         // This makes it easy to dehighlight by just selecting the highlighted text
-        const overlapRatioWithHighlight =
-          highlightLength > 0 ? overlapLength / highlightLength : 0;
-        const overlapRatioWithSelection =
-          selectionLength > 0 ? overlapLength / selectionLength : 0;
+        const overlapRatioWithHighlight = highlightLength > 0 ? overlapLength / highlightLength : 0;
+        const overlapRatioWithSelection = selectionLength > 0 ? overlapLength / selectionLength : 0;
 
-        if (
-          overlapRatioWithHighlight >= 0.5 ||
-          overlapRatioWithSelection >= 0.5
-        ) {
+        if (overlapRatioWithHighlight >= 0.5 || overlapRatioWithSelection >= 0.5) {
           // Partial dehighlight: only remove the selected portion, keep the rest
           window.getSelection()?.removeAllRanges();
           removeTempHighlights(container);
@@ -930,12 +803,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           buttonPositionedRef.current = false;
 
           // Compute sub-highlights for remaining portions
-          const subHighlights = computeSubHighlights(
-            fullText,
-            highlight,
-            selStartOffset,
-            selEndOffset,
-          );
+          const subHighlights = computeSubHighlights(fullText, highlight, selStartOffset, selEndOffset);
 
           // Remove original highlight
           removeHighlightFromDOM(container, highlight.id);
@@ -943,7 +811,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           appliedHighlightsRef.current.delete(highlight.id);
 
           // Re-highlight remaining portions
-          subHighlights.forEach((sub) => addHighlight(sub));
+          subHighlights.forEach(sub => addHighlight(sub));
           return;
         }
       }
@@ -952,16 +820,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     // Calculate offsets and get context using TreeWalker-based text
     // This ensures consistency when highlighting across block elements
     const fullText = getTextContent(container);
-    const startOffset = getTextOffset(
-      container,
-      range.startContainer,
-      range.startOffset,
-    );
-    const endOffset = getTextOffset(
-      container,
-      range.endContainer,
-      range.endOffset,
-    );
+    const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
+    const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
 
     // Use the TreeWalker-based text instead of selection.toString()
     // This ensures the stored text matches what we'll find when re-applying highlights
@@ -978,7 +838,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     const prefixStart = Math.max(0, startOffset - CONTEXT_LENGTH);
     const suffixEnd = Math.min(fullText.length, endOffset + CONTEXT_LENGTH);
     const prefixContext = fullText.substring(prefixStart, startOffset);
-    const suffixContext = fullText.substring(endOffset, suffixEnd);
+    const suffixContext = fullText.substring(endOffset, suffixEnd)
 
     const rect = range.getBoundingClientRect();
     const containerRect = containerRef.current?.getBoundingClientRect();
@@ -1035,13 +895,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       setShowColorPicker(true);
       setShowMobileHighlightButton(false);
     }
-  }, [
-    isLoggedIn,
-    highlightModeEnabled,
-    removeHighlight,
-    addHighlight,
-    highlights,
-  ]);
+  }, [isLoggedIn, highlightModeEnabled, removeHighlight, addHighlight, highlights]);
+
+  // Handle mouse down (desktop) - reset justDehighlighted flag so the next
+  // mouseup selection is not blocked after a dehighlight click
+  const handleMouseDown = useCallback(() => {
+    if (isTouchDevice()) return;
+    justDehighlightedRef.current = false;
+  }, []);
 
   // Handle mouse selection (desktop)
   const handleMouseUp = useCallback(() => {
@@ -1052,14 +913,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   // Android: Restore selection state when app resumes from being backgrounded/frozen
   // This ensures the blue drag handles can be used again after phone freezes
   useEffect(() => {
-    if (isIOSDevice || !isTouchDevice() || !highlightModeEnabled || !isLoggedIn)
-      return;
+    if (isIOSDevice || !isTouchDevice() || !highlightModeEnabled || !isLoggedIn) return;
 
     const container = contentRef.current;
     if (!container) return;
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === 'visible') {
         // App has resumed - check if we had a pending selection
         const pending = pendingSelectionRef.current;
         if (pending && pending.text) {
@@ -1073,30 +933,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
               // Try to programmatically restore selection with native handles
               try {
                 const boundaries = getTextNodeBoundaries(container);
-                const startBoundary = findTextNodeBoundaryAtOffset(
-                  boundaries,
-                  pending.startOffset,
-                );
-                const endBoundary = findTextNodeBoundaryAtOffset(
-                  boundaries,
-                  pending.endOffset,
-                );
+                const startBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.startOffset);
+                const endBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.endOffset);
 
                 if (startBoundary && endBoundary) {
                   const range = document.createRange();
-                  const startLocalOffset =
-                    pending.startOffset - startBoundary.startOffset;
-                  const endLocalOffset =
-                    pending.endOffset - endBoundary.startOffset;
+                  const startLocalOffset = pending.startOffset - startBoundary.startOffset;
+                  const endLocalOffset = pending.endOffset - endBoundary.startOffset;
 
-                  range.setStart(
-                    startBoundary.node,
-                    Math.min(startLocalOffset, startBoundary.node.length),
-                  );
-                  range.setEnd(
-                    endBoundary.node,
-                    Math.min(endLocalOffset, endBoundary.node.length),
-                  );
+                  range.setStart(startBoundary.node, Math.min(startLocalOffset, startBoundary.node.length));
+                  range.setEnd(endBoundary.node, Math.min(endLocalOffset, endBoundary.node.length));
 
                   const selection = window.getSelection();
                   if (selection) {
@@ -1117,27 +963,19 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                   }
                 }
               } catch (e) {
-                console.warn("Could not restore selection:", e);
+                console.warn('Could not restore selection:', e);
               }
             }
           }, 100);
         }
-      } else if (document.visibilityState === "hidden") {
+      } else if (document.visibilityState === 'hidden') {
         // App is being backgrounded - store current selection
         const selection = window.getSelection();
         if (selection && selection.toString().trim().length >= 2) {
           const range = selection.getRangeAt(0);
           if (container.contains(range.commonAncestorContainer)) {
-            const startOffset = getTextOffset(
-              container,
-              range.startContainer,
-              range.startOffset,
-            );
-            const endOffset = getTextOffset(
-              container,
-              range.endContainer,
-              range.endOffset,
-            );
+            const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
+            const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
             pendingSelectionRef.current = {
               startOffset,
               endOffset,
@@ -1148,10 +986,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
     };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isIOSDevice, highlightModeEnabled, isLoggedIn, processSelection]);
 
@@ -1172,10 +1010,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
     // Prevent copy/cut keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        (e.key === "c" || e.key === "x" || e.key === "a")
-      ) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'x' || e.key === 'a')) {
         e.preventDefault();
         e.stopPropagation();
         return false;
@@ -1202,38 +1037,26 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       return false;
     };
 
-    container.addEventListener("contextmenu", handleContextMenu, {
-      capture: true,
-    });
-    container.addEventListener("keydown", handleKeyDown);
-    container.addEventListener("copy", handleCopy, { capture: true });
-    container.addEventListener("cut", handleCut, { capture: true });
-    container.addEventListener("beforecopy", handleBeforeCopy, {
-      capture: true,
-    });
+    container.addEventListener('contextmenu', handleContextMenu, { capture: true });
+    container.addEventListener('keydown', handleKeyDown);
+    container.addEventListener('copy', handleCopy, { capture: true });
+    container.addEventListener('cut', handleCut, { capture: true });
+    container.addEventListener('beforecopy', handleBeforeCopy, { capture: true });
 
     // Also add to document to catch browser-level menus
-    document.addEventListener("contextmenu", handleContextMenu, {
-      capture: true,
-    });
-    document.addEventListener("copy", handleCopy, { capture: true });
-    document.addEventListener("cut", handleCut, { capture: true });
+    document.addEventListener('contextmenu', handleContextMenu, { capture: true });
+    document.addEventListener('copy', handleCopy, { capture: true });
+    document.addEventListener('cut', handleCut, { capture: true });
 
     return () => {
-      container.removeEventListener("contextmenu", handleContextMenu, {
-        capture: true,
-      });
-      container.removeEventListener("keydown", handleKeyDown);
-      container.removeEventListener("copy", handleCopy, { capture: true });
-      container.removeEventListener("cut", handleCut, { capture: true });
-      container.removeEventListener("beforecopy", handleBeforeCopy, {
-        capture: true,
-      });
-      document.removeEventListener("contextmenu", handleContextMenu, {
-        capture: true,
-      });
-      document.removeEventListener("copy", handleCopy, { capture: true });
-      document.removeEventListener("cut", handleCut, { capture: true });
+      container.removeEventListener('contextmenu', handleContextMenu, { capture: true });
+      container.removeEventListener('keydown', handleKeyDown);
+      container.removeEventListener('copy', handleCopy, { capture: true });
+      container.removeEventListener('cut', handleCut, { capture: true });
+      container.removeEventListener('beforecopy', handleBeforeCopy, { capture: true });
+      document.removeEventListener('contextmenu', handleContextMenu, { capture: true });
+      document.removeEventListener('copy', handleCopy, { capture: true });
+      document.removeEventListener('cut', handleCut, { capture: true });
     };
   }, [highlightModeEnabled, isLoggedIn]);
 
@@ -1316,11 +1139,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           if (currentText === lastProcessedSelection) return;
 
           const currentRange = currentSel.getRangeAt(0);
-          if (
-            !container ||
-            !container.contains(currentRange.commonAncestorContainer)
-          )
-            return;
+          if (!container || !container.contains(currentRange.commonAncestorContainer)) return;
 
           // Only process if selection hasn't changed in the last 150ms
           const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
@@ -1374,16 +1193,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       // Store selection for potential restoration after app resume
       if (selText && selText.length >= 2 && container) {
         try {
-          const startOffset = getTextOffset(
-            container,
-            selRange.startContainer,
-            selRange.startOffset,
-          );
-          const endOffset = getTextOffset(
-            container,
-            selRange.endContainer,
-            selRange.endOffset,
-          );
+          const startOffset = getTextOffset(container, selRange.startContainer, selRange.startOffset);
+          const endOffset = getTextOffset(container, selRange.endContainer, selRange.endOffset);
           pendingSelectionRef.current = {
             startOffset,
             endOffset,
@@ -1436,11 +1247,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           if (timeSinceLastChange < 200) return;
 
           const currentRange = currentSel.getRangeAt(0);
-          if (
-            !container ||
-            !container.contains(currentRange.commonAncestorContainer)
-          )
-            return;
+          if (!container || !container.contains(currentRange.commonAncestorContainer)) return;
 
           isSelectingRef.current = false;
           isHandleDraggingRef.current = false;
@@ -1451,22 +1258,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     // Add touch listeners
-    document.addEventListener("touchstart", handleTouchStartForSelection, {
-      passive: true,
-    });
-    document.addEventListener("touchend", handleTouchEndForSelection, {
-      passive: true,
-    });
-    document.addEventListener("touchcancel", handleTouchEndForSelection, {
-      passive: true,
-    });
-    document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener('touchstart', handleTouchStartForSelection, { passive: true });
+    document.addEventListener('touchend', handleTouchEndForSelection, { passive: true });
+    document.addEventListener('touchcancel', handleTouchEndForSelection, { passive: true });
+    document.addEventListener('selectionchange', handleSelectionChange);
 
     return () => {
-      document.removeEventListener("selectionchange", handleSelectionChange);
-      document.removeEventListener("touchstart", handleTouchStartForSelection);
-      document.removeEventListener("touchend", handleTouchEndForSelection);
-      document.removeEventListener("touchcancel", handleTouchEndForSelection);
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      document.removeEventListener('touchstart', handleTouchStartForSelection);
+      document.removeEventListener('touchend', handleTouchEndForSelection);
+      document.removeEventListener('touchcancel', handleTouchEndForSelection);
       if (touchTimeoutRef.current) {
         clearTimeout(touchTimeoutRef.current);
       }
@@ -1477,14 +1278,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         clearTimeout(selectionCheckTimer);
       }
     };
-  }, [
-    isLoggedIn,
-    highlightModeEnabled,
-    processSelection,
-    showColorPicker,
-    showMobileHighlightButton,
-    isIOSDevice,
-  ]);
+  }, [isLoggedIn, highlightModeEnabled, processSelection, showColorPicker, showMobileHighlightButton, isIOSDevice]);
 
   // Touch handling for Android only (iOS has custom programmatic selection above)
   // Allows native drag selection for multi-word/sentence selection
@@ -1522,9 +1316,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       // Don't interfere with the touch, just ensure callout is suppressed
       const target = e.target as HTMLElement;
       if (target) {
-        (
-          target.style as CSSStyleDeclaration & { webkitTouchCallout: string }
-        ).webkitTouchCallout = "none";
+        (target.style as CSSStyleDeclaration & { webkitTouchCallout: string }).webkitTouchCallout = 'none';
       }
     };
 
@@ -1581,18 +1373,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       // Check if tapping on an existing highlight (for de-highlighting)
       const target = e.target as HTMLElement;
-      const highlightMark = target.closest(
-        "[data-highlight-id]",
-      ) as HTMLElement | null;
+      const highlightMark = target.closest('[data-highlight-id]') as HTMLElement | null;
       if (highlightMark) {
         // Store the highlight element for potential removal on tap
-        (
-          container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement }
-        )._pendingHighlightRemoval = highlightMark;
+        (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = highlightMark;
       } else {
-        (
-          container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement }
-        )._pendingHighlightRemoval = undefined;
+        (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
       }
     };
 
@@ -1654,21 +1440,18 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       // IMPORTANT: This must run BEFORE the showColorPicker/showMobileHighlightButton guard
       // because those are React state values that may be stale in this closure
       // (e.g. handleTouchStart called setShowMobileHighlightButton(false) but it hasn't re-rendered yet)
-      const pendingRemoval = (
-        container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement }
-      )._pendingHighlightRemoval;
+      const pendingRemoval = (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval;
       if (pendingRemoval && startPos) {
         const touch = e.changedTouches[0];
         if (touch) {
           const moveDistance = Math.sqrt(
             Math.pow(touch.clientX - startPos.x, 2) +
-              Math.pow(touch.clientY - startPos.y, 2),
+            Math.pow(touch.clientY - startPos.y, 2)
           );
           // If it was a tap (not a drag), unhighlight the tapped word
           // Increased threshold to 15px for easier tapping on mobile
           if (moveDistance < 15) {
-            const highlightId =
-              pendingRemoval.getAttribute("data-highlight-id");
+            const highlightId = pendingRemoval.getAttribute('data-highlight-id');
             if (highlightId) {
               // Clear any existing selection first
               window.getSelection()?.removeAllRanges();
@@ -1687,7 +1470,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
               buttonPositionedRef.current = false;
 
               // Partial unhighlight: only remove the tapped word, keep the rest
-              const highlight = highlights.find((h) => h.id === highlightId);
+              const highlight = highlights.find(h => h.id === highlightId);
               if (highlight) {
                 const fullText = getTextContent(container);
 
@@ -1695,19 +1478,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                 let tapOffset: number | null = null;
 
                 // Method 1: caretRangeFromPoint with touch end position
-                tapOffset = getCharacterOffsetAtPoint(
-                  container,
-                  touch.clientX,
-                  touch.clientY,
-                );
+                tapOffset = getCharacterOffsetAtPoint(container, touch.clientX, touch.clientY);
 
                 // Method 2: try with touch start position
                 if (tapOffset === null && startPos) {
-                  tapOffset = getCharacterOffsetAtPoint(
-                    container,
-                    startPos.x,
-                    startPos.y,
-                  );
+                  tapOffset = getCharacterOffsetAtPoint(container, startPos.x, startPos.y);
                 }
 
                 // Method 3: use current selection/caret position
@@ -1716,11 +1491,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                   if (sel && sel.rangeCount > 0) {
                     const selRange = sel.getRangeAt(0);
                     if (container.contains(selRange.startContainer)) {
-                      tapOffset = getTextOffset(
-                        container,
-                        selRange.startContainer,
-                        selRange.startOffset,
-                      );
+                      tapOffset = getTextOffset(container, selRange.startContainer, selRange.startOffset);
                     }
                   }
                 }
@@ -1729,32 +1500,20 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                 if (tapOffset === null && pendingRemoval.firstChild) {
                   const markTextNode = pendingRemoval.firstChild;
                   if (markTextNode.nodeType === Node.TEXT_NODE) {
-                    tapOffset = getTextOffset(
-                      container,
-                      markTextNode as Text,
-                      0,
-                    );
+                    tapOffset = getTextOffset(container, markTextNode as Text, 0);
                   }
                 }
 
                 if (tapOffset !== null) {
-                  const wordBounds = getWordBoundariesAtOffset(
-                    fullText,
-                    tapOffset,
-                  );
-                  const subHighlights = computeSubHighlights(
-                    fullText,
-                    highlight,
-                    wordBounds.start,
-                    wordBounds.end,
-                  );
+                  const wordBounds = getWordBoundariesAtOffset(fullText, tapOffset);
+                  const subHighlights = computeSubHighlights(fullText, highlight, wordBounds.start, wordBounds.end);
 
                   removeHighlightFromDOM(container, highlightId);
                   removeHighlight(highlightId);
                   appliedHighlightsRef.current.delete(highlightId);
 
                   // Re-highlight remaining portions
-                  subHighlights.forEach((sub) => addHighlight(sub));
+                  subHighlights.forEach(sub => addHighlight(sub));
                 } else {
                   // Absolute last resort: remove entire highlight
                   removeHighlightFromDOM(container, highlightId);
@@ -1767,11 +1526,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                 appliedHighlightsRef.current.delete(highlightId);
               }
 
-              (
-                container as HTMLElement & {
-                  _pendingHighlightRemoval?: HTMLElement;
-                }
-              )._pendingHighlightRemoval = undefined;
+              (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
               isSelectingRef.current = false;
               isHandleDraggingRef.current = false;
               // Clear pending selection since we're removing a highlight
@@ -1787,9 +1542,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           }
         }
       }
-      (
-        container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement }
-      )._pendingHighlightRemoval = undefined;
+      (container as HTMLElement & { _pendingHighlightRemoval?: HTMLElement })._pendingHighlightRemoval = undefined;
 
       if (showColorPicker || showMobileHighlightButton) return;
 
@@ -1820,60 +1573,36 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     };
 
     // Add event listeners - use capture phase for context menu to intercept early
-    container.addEventListener("contextmenu", handleContextMenu, {
-      capture: true,
-    });
-    container.addEventListener("touchstart", handleTouchStart, {
-      passive: true,
-    });
-    container.addEventListener("touchmove", handleTouchMove, { passive: true });
-    container.addEventListener("touchend", handleTouchEnd, { passive: true });
-    container.addEventListener("touchcancel", handleTouchCancel, {
-      passive: true,
-    });
-    container.addEventListener("copy", handleCopy, { capture: true });
-    container.addEventListener("cut", handleCopy, { capture: true });
+    container.addEventListener('contextmenu', handleContextMenu, { capture: true });
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: true });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('touchcancel', handleTouchCancel, { passive: true });
+    container.addEventListener('copy', handleCopy, { capture: true });
+    container.addEventListener('cut', handleCopy, { capture: true });
 
     // Track selection start on container only (don't prevent it!)
-    container.addEventListener("selectstart", handleSelectStart, {
-      passive: true,
-    });
+    container.addEventListener('selectstart', handleSelectStart, { passive: true });
 
     // Prevent context menu at document level for all mobile devices (iOS and Android)
-    document.addEventListener("contextmenu", handleContextMenu, {
-      capture: true,
-    });
-    document.addEventListener("copy", handleCopy, { capture: true });
-    document.addEventListener("cut", handleCopy, { capture: true });
+    document.addEventListener('contextmenu', handleContextMenu, { capture: true });
+    document.addEventListener('copy', handleCopy, { capture: true });
+    document.addEventListener('cut', handleCopy, { capture: true });
 
     return () => {
-      container.removeEventListener("contextmenu", handleContextMenu, {
-        capture: true,
-      });
-      container.removeEventListener("touchstart", handleTouchStart);
-      container.removeEventListener("touchmove", handleTouchMove);
-      container.removeEventListener("touchend", handleTouchEnd);
-      container.removeEventListener("touchcancel", handleTouchCancel);
-      container.removeEventListener("copy", handleCopy, { capture: true });
-      container.removeEventListener("cut", handleCopy, { capture: true });
-      container.removeEventListener("selectstart", handleSelectStart);
-      document.removeEventListener("contextmenu", handleContextMenu, {
-        capture: true,
-      });
-      document.removeEventListener("copy", handleCopy, { capture: true });
-      document.removeEventListener("cut", handleCopy, { capture: true });
+      container.removeEventListener('contextmenu', handleContextMenu, { capture: true });
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('touchcancel', handleTouchCancel);
+      container.removeEventListener('copy', handleCopy, { capture: true });
+      container.removeEventListener('cut', handleCopy, { capture: true });
+      container.removeEventListener('selectstart', handleSelectStart);
+      document.removeEventListener('contextmenu', handleContextMenu, { capture: true });
+      document.removeEventListener('copy', handleCopy, { capture: true });
+      document.removeEventListener('cut', handleCopy, { capture: true });
     };
-  }, [
-    highlightModeEnabled,
-    isLoggedIn,
-    showColorPicker,
-    showMobileHighlightButton,
-    processSelection,
-    removeHighlight,
-    addHighlight,
-    highlights,
-    isIOSDevice,
-  ]);
+  }, [highlightModeEnabled, isLoggedIn, showColorPicker, showMobileHighlightButton, processSelection, removeHighlight, addHighlight, highlights, isIOSDevice]);
 
   // iOS: Restore selection state when app resumes from being backgrounded/frozen
   useEffect(() => {
@@ -1883,7 +1612,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     if (!container) return;
 
     const handleIOSVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === 'visible') {
         // App has resumed - check if we had a pending selection
         const pending = pendingSelectionRef.current;
         if (pending && pending.text) {
@@ -1894,30 +1623,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             if (textIndex !== -1) {
               try {
                 const boundaries = getTextNodeBoundaries(container);
-                const startBoundary = findTextNodeBoundaryAtOffset(
-                  boundaries,
-                  pending.startOffset,
-                );
-                const endBoundary = findTextNodeBoundaryAtOffset(
-                  boundaries,
-                  pending.endOffset,
-                );
+                const startBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.startOffset);
+                const endBoundary = findTextNodeBoundaryAtOffset(boundaries, pending.endOffset);
 
                 if (startBoundary && endBoundary) {
                   const range = document.createRange();
-                  const startLocalOffset =
-                    pending.startOffset - startBoundary.startOffset;
-                  const endLocalOffset =
-                    pending.endOffset - endBoundary.startOffset;
+                  const startLocalOffset = pending.startOffset - startBoundary.startOffset;
+                  const endLocalOffset = pending.endOffset - endBoundary.startOffset;
 
-                  range.setStart(
-                    startBoundary.node,
-                    Math.min(startLocalOffset, startBoundary.node.length),
-                  );
-                  range.setEnd(
-                    endBoundary.node,
-                    Math.min(endLocalOffset, endBoundary.node.length),
-                  );
+                  range.setStart(startBoundary.node, Math.min(startLocalOffset, startBoundary.node.length));
+                  range.setEnd(endBoundary.node, Math.min(endLocalOffset, endBoundary.node.length));
 
                   const selection = window.getSelection();
                   if (selection) {
@@ -1928,27 +1643,19 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                   }
                 }
               } catch (e) {
-                console.warn("Could not restore iOS selection:", e);
+                console.warn('Could not restore iOS selection:', e);
               }
             }
           }, 150);
         }
-      } else if (document.visibilityState === "hidden") {
+      } else if (document.visibilityState === 'hidden') {
         // Store current selection
         const selection = window.getSelection();
         if (selection && selection.toString().trim().length >= 2) {
           const range = selection.getRangeAt(0);
           if (container.contains(range.commonAncestorContainer)) {
-            const startOffset = getTextOffset(
-              container,
-              range.startContainer,
-              range.startOffset,
-            );
-            const endOffset = getTextOffset(
-              container,
-              range.endContainer,
-              range.endOffset,
-            );
+            const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
+            const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
             pendingSelectionRef.current = {
               startOffset,
               endOffset,
@@ -1959,12 +1666,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       }
     };
 
-    document.addEventListener("visibilitychange", handleIOSVisibilityChange);
+    document.addEventListener('visibilitychange', handleIOSVisibilityChange);
     return () => {
-      document.removeEventListener(
-        "visibilitychange",
-        handleIOSVisibilityChange,
-      );
+      document.removeEventListener('visibilitychange', handleIOSVisibilityChange);
     };
   }, [isIOSDevice, highlightModeEnabled, isLoggedIn]);
 
@@ -2009,16 +1713,8 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       if (!container.contains(range.commonAncestorContainer)) return;
 
       const fullText = getTextContent(container);
-      const startOffset = getTextOffset(
-        container,
-        range.startContainer,
-        range.startOffset,
-      );
-      const endOffset = getTextOffset(
-        container,
-        range.endContainer,
-        range.endOffset,
-      );
+      const startOffset = getTextOffset(container, range.startContainer, range.startOffset);
+      const endOffset = getTextOffset(container, range.endContainer, range.endOffset);
 
       // iOS: Check if the selected text overlaps with an existing highlight
       // If so, automatically dehighlight it (user-friendly toggle behavior)
@@ -2029,8 +1725,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
         // Try to find exact position using context (same logic as applyHighlightToDOM)
         if (highlight.prefixContext && highlight.suffixContext) {
-          const searchPattern =
-            highlight.prefixContext + highlight.text + highlight.suffixContext;
+          const searchPattern = highlight.prefixContext + highlight.text + highlight.suffixContext;
           const patternIndex = fullText.indexOf(searchPattern);
           if (patternIndex !== -1) {
             highlightStart = patternIndex + highlight.prefixContext.length;
@@ -2062,15 +1757,10 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         const highlightLength = highlightEnd - highlightStart;
 
         // If selection overlaps with 50%+ of the highlight OR the highlight overlaps with 50%+ of selection
-        const overlapRatioWithHighlight =
-          highlightLength > 0 ? overlapLength / highlightLength : 0;
-        const overlapRatioWithSelection =
-          selectionLength > 0 ? overlapLength / selectionLength : 0;
+        const overlapRatioWithHighlight = highlightLength > 0 ? overlapLength / highlightLength : 0;
+        const overlapRatioWithSelection = selectionLength > 0 ? overlapLength / selectionLength : 0;
 
-        if (
-          overlapRatioWithHighlight >= 0.5 ||
-          overlapRatioWithSelection >= 0.5
-        ) {
+        if (overlapRatioWithHighlight >= 0.5 || overlapRatioWithSelection >= 0.5) {
           // Partial dehighlight: only remove the selected portion, keep the rest
           window.getSelection()?.removeAllRanges();
           // Remove any temp highlights that might be showing
@@ -2085,12 +1775,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           buttonPositionedRef.current = false;
 
           // Compute sub-highlights for remaining portions
-          const subHighlights = computeSubHighlights(
-            fullText,
-            highlight,
-            startOffset,
-            endOffset,
-          );
+          const subHighlights = computeSubHighlights(fullText, highlight, startOffset, endOffset);
 
           // Remove original highlight
           removeHighlightFromDOM(container, highlight.id);
@@ -2098,7 +1783,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           appliedHighlightsRef.current.delete(highlight.id);
 
           // Re-highlight remaining portions
-          subHighlights.forEach((sub) => addHighlight(sub));
+          subHighlights.forEach(sub => addHighlight(sub));
           return;
         }
       }
@@ -2196,20 +1881,14 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       // Check if tapping on an existing highlight (for removal)
       const target = e.target as HTMLElement;
-      const highlightMark = target.closest(
-        "[data-highlight-id]",
-      ) as HTMLElement | null;
+      const highlightMark = target.closest('[data-highlight-id]') as HTMLElement | null;
       if (highlightMark) {
-        const highlightId = highlightMark.getAttribute("data-highlight-id");
+        const highlightId = highlightMark.getAttribute('data-highlight-id');
         if (highlightId) {
-          (
-            container as HTMLElement & { _pendingHighlightRemoval?: string }
-          )._pendingHighlightRemoval = highlightId;
+          (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval = highlightId;
         }
       } else {
-        (
-          container as HTMLElement & { _pendingHighlightRemoval?: string }
-        )._pendingHighlightRemoval = undefined;
+        (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval = undefined;
       }
 
       // Hide highlight button and remove temp highlights if showing
@@ -2270,14 +1949,12 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       if (startPos) {
         const moveDistance = Math.sqrt(
           Math.pow(touch.clientX - startPos.x, 2) +
-            Math.pow(touch.clientY - startPos.y, 2),
+          Math.pow(touch.clientY - startPos.y, 2)
         );
 
         // Use 15px threshold for easier tapping on mobile
         if (moveDistance < 15) {
-          const pendingRemoval = (
-            container as HTMLElement & { _pendingHighlightRemoval?: string }
-          )._pendingHighlightRemoval;
+          const pendingRemoval = (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval;
           if (pendingRemoval) {
             // Clear selection first
             window.getSelection()?.removeAllRanges();
@@ -2290,7 +1967,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             buttonPositionedRef.current = false;
 
             // Partial unhighlight: only remove the tapped word, keep the rest
-            const highlight = highlights.find((h) => h.id === pendingRemoval);
+            const highlight = highlights.find(h => h.id === pendingRemoval);
             if (highlight) {
               const fullText = getTextContent(container);
 
@@ -2298,19 +1975,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
               let tapOffset: number | null = null;
 
               // Method 1: caretRangeFromPoint with touch end position
-              tapOffset = getCharacterOffsetAtPoint(
-                container,
-                touch.clientX,
-                touch.clientY,
-              );
+              tapOffset = getCharacterOffsetAtPoint(container, touch.clientX, touch.clientY);
 
               // Method 2: try with touch start position
               if (tapOffset === null && startPos) {
-                tapOffset = getCharacterOffsetAtPoint(
-                  container,
-                  startPos.x,
-                  startPos.y,
-                );
+                tapOffset = getCharacterOffsetAtPoint(container, startPos.x, startPos.y);
               }
 
               // Method 3: use current selection/caret position
@@ -2319,52 +1988,30 @@ export const Highlightable: React.FC<HighlightableProps> = ({
                 if (sel && sel.rangeCount > 0) {
                   const selRange = sel.getRangeAt(0);
                   if (container.contains(selRange.startContainer)) {
-                    tapOffset = getTextOffset(
-                      container,
-                      selRange.startContainer,
-                      selRange.startOffset,
-                    );
+                    tapOffset = getTextOffset(container, selRange.startContainer, selRange.startOffset);
                   }
                 }
               }
 
               // Method 4: use the mark element's position in the DOM
               if (tapOffset === null) {
-                const markElements = container.querySelectorAll(
-                  `[data-highlight-id="${pendingRemoval}"]`,
-                );
+                const markElements = container.querySelectorAll(`[data-highlight-id="${pendingRemoval}"]`);
                 const firstMark = markElements[0];
-                if (
-                  firstMark &&
-                  firstMark.firstChild &&
-                  firstMark.firstChild.nodeType === Node.TEXT_NODE
-                ) {
-                  tapOffset = getTextOffset(
-                    container,
-                    firstMark.firstChild as Text,
-                    0,
-                  );
+                if (firstMark && firstMark.firstChild && firstMark.firstChild.nodeType === Node.TEXT_NODE) {
+                  tapOffset = getTextOffset(container, firstMark.firstChild as Text, 0);
                 }
               }
 
               if (tapOffset !== null) {
-                const wordBounds = getWordBoundariesAtOffset(
-                  fullText,
-                  tapOffset,
-                );
-                const subHighlights = computeSubHighlights(
-                  fullText,
-                  highlight,
-                  wordBounds.start,
-                  wordBounds.end,
-                );
+                const wordBounds = getWordBoundariesAtOffset(fullText, tapOffset);
+                const subHighlights = computeSubHighlights(fullText, highlight, wordBounds.start, wordBounds.end);
 
                 removeHighlightFromDOM(container, pendingRemoval);
                 removeHighlight(pendingRemoval);
                 appliedHighlightsRef.current.delete(pendingRemoval);
 
                 // Re-highlight remaining portions
-                subHighlights.forEach((sub) => addHighlight(sub));
+                subHighlights.forEach(sub => addHighlight(sub));
               } else {
                 // Absolute last resort: remove entire highlight
                 removeHighlightFromDOM(container, pendingRemoval);
@@ -2377,9 +2024,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
               appliedHighlightsRef.current.delete(pendingRemoval);
             }
 
-            (
-              container as HTMLElement & { _pendingHighlightRemoval?: string }
-            )._pendingHighlightRemoval = undefined;
+            (container as HTMLElement & { _pendingHighlightRemoval?: string })._pendingHighlightRemoval = undefined;
             // Clear pending selection
             pendingSelectionRef.current = null;
             isHandleDraggingRef.current = false;
@@ -2444,61 +2089,112 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         selectionCheckTimer = null;
       }
     };
+
+    // Track selection changes - this fires when user drags handles on iOS
     const handleIOSSelectionChange = () => {
+      lastSelectionChangeTime = Date.now();
+
+      // Skip if we just dehighlighted
+      if (justDehighlightedRef.current) return;
+
+      // Only skip if color picker is showing (user is picking a color)
+      // Don't skip for showMobileHighlightButton - we need to update selectionInfo when user adjusts selection
+      if (showColorPicker) return;
+
       const sel = window.getSelection();
-
-      // LOGIC FIX: iOS needs to know we are still interested even if the text is 'clean'
-      if (!sel || sel.rangeCount === 0) return;
-
-      const selText = sel.toString().trim();
-
-      // Ensure we check if the selection is INSIDE your container
-      // even if it's just raw text nodes
-      const range = sel.getRangeAt(0);
-      if (!container.contains(range.commonAncestorContainer)) {
+      if (!sel || sel.rangeCount === 0) {
+        lastSelectionTextRef.current = "";
+        isHandleDraggingRef.current = false;
         return;
       }
-      if (selText.length < 2) return;
 
-      // // 1. Capture the range immediately before it's lost
-      // const range = sel.getRangeAt(0);
+      const selText = sel.toString().trim();
+      const selRange = sel.getRangeAt(0);
 
-      // 2. Start the "Stability Timer"
-      // We wait 600-800ms to ensure the user stopped dragging handles
-      if (selectionCheckTimer) clearTimeout(selectionCheckTimer);
+      // Check if selection is within our container
+      if (!container.contains(selRange.commonAncestorContainer)) {
+        return;
+      }
 
-      selectionCheckTimer = setTimeout(() => {
-        if (isTouchActive) return; // Still moving? Don't show yet.
+      // Track selection changes
+      const prevSelText = lastSelectionTextRef.current;
+      lastSelectionTextRef.current = selText;
 
-        // Process the selection for the UI
-        processIOSSelection();
-      }, 700);
+      // Store selection for potential restoration after app resume (iOS)
+      if (selText && selText.length >= 2 && container) {
+        try {
+          const startOffset = getTextOffset(container, selRange.startContainer, selRange.startOffset);
+          const endOffset = getTextOffset(container, selRange.endContainer, selRange.endOffset);
+          pendingSelectionRef.current = {
+            startOffset,
+            endOffset,
+            text: selText,
+          };
+        } catch (e) {
+          // Ignore errors during selection tracking
+        }
+      }
+
+      // If selection changed, user is dragging handles - reset timers
+      if (selText !== prevSelText && selText.length > 0) {
+        isHandleDraggingRef.current = true;
+
+        // Clear any pending processing timer
+        if (selectionStableTimeoutRef.current) {
+          clearTimeout(selectionStableTimeoutRef.current);
+          selectionStableTimeoutRef.current = null;
+        }
+        if (selectionCheckTimer) {
+          clearTimeout(selectionCheckTimer);
+          selectionCheckTimer = null;
+        }
+      }
+
+      // If not touching and selection exists, start stability check
+      if (!isTouchActive && selText && selText.length >= 2) {
+        if (selectionCheckTimer) {
+          clearTimeout(selectionCheckTimer);
+        }
+
+        // Wait 800ms after last selection change before showing button
+        selectionCheckTimer = setTimeout(() => {
+          if (isTouchActive) return;
+          // Only skip if color picker is showing (user is picking a color)
+          // Don't skip for showMobileHighlightButton - we need to update selectionInfo when user adjusts selection
+          if (showColorPicker) return;
+
+          const currentSel = window.getSelection();
+          if (!currentSel || currentSel.rangeCount === 0) return;
+
+          const currentText = currentSel.toString().trim();
+          if (!currentText || currentText.length < 2) return;
+          if (currentText === lastProcessedSelection) return;
+
+          const timeSinceLastChange = Date.now() - lastSelectionChangeTime;
+          if (timeSinceLastChange < 500) return;
+
+          const currentRange = currentSel.getRangeAt(0);
+          if (!container.contains(currentRange.commonAncestorContainer)) return;
+
+          isHandleDraggingRef.current = false;
+          processIOSSelection();
+        }, 800);
+      }
     };
-    // Add event listeners
-    container.addEventListener("touchstart", handleIOSTouchStart, {
-      passive: true,
-    });
-    container.addEventListener("touchmove", handleIOSTouchMove, {
-      passive: true,
-    });
-    container.addEventListener("touchend", handleIOSTouchEnd, {
-      passive: true,
-    });
-    container.addEventListener("touchcancel", handleIOSTouchCancel, {
-      passive: true,
-    });
-    container.addEventListener("contextmenu", preventContextMenu, {
-      capture: true,
-    });
-    container.addEventListener("copy", preventContextMenu, { capture: true });
-    container.addEventListener("cut", preventContextMenu, { capture: true });
-    document.addEventListener("selectionchange", handleIOSSelectionChange);
 
-    document.addEventListener("contextmenu", preventContextMenu, {
-      capture: true,
-    });
-    document.addEventListener("copy", preventContextMenu, { capture: true });
-    document.addEventListener("cut", preventContextMenu, { capture: true });
+    // Add event listeners
+    container.addEventListener('touchstart', handleIOSTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleIOSTouchMove, { passive: true });
+    container.addEventListener('touchend', handleIOSTouchEnd, { passive: true });
+    container.addEventListener('touchcancel', handleIOSTouchCancel, { passive: true });
+    container.addEventListener('contextmenu', preventContextMenu, { capture: true });
+    container.addEventListener('copy', preventContextMenu, { capture: true });
+    container.addEventListener('cut', preventContextMenu, { capture: true });
+    document.addEventListener('selectionchange', handleIOSSelectionChange);
+
+    document.addEventListener('contextmenu', preventContextMenu, { capture: true });
+    document.addEventListener('copy', preventContextMenu, { capture: true });
+    document.addEventListener('cut', preventContextMenu, { capture: true });
 
     // Prevent iOS gesture events that might trigger menus
     const preventGesture = (e: Event) => {
@@ -2506,50 +2202,28 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       e.stopPropagation();
       return false;
     };
-    container.addEventListener("gesturestart", preventGesture, {
-      capture: true,
-    });
-    container.addEventListener("gesturechange", preventGesture, {
-      capture: true,
-    });
-    container.addEventListener("gestureend", preventGesture, { capture: true });
+    container.addEventListener('gesturestart', preventGesture, { capture: true });
+    container.addEventListener('gesturechange', preventGesture, { capture: true });
+    container.addEventListener('gestureend', preventGesture, { capture: true });
 
     // DO NOT prevent selectstart - we WANT native selection to work
     // Just suppress the callout menu via CSS
 
     return () => {
-      container.removeEventListener("touchstart", handleIOSTouchStart);
-      container.removeEventListener("touchmove", handleIOSTouchMove);
-      container.removeEventListener("touchend", handleIOSTouchEnd);
-      container.removeEventListener("touchcancel", handleIOSTouchCancel);
-      container.removeEventListener("contextmenu", preventContextMenu, {
-        capture: true,
-      });
-      container.removeEventListener("copy", preventContextMenu, {
-        capture: true,
-      });
-      container.removeEventListener("cut", preventContextMenu, {
-        capture: true,
-      });
-      container.removeEventListener("gesturestart", preventGesture, {
-        capture: true,
-      });
-      container.removeEventListener("gesturechange", preventGesture, {
-        capture: true,
-      });
-      container.removeEventListener("gestureend", preventGesture, {
-        capture: true,
-      });
-      document.removeEventListener("selectionchange", handleIOSSelectionChange);
-      document.removeEventListener("contextmenu", preventContextMenu, {
-        capture: true,
-      });
-      document.removeEventListener("copy", preventContextMenu, {
-        capture: true,
-      });
-      document.removeEventListener("cut", preventContextMenu, {
-        capture: true,
-      });
+      container.removeEventListener('touchstart', handleIOSTouchStart);
+      container.removeEventListener('touchmove', handleIOSTouchMove);
+      container.removeEventListener('touchend', handleIOSTouchEnd);
+      container.removeEventListener('touchcancel', handleIOSTouchCancel);
+      container.removeEventListener('contextmenu', preventContextMenu, { capture: true });
+      container.removeEventListener('copy', preventContextMenu, { capture: true });
+      container.removeEventListener('cut', preventContextMenu, { capture: true });
+      container.removeEventListener('gesturestart', preventGesture, { capture: true });
+      container.removeEventListener('gesturechange', preventGesture, { capture: true });
+      container.removeEventListener('gestureend', preventGesture, { capture: true });
+      document.removeEventListener('selectionchange', handleIOSSelectionChange);
+      document.removeEventListener('contextmenu', preventContextMenu, { capture: true });
+      document.removeEventListener('copy', preventContextMenu, { capture: true });
+      document.removeEventListener('cut', preventContextMenu, { capture: true });
 
       if (selectionStableTimeoutRef.current) {
         clearTimeout(selectionStableTimeoutRef.current);
@@ -2558,16 +2232,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         clearTimeout(selectionCheckTimer);
       }
     };
-  }, [
-    isIOSDevice,
-    highlightModeEnabled,
-    isLoggedIn,
-    removeHighlight,
-    addHighlight,
-    showColorPicker,
-    showMobileHighlightButton,
-    highlights,
-  ]);
+  }, [isIOSDevice, highlightModeEnabled, isLoggedIn, removeHighlight, addHighlight, showColorPicker, showMobileHighlightButton, highlights]);
 
   // Native selection is now used for iOS (same as Android)
   // No custom touch selection needed
@@ -2588,56 +2253,49 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   // This helps CSS suppress OS options when highlight mode is ON
   useEffect(() => {
     if (!highlightModeEnabled || !isLoggedIn) {
-      document.body.classList.remove("highlight-mode-active");
+      document.body.classList.remove('highlight-mode-active');
       return;
     }
 
     // Add class on both desktop and mobile when highlight mode is enabled
-    document.body.classList.add("highlight-mode-active");
+    document.body.classList.add('highlight-mode-active');
     return () => {
-      document.body.classList.remove("highlight-mode-active");
+      document.body.classList.remove('highlight-mode-active');
     };
   }, [highlightModeEnabled, isLoggedIn]);
 
-  const saveHighlight = useCallback(
-    (color: string) => {
-      // 1. Validate data from our Provider's user state
-      if (!selectedText || !user || !selectionInfo) return;
+  const saveHighlight = useCallback((color: string) => {
+    if (!selectedText || !user || !selectionInfo) return;
 
-      // 2. Call the provider's addHighlight
-      // (This will automatically trigger the cookie save in AnnotationProvider)
-      addHighlight({
-        text: selectedText,
-        startOffset: selectionInfo.startOffset,
-        endOffset: selectionInfo.endOffset,
-        color: color,
-        pageId: pageId,
-        prefixContext: selectionInfo.prefixContext,
-        suffixContext: selectionInfo.suffixContext,
-      });
+    // Remove temporary highlight before applying real one
+    if (contentRef.current) {
+      removeTempHighlights(contentRef.current);
+    }
 
-      // 3. CLEANUP FOR IOS:
-      // iOS handles often get "stuck" visually. This forces them to disappear.
-      window.getSelection()?.removeAllRanges();
-      setShowColorPicker(false);
+    addHighlight({
+      text: selectedText,
+      startOffset: selectionInfo.startOffset,
+      endOffset: selectionInfo.endOffset,
+      color,
+      pageId,
+      prefixContext: selectionInfo.prefixContext,
+      suffixContext: selectionInfo.suffixContext,
+    });
 
-      // Reset local state
-      setSelectedText("");
-      setSelectionInfo(null);
-    },
-    [selectedText, user, selectionInfo, addHighlight, pageId],
-  );
+    window.getSelection()?.removeAllRanges();
+    setShowColorPicker(false);
+    setShowMobileHighlightButton(false);
+    setSelectedText("");
+    setSelectionInfo(null);
+    buttonPositionedRef.current = false;
+  }, [selectedText, user, selectionInfo, addHighlight, pageId]);
 
   // Mobile: When user taps the highlight button, show color picker
   // Apply temp highlight and clear native selection
   const handleMobileHighlightTap = useCallback(() => {
     // Apply temp highlight before clearing native selection (for iOS)
     if (contentRef.current && selectionInfo) {
-      applyTempHighlight(
-        contentRef.current,
-        selectionInfo.startOffset,
-        selectionInfo.endOffset,
-      );
+      applyTempHighlight(contentRef.current, selectionInfo.startOffset, selectionInfo.endOffset);
     }
     window.getSelection()?.removeAllRanges();
     setShowMobileHighlightButton(false);
@@ -2673,6 +2331,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     >
       <div
         ref={contentRef}
+        onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         className={`highlightable-content ${showColorPicker ? "picker-active" : ""} ${highlightModeEnabled && isMobileDevice ? "mobile-highlight-mode" : ""} ${highlightModeEnabled && isIOSDevice ? "ios-highlight-mode" : ""}`}
       >
@@ -2695,16 +2354,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             onClick={handleMobileHighlightTap}
             className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-full shadow-lg active:scale-95 transition-transform font-medium text-sm"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-4 h-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 20h9" />
               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
             </svg>
@@ -2712,6 +2362,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
           </button>
         </div>
       )}
+
 
       {/* Color picker - always positioned ABOVE the selected text */}
       {showColorPicker && isLoggedIn && selectedText && (
@@ -2906,45 +2557,6 @@ export const Highlightable: React.FC<HighlightableProps> = ({
             background-color: rgba(147, 51, 234, 0.4) !important;
             color: inherit !important;
           }
-            /* 1. Ensure the base container allows selection but blocks the OS menu */
-.ios-highlight-mode {
-  -webkit-user-select: text !important;
-  user-select: text !important;
-  -webkit-touch-callout: none !important; /* Hide the Copy/Paste menu */
-}
-
-/* 2. FORCE every child (p, span, div, etc.) to be selectable */
-/* This is likely why "normal" text isn't working for you right now */
-.ios-highlight-mode * {
-  -webkit-user-select: text !important;
-  user-select: text !important;
-  -webkit-touch-callout: none !important;
-  pointer-events: auto !important; /* Ensure the text can receive touch */
-}
-
-/* 3. Disable the native "tap highlight" which can interfere with dragging handles */
-.ios-highlight-mode, .ios-highlight-mode * {
-  -webkit-tap-highlight-color: transparent !important;
-}
-          
-          /* Aggressive iOS callout suppression */
-body.highlight-mode-active {
-  -webkit-touch-callout: none !important;
-  -webkit-user-select: none; /* Prevent selection on the UI/buttons */
-}
-
-/* But allow selection ONLY on the content */
-body.highlight-mode-active .highlightable-content,
-body.highlight-mode-active .highlightable-content * {
-  -webkit-user-select: text !important;
-  user-select: text !important;
-  -webkit-touch-callout: none !important;
-}
-
-/* Ensure handles are purple on iOS to match your brand */
-.highlightable-content::selection {
-  background-color: rgba(147, 51, 234, 0.4);
-}
 
           /* iOS: AGGRESSIVE suppression at body level when highlight mode active */
           body.highlight-mode-active {
