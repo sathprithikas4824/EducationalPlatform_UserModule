@@ -624,12 +624,12 @@ const Contents: React.FC = () => {
             touch-action: manipulation !important;
           }
 
-          /* iOS: Override content wrapper - disable native selection for custom touch selection */
-          /* Higher specificity to override the rule above */
+          /* iOS: Allow native selection in content wrapper but suppress callout menu */
+          /* Higher specificity to ensure touch-callout is none on iOS */
           body.highlight-mode-active .ios-highlight-mode .ai-content-wrapper,
           body.highlight-mode-active .ios-highlight-mode .ai-content-wrapper * {
-            -webkit-user-select: none !important;
-            user-select: none !important;
+            -webkit-user-select: text !important;
+            user-select: text !important;
             -webkit-touch-callout: none !important;
           }
         }
