@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import localFont from "next/font/local";
 import { ArrowRight, ArrowDown } from "../common/icons";
 import { Highlightable } from "../common/Highlightable";
 import { UserProfileButton } from "../common/UserProfileButton";
+import { useAnnotation } from "../common/AnnotationProvider";
+import { markTopicCompleted, getCompletedTopics } from "../../lib/supabase";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
-const SUBMODULE_ID = 18; // Submodule ID for "Python Programming For AI"
 
 // Backend response interfaces
 interface Topic {
@@ -27,14 +28,15 @@ interface Topic {
 interface SubModuleData {
   submodule_id: number;
   module_id: number;
+  category_id: number;
   name: string;
   description: string | null;
   content: string | null;
-  order_index: number;
+  title: string | null;
+  image_url: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
-  topics?: Topic[];
 }
 
 const fuzzyBubblesBoldFont = localFont({
@@ -43,103 +45,117 @@ const fuzzyBubblesBoldFont = localFont({
   variable: "--font-fuzzy-bubbles-bold",
 });
 
-interface SubModule {
+interface SidebarTopic {
   id: string;
   title: string;
   status: "completed" | "current" | "locked" | "available";
 }
 
-interface ModuleItem {
+interface SidebarModule {
   id: string;
+  submoduleId: number;
   title: string;
   expanded: boolean;
-  subModules?: SubModule[];
+  topics: SidebarTopic[];
+  topicsLoaded: boolean;
 }
 
-const Contents: React.FC = () => {
-  const [modules, setModules] = useState<ModuleItem[]>([]);
-  const [subModuleData, setSubModuleData] = useState<SubModuleData | null>(null);
+interface ContentsProps {
+  submoduleId: number;
+}
+
+const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
+  const { user } = useAnnotation();
+  const [sidebarModules, setSidebarModules] = useState<SidebarModule[]>([]);
+  const [currentSubmodule, setCurrentSubmodule] = useState<SubModuleData | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch submodule data and topics from backend
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Fetch topics for a specific submodule
+  const fetchTopicsForSubmodule = useCallback(async (subId: number): Promise<Topic[]> => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/topics/${subId}`);
+      if (!res.ok) return [];
+      const data: Topic[] = await res.json();
+      return data;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  // Initial data fetch
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        setError(null);
 
-        // Fetch all submodules to find the one we need
-        const submodulesResponse = await fetch(
-          `${BACKEND_URL}/api/submodules`
+        // Fetch all submodules and topics for the current submodule in parallel
+        const [submodulesRes, topicsData] = await Promise.all([
+          fetch(`${BACKEND_URL}/api/submodules`).then((res) =>
+            res.ok ? res.json() : []
+          ),
+          fetchTopicsForSubmodule(submoduleId),
+        ]);
+
+        const allSubmodules: SubModuleData[] = submodulesRes;
+
+        // Find the current submodule
+        const current = allSubmodules.find(
+          (s) => s.submodule_id === submoduleId
         );
+        setCurrentSubmodule(current || null);
 
-        // Fetch topics for this submodule - endpoint is /api/topics/:submoduleId
-        const topicsResponse = await fetch(
-          `${BACKEND_URL}/api/topics/${SUBMODULE_ID}`
-        );
-
-        if (!topicsResponse.ok) {
-          throw new Error("Failed to fetch topics data");
+        if (!current) {
+          setError("Submodule not found");
+          setLoading(false);
+          return;
         }
 
-        const topicsData: Topic[] = await topicsResponse.json();
         setTopics(topicsData);
 
-        // Try to get submodule data from the list
-        let submoduleData: SubModuleData | null = null;
-        if (submodulesResponse.ok) {
-          const allSubmodules: SubModuleData[] = await submodulesResponse.json();
-          submoduleData = allSubmodules.find(s => s.submodule_id === SUBMODULE_ID) || null;
-          setSubModuleData(submoduleData);
-        }
+        // Fetch completed topics from localStorage for current demo user
+        const completedTopicIds = user ? getCompletedTopics(user.id, submoduleId) : [];
 
-        // Convert topics to sidebar format
-        const subModulesForSidebar: SubModule[] = topicsData.map((topic, index) => ({
-          id: `topic-${topic.topic_id}`,
-          title: topic.name,
-          status: index === 0 ? "current" : "available" as const,
-        }));
+        // Find the first uncompleted topic index
+        const firstUncompletedIndex = topicsData.findIndex(
+          (topic) => !completedTopicIds.includes(topic.topic_id)
+        );
 
-        // Set the first topic as selected by default
+        // Build sidebar topics for the current submodule only
+        const currentTopics: SidebarTopic[] = topicsData.map(
+          (topic, index) => ({
+            id: `topic-${topic.topic_id}`,
+            title: topic.name,
+            status: completedTopicIds.includes(topic.topic_id)
+              ? "completed"
+              : index === firstUncompletedIndex
+                ? "current"
+                : ("available" as const),
+          })
+        );
+
+        // Only show the selected submodule in the sidebar
+        const sidebarData: SidebarModule[] = [{
+          id: String(current.submodule_id),
+          submoduleId: current.submodule_id,
+          title: current.name,
+          expanded: true,
+          topics: currentTopics,
+          topicsLoaded: true,
+        }];
+
+        setSidebarModules(sidebarData);
+
+        // Select the first uncompleted topic, or first topic if all completed
         if (topicsData.length > 0) {
-          setSelectedTopic(topicsData[0]);
+          const startIndex = firstUncompletedIndex >= 0 ? firstUncompletedIndex : 0;
+          setSelectedTopic(topicsData[startIndex]);
         }
-
-        // Create module structure with fetched topics
-        setModules([
-          {
-            id: "1",
-            title: "Overview of AI",
-            expanded: false,
-            subModules: [],
-          },
-          {
-            id: "2",
-            title: submoduleData?.name,
-            expanded: true,
-            subModules: subModulesForSidebar,
-          },
-          {
-            id: "3",
-            title: "ML Fundamentals",
-            expanded: false,
-            subModules: [],
-          },
-          {
-            id: "4",
-            title: "DL Basics",
-            expanded: false,
-            subModules: [],
-          },
-          {
-            id: "5",
-            title: "Computer Vision",
-            expanded: false,
-            subModules: [],
-          },
-        ]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
         console.error("Error fetching data:", err);
@@ -149,42 +165,87 @@ const Contents: React.FC = () => {
     };
 
     fetchData();
-  }, []);
+  }, [submoduleId, fetchTopicsForSubmodule, user]);
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Toggle a sidebar module (expand/collapse) and lazy-load its topics
+  const toggleModule = async (moduleId: string) => {
+    const mod = sidebarModules.find((m) => m.id === moduleId);
+    if (!mod) return;
 
-  const toggleModule = (moduleId: string) => {
-    setModules((prev) =>
-      prev.map((mod) =>
-        mod.id === moduleId ? { ...mod, expanded: !mod.expanded } : mod
-      )
-    );
+    // If collapsing, just toggle
+    if (mod.expanded) {
+      setSidebarModules((prev) =>
+        prev.map((m) =>
+          m.id === moduleId ? { ...m, expanded: false } : m
+        )
+      );
+      return;
+    }
+
+    // If expanding and topics not loaded yet, fetch them
+    if (!mod.topicsLoaded) {
+      const fetchedTopics = await fetchTopicsForSubmodule(mod.submoduleId);
+      const completedTopicIds = user ? getCompletedTopics(user.id, mod.submoduleId) : [];
+
+      const sidebarTopics: SidebarTopic[] = fetchedTopics.map((topic) => ({
+        id: `topic-${topic.topic_id}`,
+        title: topic.name,
+        status: completedTopicIds.includes(topic.topic_id)
+          ? "completed"
+          : ("available" as const),
+      }));
+
+      setSidebarModules((prev) =>
+        prev.map((m) =>
+          m.id === moduleId
+            ? { ...m, expanded: true, topics: sidebarTopics, topicsLoaded: true }
+            : m
+        )
+      );
+    } else {
+      setSidebarModules((prev) =>
+        prev.map((m) =>
+          m.id === moduleId ? { ...m, expanded: true } : m
+        )
+      );
+    }
   };
 
   // Handle topic selection from sidebar
-  const handleTopicClick = (topicId: string) => {
-    if (topics.length === 0) return;
-
+  const handleTopicClick = async (topicId: string, parentSubmoduleId: number) => {
     const topicIdNum = parseInt(topicId.replace("topic-", ""));
+
     const topic = topics.find((t) => t.topic_id === topicIdNum);
-    if (topic) {
-      setSelectedTopic(topic);
-      // Update status to show current topic
-      setModules((prev) =>
-        prev.map((mod) => {
-          if (mod.id === "2" && mod.subModules) {
-            return {
-              ...mod,
-              subModules: mod.subModules.map((sub) => ({
-                ...sub,
-                status: sub.id === topicId ? "current" : "available" as const,
-              })),
-            };
-          }
-          return mod;
-        })
-      );
+    if (!topic) return;
+
+    // Mark previously selected topic as completed in localStorage
+    if (user && selectedTopic && selectedTopic.topic_id !== topicIdNum) {
+      const prevSubId = currentSubmodule?.submodule_id ?? submoduleId;
+      markTopicCompleted(user.id, selectedTopic.topic_id, prevSubId, true);
     }
+
+    setSelectedTopic(topic);
+
+    // Update sidebar topic statuses
+    setSidebarModules((prev) =>
+      prev.map((mod) => {
+        if (mod.submoduleId === parentSubmoduleId && mod.topics) {
+          return {
+            ...mod,
+            topics: mod.topics.map((t) => {
+              // Mark the clicked topic as "current" only if it's not already completed
+              if (t.id === topicId && t.status !== "completed")
+                return { ...t, status: "current" as const };
+              // Mark previously selected topic as "completed"
+              if (t.id === `topic-${selectedTopic?.topic_id}` && t.status === "current")
+                return { ...t, status: "completed" as const };
+              return t;
+            }),
+          };
+        }
+        return mod;
+      })
+    );
   };
 
   // Loading state
@@ -237,19 +298,16 @@ const Contents: React.FC = () => {
           <div className="flex-1 text-center md:text-left">
             <p className="text-purple-600 text-sm sm:text-base font-medium mb-2">Education</p>
             <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-900 mb-3 sm:mb-5">
-              {subModuleData?.name} ?
+              {currentSubmodule?.name}
             </h1>
-            {subModuleData?.description ? (
+            {currentSubmodule?.description ? (
               <div
                 className="text-purple-600 text-sm sm:text-base leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: subModuleData.description }}
+                dangerouslySetInnerHTML={{ __html: currentSubmodule.description }}
               />
             ) : (
               <p className="text-purple-600 text-sm sm:text-base leading-relaxed">
-                Python is the #1 Language for AI development !<br className="hidden sm:block" />
-                Python handles the complex stuff so you can<br className="hidden sm:block" />
-                focus on{" "}
-                <span className="font-medium">building intelligent systems !</span>
+                Explore the topics below to start learning.
               </p>
             )}
           </div>
@@ -287,44 +345,55 @@ const Contents: React.FC = () => {
           `}
         >
           <div className="bg-[#d4d4d4] rounded-2xl lg:rounded-3xl p-3 space-y-2 max-w-[300px] mx-auto lg:max-w-none">
-            {modules.map((module) => (
-              <div key={module.id}>
+            {sidebarModules.map((mod) => (
+              <div key={mod.id}>
                 {/* Module Header */}
                 <button
-                  onClick={() => toggleModule(module.id)}
-                  className="w-full flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl lg:rounded-2xl text-left transition-all duration-200 bg-white shadow-sm"
+                  onClick={() => toggleModule(mod.id)}
+                  className={`w-full flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl lg:rounded-2xl text-left transition-all duration-200 shadow-sm ${
+                    mod.submoduleId === submoduleId
+                      ? "bg-purple-50 border border-purple-200"
+                      : "bg-white"
+                  }`}
                 >
                   <span className="text-[11px] sm:text-xs font-semibold leading-tight text-gray-800">
-                    {module.title}
+                    {mod.title}
                   </span>
                   <span className="w-3.5 h-3.5 text-gray-400 flex-shrink-0">
-                    {module.expanded ? <ArrowDown /> : <ArrowRight />}
+                    {mod.expanded ? <ArrowDown /> : <ArrowRight />}
                   </span>
                 </button>
 
-                {/* Sub Modules */}
-                {module.expanded && module.subModules && module.subModules.length > 0 && (
+                {/* Topics */}
+                {mod.expanded && mod.topics && mod.topics.length > 0 && (
                   <div className="mt-2 bg-white rounded-xl lg:rounded-2xl shadow-sm overflow-hidden">
-                    {module.subModules.map((subModule, index) => (
+                    {mod.topics.map((topic, index) => (
                       <div
-                        key={subModule.id}
-                        onClick={() => handleTopicClick(subModule.id)}
+                        key={topic.id}
+                        onClick={() => handleTopicClick(topic.id, mod.submoduleId)}
                         className={`flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${
-                          index !== module.subModules!.length - 1 ? "border-b border-gray-100" : ""
+                          index !== mod.topics.length - 1 ? "border-b border-gray-100" : ""
                         }`}
                       >
                         <span
                           className={`text-[11px] sm:text-xs font-medium ${
-                            subModule.status === "current"
+                            topic.status === "current"
                               ? "text-blue-500"
-                              : "text-gray-700"
+                              : topic.status === "completed"
+                                ? "text-green-600"
+                                : "text-gray-700"
                           }`}
                         >
-                          {subModule.title}
+                          {topic.title}
                         </span>
                         {/* Status Icon - Progress Circle */}
                         <div className="flex-shrink-0">
-                          {subModule.status === "current" ? (
+                          {topic.status === "completed" ? (
+                            <svg className="w-4 h-4" viewBox="0 0 20 20">
+                              <circle cx="10" cy="10" r="8" fill="#22c55e" />
+                              <path d="M6 10l3 3 5-5" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          ) : topic.status === "current" ? (
                             <svg className="w-4 h-4" viewBox="0 0 20 20">
                               <circle
                                 cx="10"
@@ -355,6 +424,20 @@ const Contents: React.FC = () => {
                     ))}
                   </div>
                 )}
+
+                {/* Loading indicator when expanding */}
+                {mod.expanded && !mod.topicsLoaded && (
+                  <div className="mt-2 flex justify-center py-3">
+                    <div className="w-5 h-5 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                  </div>
+                )}
+
+                {/* Empty state for modules with no topics */}
+                {mod.expanded && mod.topicsLoaded && mod.topics.length === 0 && (
+                  <div className="mt-2 bg-white rounded-xl lg:rounded-2xl shadow-sm p-3">
+                    <p className="text-[10px] text-gray-400 text-center italic">No topics yet</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -363,7 +446,7 @@ const Contents: React.FC = () => {
         {/* Main Content Area - Responsive */}
         <div className="flex-1 py-6 sm:py-8 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 bg-white">
           <div className="max-w-2xl mx-auto lg:mx-0">
-            <Highlightable pageId={selectedTopic ? `topic-${selectedTopic.topic_id}` : "python-basics"}>
+            <Highlightable pageId={selectedTopic ? `topic-${selectedTopic.topic_id}` : "default"}>
               {selectedTopic ? (
                 <div className="ai-content-wrapper">
                   <section className="mb-6 sm:mb-8">
@@ -565,27 +648,23 @@ const Contents: React.FC = () => {
           }
 
           /* CRITICAL: Allow text selection with drag handles in content area (Android only) */
-          /* iOS uses custom selection handling to avoid native menu */
           body.highlight-mode-active .mobile-highlight-mode,
           body.highlight-mode-active .mobile-highlight-mode * {
             -webkit-user-select: text !important;
             user-select: text !important;
             -webkit-touch-callout: none !important;
-            /* manipulation allows both selection gestures and scrolling */
             touch-action: manipulation !important;
             cursor: text;
             pointer-events: auto;
           }
 
           /* iOS Safari - COMPLETELY DISABLE native selection */
-          /* We use custom touch handling on iOS to avoid native Copy/Look Up menu */
           body.highlight-mode-active .ios-highlight-mode {
             -webkit-touch-callout: none !important;
             -webkit-user-select: none !important;
             user-select: none !important;
           }
 
-          /* iOS: Force disable native selection on all child elements */
           body.highlight-mode-active .ios-highlight-mode *,
           body.highlight-mode-active .ios-highlight-mode p,
           body.highlight-mode-active .ios-highlight-mode span,
@@ -596,7 +675,6 @@ const Contents: React.FC = () => {
           }
 
           /* Purple selection color - works with Android selection handles */
-          /* iOS uses custom highlighting instead of native selection */
           body.highlight-mode-active .mobile-highlight-mode::selection,
           body.highlight-mode-active .mobile-highlight-mode *::selection {
             background-color: rgba(147, 51, 234, 0.4) !important;
@@ -625,7 +703,6 @@ const Contents: React.FC = () => {
           }
 
           /* iOS: Allow native selection in content wrapper but suppress callout menu */
-          /* Higher specificity to ensure touch-callout is none on iOS */
           body.highlight-mode-active .ios-highlight-mode .ai-content-wrapper,
           body.highlight-mode-active .ios-highlight-mode .ai-content-wrapper * {
             -webkit-user-select: text !important;

@@ -906,11 +906,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     }
   }, [isLoggedIn, highlightModeEnabled, removeHighlight, addHighlight, highlights]);
 
-  // Handle mouse down (desktop) - reset justDehighlighted flag so the next
-  // mouseup selection is not blocked after a dehighlight click
+  // Handle mouse down (desktop) - reset state so the next selection works immediately
   const handleMouseDown = useCallback(() => {
     if (isTouchDevice()) return;
+    // Reset justDehighlighted flag so selection is not blocked after a dehighlight click
     justDehighlightedRef.current = false;
+    // Reset buttonPositionedRef so picker position is recalculated for new selection
+    buttonPositionedRef.current = false;
   }, []);
 
   // Handle mouse selection (desktop)
@@ -1961,12 +1963,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     setSelectedText("");
     setSelectionInfo(null);
 
-    // Reset tracking refs
+    // Reset tracking refs - IMPORTANT: Reset ALL refs to ensure next selection works immediately
     lastSelectionTextRef.current = "";
     lastSelectionLengthRef.current = 0;
     isSelectingRef.current = false;
     isHandleDraggingRef.current = false;
     buttonPositionedRef.current = false;
+    // Desktop: Reset justDehighlightedRef so next selection is not blocked
+    justDehighlightedRef.current = false;
+    // Clear pending selection ref
+    pendingSelectionRef.current = null;
   }, []);
 
   return (

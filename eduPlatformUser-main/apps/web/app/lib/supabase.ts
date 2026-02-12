@@ -1,10 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Get these from your Supabase project settings
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase: SupabaseClient = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : (null as unknown as SupabaseClient);
 
 // Types for the database
 export interface Highlight {
@@ -34,6 +36,7 @@ export interface Profile {
 
 // Get all highlights for current user on a specific page
 export async function getHighlights(pageId: string): Promise<Highlight[]> {
+  if (!supabase) return [];
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -54,6 +57,7 @@ export async function getHighlights(pageId: string): Promise<Highlight[]> {
 
 // Get all highlights for current user (all pages)
 export async function getAllUserHighlights(): Promise<Highlight[]> {
+  if (!supabase) return [];
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -79,6 +83,7 @@ export async function addHighlight(highlight: {
   endOffset: number;
   color: string;
 }): Promise<Highlight | null> {
+  if (!supabase) return null;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -105,6 +110,7 @@ export async function addHighlight(highlight: {
 
 // Remove a highlight
 export async function removeHighlight(id: string): Promise<boolean> {
+  if (!supabase) return false;
   const { error } = await supabase
     .from("highlights")
     .delete()
@@ -120,6 +126,7 @@ export async function removeHighlight(id: string): Promise<boolean> {
 
 // Update highlight color
 export async function updateHighlightColor(id: string, color: string): Promise<boolean> {
+  if (!supabase) return false;
   const { error } = await supabase
     .from("highlights")
     .update({ color })
@@ -139,6 +146,7 @@ export async function updateHighlightColor(id: string, color: string): Promise<b
 
 // Sign up with email
 export async function signUp(email: string, password: string, fullName?: string) {
+  if (!supabase) return { data: null, error: new Error("Supabase not configured") };
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -154,6 +162,7 @@ export async function signUp(email: string, password: string, fullName?: string)
 
 // Sign in with email
 export async function signIn(email: string, password: string) {
+  if (!supabase) return { data: null, error: new Error("Supabase not configured") };
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
@@ -164,6 +173,7 @@ export async function signIn(email: string, password: string) {
 
 // Sign in with OAuth (Google, GitHub, etc.)
 export async function signInWithOAuth(provider: "google" | "github") {
+  if (!supabase) return { data: null, error: new Error("Supabase not configured") };
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
@@ -176,18 +186,21 @@ export async function signInWithOAuth(provider: "google" | "github") {
 
 // Sign out
 export async function signOut() {
+  if (!supabase) return { error: new Error("Supabase not configured") };
   const { error } = await supabase.auth.signOut();
   return { error };
 }
 
 // Get current user
 export async function getCurrentUser() {
+  if (!supabase) return null;
   const { data: { user } } = await supabase.auth.getUser();
   return user;
 }
 
 // Get current session
 export async function getSession() {
+  if (!supabase) return null;
   const { data: { session } } = await supabase.auth.getSession();
   return session;
 }
@@ -198,6 +211,7 @@ export async function getSession() {
 
 // Get user profile
 export async function getProfile(): Promise<Profile | null> {
+  if (!supabase) return null;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -217,6 +231,7 @@ export async function getProfile(): Promise<Profile | null> {
 
 // Update user profile
 export async function updateProfile(updates: Partial<Profile>): Promise<boolean> {
+  if (!supabase) return false;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return false;
 
@@ -234,6 +249,143 @@ export async function updateProfile(updates: Partial<Profile>): Promise<boolean>
 }
 
 // =============================================
+// MODULE PROGRESS FUNCTIONS (localStorage-based for demo login)
+// =============================================
+
+export interface TopicProgress {
+  id: string;
+  user_id: string;
+  topic_id: number;
+  module_id: number;
+  completed: boolean;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ModuleProgress {
+  module_id: number;
+  total_topics: number;
+  completed_topics: number;
+  completion_percentage: number;
+}
+
+// Custom event name for cross-component realtime progress updates
+export const PROGRESS_UPDATED_EVENT = "edu-progress-updated";
+
+// localStorage key for a user's progress
+const getProgressKey = (userId: string) => `edu_progress_${userId}`;
+
+// Internal: read all progress entries for a user from localStorage
+function readUserProgress(userId: string): TopicProgress[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(getProgressKey(userId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// Internal: write all progress entries for a user to localStorage
+function writeUserProgress(userId: string, progress: TopicProgress[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(getProgressKey(userId), JSON.stringify(progress));
+  } catch (e) {
+    console.warn("Failed to save progress to localStorage:", e);
+  }
+}
+
+// Dispatch a custom event so other components (e.g. ModulesSection) can react in realtime
+function dispatchProgressEvent(userId: string, topicId: number, moduleId: number) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(PROGRESS_UPDATED_EVENT, {
+      detail: { userId, topicId, moduleId },
+    })
+  );
+}
+
+// Mark a topic as completed (or uncompleted) — works with demo login userId
+export function markTopicCompleted(
+  userId: string,
+  topicId: number,
+  moduleId: number,
+  completed: boolean = true
+): TopicProgress | null {
+  if (!userId) return null;
+
+  const all = readUserProgress(userId);
+  const now = new Date().toISOString();
+
+  const existingIndex = all.findIndex(
+    (p) => p.topic_id === topicId && p.user_id === userId
+  );
+
+  const entry: TopicProgress = {
+    id: existingIndex >= 0 ? all[existingIndex].id : `${userId}_${topicId}_${Date.now()}`,
+    user_id: userId,
+    topic_id: topicId,
+    module_id: moduleId,
+    completed,
+    completed_at: completed ? now : null,
+    created_at: existingIndex >= 0 ? all[existingIndex].created_at : now,
+    updated_at: now,
+  };
+
+  if (existingIndex >= 0) {
+    all[existingIndex] = entry;
+  } else {
+    all.push(entry);
+  }
+
+  writeUserProgress(userId, all);
+  dispatchProgressEvent(userId, topicId, moduleId);
+  return entry;
+}
+
+// Get progress for a specific module
+export function getModuleProgress(
+  userId: string,
+  moduleId: number,
+  totalTopics: number
+): ModuleProgress {
+  if (!userId) {
+    return { module_id: moduleId, total_topics: totalTopics, completed_topics: 0, completion_percentage: 0 };
+  }
+
+  const all = readUserProgress(userId);
+  const completedTopics = all.filter(
+    (p) => p.module_id === moduleId && p.completed
+  ).length;
+  const percentage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
+
+  return {
+    module_id: moduleId,
+    total_topics: totalTopics,
+    completed_topics: completedTopics,
+    completion_percentage: percentage,
+  };
+}
+
+// Get all completed progress entries for a user
+export function getAllModulesProgress(userId: string): TopicProgress[] {
+  if (!userId) return [];
+  return readUserProgress(userId).filter((p) => p.completed);
+}
+
+// Get completed topic IDs for a specific module
+export function getCompletedTopics(userId: string, moduleId: number): number[] {
+  if (!userId) return [];
+  return readUserProgress(userId)
+    .filter((p) => p.module_id === moduleId && p.completed)
+    .map((p) => p.topic_id);
+}
+
+// =============================================
 // REALTIME SUBSCRIPTION (Optional)
 // =============================================
 
@@ -242,6 +394,7 @@ export function subscribeToHighlights(
   pageId: string,
   callback: (highlights: Highlight[]) => void
 ) {
+  if (!supabase) return () => {};
   const channel = supabase
     .channel(`highlights:${pageId}`)
     .on(
