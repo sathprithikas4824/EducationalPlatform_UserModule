@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import localFont from "next/font/local";
 import { ArrowRight, ArrowDown } from "../common/icons";
 import { Highlightable } from "../common/Highlightable";
@@ -74,6 +74,47 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [error, setError] = useState<string | null>(null);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const contentEndRef = useRef<HTMLDivElement>(null);
+
+  // Mark the currently selected topic as completed in sidebar + localStorage
+  const markCurrentTopicDone = useCallback(() => {
+    if (!selectedTopic) return;
+    const topicKey = `topic-${selectedTopic.topic_id}`;
+
+    // Persist to localStorage
+    if (user) {
+      const subId = currentSubmodule?.submodule_id ?? submoduleId;
+      markTopicCompleted(user.id, selectedTopic.topic_id, subId, true);
+    }
+
+    // Update sidebar UI
+    setSidebarModules((prev) =>
+      prev.map((mod) => ({
+        ...mod,
+        topics: mod.topics.map((t) =>
+          t.id === topicKey ? { ...t, status: "completed" as const } : t
+        ),
+      }))
+    );
+  }, [selectedTopic, user, currentSubmodule, submoduleId]);
+
+  // Auto-mark topic completed when user scrolls to the bottom of content
+  useEffect(() => {
+    const sentinel = contentEndRef.current;
+    if (!sentinel || !selectedTopic) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          markCurrentTopicDone();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [selectedTopic, markCurrentTopicDone]);
 
   // Fetch topics for a specific submodule
   const fetchTopicsForSubmodule = useCallback(async (subId: number): Promise<Topic[]> => {
@@ -218,8 +259,32 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const topic = topics.find((t) => t.topic_id === topicIdNum);
     if (!topic) return;
 
-    // Mark previously selected topic as completed in localStorage
-    if (user && selectedTopic && selectedTopic.topic_id !== topicIdNum) {
+    const isSameTopic = selectedTopic?.topic_id === topicIdNum;
+
+    // Clicking the current topic → mark it completed
+    if (isSameTopic) {
+      if (user) {
+        const subId = currentSubmodule?.submodule_id ?? submoduleId;
+        markTopicCompleted(user.id, topicIdNum, subId, true);
+      }
+      setSidebarModules((prev) =>
+        prev.map((mod) => {
+          if (mod.submoduleId === parentSubmoduleId && mod.topics) {
+            return {
+              ...mod,
+              topics: mod.topics.map((t) =>
+                t.id === topicId ? { ...t, status: "completed" as const } : t
+              ),
+            };
+          }
+          return mod;
+        })
+      );
+      return;
+    }
+
+    // Clicking a different topic → mark the previous topic as completed
+    if (user && selectedTopic) {
       const prevSubId = currentSubmodule?.submodule_id ?? submoduleId;
       markTopicCompleted(user.id, selectedTopic.topic_id, prevSubId, true);
     }
@@ -233,12 +298,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           return {
             ...mod,
             topics: mod.topics.map((t) => {
-              // Mark the clicked topic as "current" only if it's not already completed
+              // Mark previously selected topic as "completed"
+              if (t.id === `topic-${selectedTopic?.topic_id}`)
+                return { ...t, status: "completed" as const };
+              // Mark the clicked topic as "current" only if not already completed
               if (t.id === topicId && t.status !== "completed")
                 return { ...t, status: "current" as const };
-              // Mark previously selected topic as "completed"
-              if (t.id === `topic-${selectedTopic?.topic_id}` && t.status === "current")
-                return { ...t, status: "completed" as const };
               return t;
             }),
           };
@@ -472,6 +537,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                       </p>
                     )}
                   </section>
+                  {/* Sentinel: when this scrolls into view, topic is marked complete */}
+                  <div ref={contentEndRef} className="h-1" />
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12">

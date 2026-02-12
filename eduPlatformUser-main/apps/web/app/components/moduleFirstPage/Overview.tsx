@@ -30,7 +30,6 @@ const MODULE_ID = 19; // Module ID for AI content
 const Overview: React.FC = () => {
   const [moduleData, setModuleData] = useState<Module | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchModule = async () => {
@@ -40,12 +39,13 @@ const Overview: React.FC = () => {
           `${BACKEND_URL}/api/modules/single/${MODULE_ID}`
         );
         if (!response.ok) {
-          throw new Error("Failed to fetch module");
+          // Silently handle — overview is non-critical
+          setLoading(false);
+          return;
         }
         const data: Module = await response.json();
         setModuleData(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
         console.error("Error fetching module:", err);
       } finally {
         setLoading(false);
@@ -66,12 +66,8 @@ const Overview: React.FC = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="w-full min-h-screen bg-white jakarta-font py-8 md:py-12 px-4 md:px-6 flex items-center justify-center">
-        <p className="text-xl text-red-600">Error: {error}</p>
-      </div>
-    );
+  if (!loading && !moduleData) {
+    return null;
   }
 
   return (
