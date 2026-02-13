@@ -614,7 +614,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   const selectionStableTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSelectionTextRef = useRef<string>("");
   const isSelectingRef = useRef<boolean>(false);
-  
+
+  // Track when the last real touch event occurred.
+  // Used to distinguish real mouse events (desktop) from simulated mouse events
+  // that browsers fire after touch interactions on mobile.
+  // If a touch happened recently (< 1000ms), skip mouse handlers to avoid conflicts.
+  const lastTouchTimeRef = useRef<number>(0);
+
   const lastSelectionLengthRef = useRef<number>(0);
   const isHandleDraggingRef = useRef<boolean>(false);
 
@@ -779,6 +785,11 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       // Find any existing highlight that significantly overlaps with the selection
       for (const highlight of highlights) {
+        // Skip highlights whose marks have already been removed from the DOM
+        // (React state may be stale after a rapid dehighlight → re-select)
+        const markInDom = container.querySelector(`[data-highlight-id="${highlight.id}"]`);
+        if (!markInDom) continue;
+
         // Find the highlight's actual position in the text
         const pos = findHighlightPosition(fullText, highlight);
         if (!pos) continue;
@@ -891,7 +902,9 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       buttonPositionedRef.current = true;
     }
 
-    if (isTouchDevice()) {
+    // Determine if this is a real mouse interaction (desktop) or touch (mobile)
+    const isRecentTouch = Date.now() - lastTouchTimeRef.current < 1000;
+    if (isRecentTouch) {
       // Mobile: Show highlight button but KEEP native selection visible
       // This allows users to continue dragging selection handles (blue drag lines)
       // Native selection will be cleared when user taps the highlight button
@@ -906,18 +919,40 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     }
   }, [isLoggedIn, highlightModeEnabled, removeHighlight, addHighlight, highlights]);
 
-  // Handle mouse down (desktop) - reset state so the next selection works immediately
+  // Ref to always point to latest processSelection (avoids stale closures in native handlers)
+  const processSelectionRef = useRef(processSelection);
+  useEffect(() => {
+    processSelectionRef.current = processSelection;
+  }, [processSelection]);
+
+  // Handle mouse down (desktop) - fully reset state so re-highlighting works immediately
   const handleMouseDown = useCallback(() => {
-    if (isTouchDevice()) return;
+    // Skip simulated mouse events fired by the browser after touch interactions
+    if (Date.now() - lastTouchTimeRef.current < 1000) return;
     // Reset justDehighlighted flag so selection is not blocked after a dehighlight click
     justDehighlightedRef.current = false;
     // Reset buttonPositionedRef so picker position is recalculated for new selection
     buttonPositionedRef.current = false;
-  }, []);
+
+    // Clean up stale temp highlights from the DOM so text nodes are normalized
+    // This ensures processSelection sees clean text nodes for the new selection
+    if (contentRef.current) {
+      removeTempHighlights(contentRef.current);
+    }
+
+    // Close any open color picker / highlight button from previous interaction
+    if (showColorPicker || selectedText) {
+      setShowColorPicker(false);
+      setShowMobileHighlightButton(false);
+      setSelectedText("");
+      setSelectionInfo(null);
+    }
+  }, [showColorPicker, selectedText]);
 
   // Handle mouse selection (desktop)
   const handleMouseUp = useCallback(() => {
-    if (isTouchDevice()) return;
+    // Skip simulated mouse events fired by the browser after touch interactions
+    if (Date.now() - lastTouchTimeRef.current < 1000) return;
     processSelection();
   }, [processSelection]);
 
@@ -1007,6 +1042,64 @@ export const Highlightable: React.FC<HighlightableProps> = ({
   // Desktop: Allow default OS context menu (copy, paste, etc.) to work normally
   // The highlight feature (temp highlight + color picker) works alongside native OS options
 
+  // Desktop: Suppress browser context menu when highlight mode is active
+  // This ensures only the highlight color picker shows, not the OS right-click menu
+  useEffect(() => {
+    if (!highlightModeEnabled || !isLoggedIn) return;
+
+    const container = contentRef.current;
+    if (!container) return;
+
+    const handleContextMenu = (e: Event) => {
+      e.preventDefault();
+    };
+
+    container.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      container.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [highlightModeEnabled, isLoggedIn]);
+
+  // Desktop: Native capture-phase mouseup handler
+  // Fires BEFORE bubble-phase handlers (including Edge's mini menu handler) so we can:
+  // 1. Process the selection and show our color picker immediately
+  // 2. Clear native selection before Edge/Chrome can show their built-in mini menus
+  // 3. Stop propagation so browser never sees the mouseup on a text selection
+  useEffect(() => {
+    if (!highlightModeEnabled || !isLoggedIn) return;
+
+    const container = contentRef.current;
+    if (!container) return;
+
+    const handleNativeMouseUp = (e: MouseEvent) => {
+      // Skip simulated mouse events fired by the browser after touch interactions
+      if (Date.now() - lastTouchTimeRef.current < 1000) return;
+
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+
+      const text = sel.toString().trim();
+      if (!text || text.length < 2) return;
+
+      const range = sel.getRangeAt(0);
+      if (!container.contains(range.commonAncestorContainer)) return;
+
+      // Text is selected inside our container - suppress Edge/Chrome mini menu
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      // Process selection immediately (clears native selection in desktop branch)
+      processSelectionRef.current();
+    };
+
+    container.addEventListener('mouseup', handleNativeMouseUp, { capture: true });
+
+    return () => {
+      container.removeEventListener('mouseup', handleNativeMouseUp, { capture: true });
+    };
+  }, [highlightModeEnabled, isLoggedIn]);
+
   // Handle touch selection (mobile) using selectionchange event
   // Works on Android only - iOS uses custom programmatic selection
   // Key principle: Keep native selection visible until user is COMPLETELY DONE dragging handles
@@ -1029,6 +1122,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
     // When touch starts, ALWAYS clear pending timers - user is interacting
     const handleTouchStartForSelection = () => {
       isTouchActive = true;
+      lastTouchTimeRef.current = Date.now();
 
       // Reset dehighlight flag - new touch gesture means user wants to interact again
       // This prevents the flag from blocking the next selection attempt
@@ -1284,6 +1378,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       const touch = e.touches[0];
       if (!touch) return;
 
+      lastTouchTimeRef.current = Date.now();
       touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
       scrollStartYRef.current = touch.clientY;
       isScrollingRef.current = false; // Reset scroll detection
@@ -1696,6 +1791,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
       isTouchActive = true;
       processed = false;
+      lastTouchTimeRef.current = Date.now();
       touchStartX = touch.clientX;
       touchStartY = touch.clientY;
       isScrolling = false;
@@ -2269,9 +2365,16 @@ export const Highlightable: React.FC<HighlightableProps> = ({
 
           body.highlight-mode-active .highlightable-content,
           body.highlight-mode-active .highlightable-content * {
-            -webkit-touch-callout: auto !important;
+            -webkit-touch-callout: none !important;
             -webkit-user-select: text !important;
             user-select: text !important;
+          }
+
+          /* Purple selection color on desktop when highlight mode is active */
+          body.highlight-mode-active .highlightable-content::selection,
+          body.highlight-mode-active .highlightable-content *::selection {
+            background-color: rgba(147, 51, 234, 0.4) !important;
+            color: inherit !important;
           }
         }
 

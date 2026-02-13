@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { cachedFetch } from "../../lib/apiCache";
 
 // Import the fonts
 import localFont from "next/font/local";
@@ -35,17 +36,13 @@ const Overview: React.FC = () => {
     const fetchModule = async () => {
       try {
         setLoading(true);
-        const response = await fetch(
-          `${BACKEND_URL}/api/modules/single/${MODULE_ID}`
+        const data = await cachedFetch<Module>(
+          `${BACKEND_URL}/api/modules/single/${MODULE_ID}`,
+          `module_single_${MODULE_ID}`
         );
-        if (!response.ok) {
-          // Silently handle — overview is non-critical
-          setLoading(false);
-          return;
-        }
-        const data: Module = await response.json();
         setModuleData(data);
       } catch (err) {
+        // Silently handle — overview is non-critical
         console.error("Error fetching module:", err);
       } finally {
         setLoading(false);
@@ -57,10 +54,20 @@ const Overview: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="w-full min-h-screen bg-white jakarta-font py-8 md:py-12 px-4 md:px-6 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-          <p className="text-xl text-gray-600 font-medium">Loading...</p>
+      <div className={`w-full min-h-screen bg-white jakarta-font py-8 md:py-12 px-4 md:px-6 ${fuzzyBubblesBoldFont.variable}`}>
+        <div className="max-w-6xl ml-0 md:pl-16 lg:pl-32 space-y-10 md:space-y-12 animate-pulse">
+          <div className="space-y-4">
+            <div className="h-10 bg-gray-200 rounded w-3/4" />
+            <div className="h-5 bg-gray-200 rounded w-full" />
+            <div className="h-5 bg-gray-200 rounded w-5/6" />
+            <div className="h-5 bg-gray-200 rounded w-full" />
+            <div className="h-5 bg-gray-200 rounded w-2/3" />
+            <div className="h-8 bg-gray-200 rounded w-1/2 mt-8" />
+            <div className="h-5 bg-gray-200 rounded w-full" />
+            <div className="h-5 bg-gray-200 rounded w-4/5" />
+            <div className="h-5 bg-gray-200 rounded w-full" />
+            <div className="h-5 bg-gray-200 rounded w-3/4" />
+          </div>
         </div>
       </div>
     );

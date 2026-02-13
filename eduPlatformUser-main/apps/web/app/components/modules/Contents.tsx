@@ -7,6 +7,7 @@ import { Highlightable } from "../common/Highlightable";
 import { UserProfileButton } from "../common/UserProfileButton";
 import { useAnnotation } from "../common/AnnotationProvider";
 import { markTopicCompleted, getCompletedTopics } from "../../lib/supabase";
+import { cachedFetch } from "../../lib/apiCache";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 
@@ -64,6 +65,51 @@ interface ContentsProps {
   submoduleId: number;
 }
 
+// Skeleton components for loading state
+const SidebarSkeleton: React.FC = () => (
+  <div className="bg-[#d4d4d4] rounded-2xl lg:rounded-3xl p-3 space-y-2 max-w-[300px] mx-auto lg:max-w-none animate-pulse">
+    <div className="bg-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl lg:rounded-2xl">
+      <div className="h-3 bg-gray-200 rounded w-3/4" />
+    </div>
+    {[1, 2, 3, 4, 5].map((i) => (
+      <div key={i} className="bg-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl lg:rounded-2xl">
+        <div className="flex items-center justify-between">
+          <div className="h-3 bg-gray-200 rounded" style={{ width: `${50 + Math.random() * 30}%` }} />
+          <div className="w-4 h-4 bg-gray-200 rounded-full flex-shrink-0" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+const ContentSkeleton: React.FC = () => (
+  <div className="animate-pulse space-y-4">
+    <div className="h-8 bg-gray-200 rounded w-3/4" />
+    <div className="h-4 bg-gray-200 rounded w-full" />
+    <div className="h-4 bg-gray-200 rounded w-5/6" />
+    <div className="h-4 bg-gray-200 rounded w-full" />
+    <div className="h-4 bg-gray-200 rounded w-2/3" />
+    <div className="h-6 bg-gray-200 rounded w-1/2 mt-6" />
+    <div className="h-4 bg-gray-200 rounded w-full" />
+    <div className="h-4 bg-gray-200 rounded w-4/5" />
+    <div className="h-4 bg-gray-200 rounded w-full" />
+  </div>
+);
+
+const HeroSkeleton: React.FC = () => (
+  <div className="w-full bg-white py-6 sm:py-8 md:py-12 px-4 sm:px-6 md:px-10">
+    <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-6 md:gap-12 items-center animate-pulse">
+      <div className="w-full max-w-[280px] h-[140px] sm:h-[160px] md:h-[180px] bg-gray-200 rounded-2xl md:rounded-3xl flex-shrink-0" />
+      <div className="flex-1 w-full space-y-3">
+        <div className="h-4 bg-gray-200 rounded w-20" />
+        <div className="h-10 bg-gray-200 rounded w-3/4" />
+        <div className="h-4 bg-gray-200 rounded w-full" />
+        <div className="h-4 bg-gray-200 rounded w-2/3" />
+      </div>
+    </div>
+  </div>
+);
+
 const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const { user } = useAnnotation();
   const [sidebarModules, setSidebarModules] = useState<SidebarModule[]>([]);
@@ -116,13 +162,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     return () => observer.disconnect();
   }, [selectedTopic, markCurrentTopicDone]);
 
-  // Fetch topics for a specific submodule
+  // Fetch topics for a specific submodule (with cache)
   const fetchTopicsForSubmodule = useCallback(async (subId: number): Promise<Topic[]> => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/topics/${subId}`);
-      if (!res.ok) return [];
-      const data: Topic[] = await res.json();
-      return data;
+      return await cachedFetch<Topic[]>(
+        `${BACKEND_URL}/api/topics/${subId}`,
+        `topics_${subId}`
+      );
     } catch {
       return [];
     }
@@ -135,15 +181,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         setLoading(true);
         setError(null);
 
-        // Fetch all submodules and topics for the current submodule in parallel
-        const [submodulesRes, topicsData] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/submodules`).then((res) =>
-            res.ok ? res.json() : []
+        // Fetch all submodules and topics for the current submodule in parallel (with cache)
+        const [allSubmodules, topicsData] = await Promise.all([
+          cachedFetch<SubModuleData[]>(
+            `${BACKEND_URL}/api/submodules`,
+            "all_submodules"
           ),
           fetchTopicsForSubmodule(submoduleId),
         ]);
-
-        const allSubmodules: SubModuleData[] = submodulesRes;
 
         // Find the current submodule
         const current = allSubmodules.find(
@@ -313,13 +358,40 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     );
   };
 
-  // Loading state
+  // Loading state - skeleton UI
   if (loading) {
     return (
-      <div className="w-full min-h-screen bg-white flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-          <p className="text-xl text-gray-600 font-medium">Loading content...</p>
+      <div
+        className={`w-full min-h-screen bg-white jakarta-font ${fuzzyBubblesBoldFont.variable}`}
+      >
+        {/* Header */}
+        <div className="w-full bg-white px-4 sm:px-6 md:px-10 py-3 border-b border-gray-100">
+          <div className="max-w-6xl mx-auto flex justify-end">
+            <UserProfileButton />
+          </div>
+        </div>
+
+        {/* Hero Skeleton */}
+        <HeroSkeleton />
+
+        {/* Mobile Toggle Placeholder */}
+        <div className="lg:hidden sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3">
+          <div className="h-5 bg-gray-200 rounded w-28 animate-pulse" />
+        </div>
+
+        {/* Main Content Skeleton */}
+        <div className="flex flex-col lg:flex-row">
+          {/* Sidebar Skeleton */}
+          <div className="hidden lg:block w-full lg:w-[220px] xl:w-[250px] bg-white py-4 lg:py-6 px-4 flex-shrink-0 lg:min-h-screen">
+            <SidebarSkeleton />
+          </div>
+
+          {/* Content Skeleton */}
+          <div className="flex-1 py-6 sm:py-8 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 bg-white">
+            <div className="max-w-2xl mx-auto lg:mx-0">
+              <ContentSkeleton />
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight } from "../common/icons";
 import { useAnnotation } from "../common/AnnotationProvider";
 import { getAllModulesProgress, PROGRESS_UPDATED_EVENT, type TopicProgress } from "../../lib/supabase";
+import { cachedFetch, prefetchAll } from "../../lib/apiCache";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 const CATEGORY_ID = 185; // AI course category
@@ -34,6 +35,30 @@ interface Module {
   completionPercentage: number;
   imageUrl: string | null;
 }
+
+// Skeleton card component for loading state
+const SkeletonCard: React.FC = () => (
+  <div
+    className="flex-shrink-0 flex items-center gap-3 rounded-2xl border p-2
+               w-full md:w-[calc((50%)-8px)] lg:w-[calc((33.333%)-10.6px)] animate-pulse"
+    style={{
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
+      borderColor: "rgba(140, 140, 170, 0.2)",
+    }}
+  >
+    <div className="w-24 h-16 md:w-32 md:h-20 bg-gray-200 rounded-lg flex-shrink-0" />
+    <div className="flex-1 flex flex-col justify-between h-16 md:h-20 py-0.5">
+      <div className="space-y-1.5">
+        <div className="h-3 bg-gray-200 rounded w-4/5" />
+        <div className="h-3 bg-gray-200 rounded w-3/5" />
+      </div>
+      <div className="flex items-center justify-between mt-auto">
+        <div className="h-2.5 bg-gray-200 rounded w-16" />
+        <div className="h-6 bg-gray-200 rounded w-12" />
+      </div>
+    </div>
+  </div>
+);
 
 const ModulesSection: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -88,16 +113,21 @@ const ModulesSection: React.FC = () => {
       try {
         setLoading(true);
 
-        const submodulesRes = await fetch(
-          `${BACKEND_URL}/api/submodules/category/${CATEGORY_ID}`
+        // Use cached fetch for submodules
+        const submodulesData = await cachedFetch<{ data?: BackendSubmodule[] } | BackendSubmodule[]>(
+          `${BACKEND_URL}/api/submodules/category/${CATEGORY_ID}`,
+          `submodules_cat_${CATEGORY_ID}`
         );
-        const submodulesData = submodulesRes.ok ? await submodulesRes.json() : { data: [] };
-        const submodules: BackendSubmodule[] = submodulesData.data || submodulesData || [];
+        const submodules: BackendSubmodule[] =
+          Array.isArray(submodulesData) ? submodulesData :
+          (submodulesData as { data?: BackendSubmodule[] }).data || [];
 
+        // Use cached fetch for each submodule's topics (parallel)
         const topicPromises = submodules.map((sub) =>
-          fetch(`${BACKEND_URL}/api/topics/${sub.submodule_id}`)
-            .then((res) => (res.ok ? res.json() : []))
-            .catch(() => [])
+          cachedFetch<BackendTopic[]>(
+            `${BACKEND_URL}/api/topics/${sub.submodule_id}`,
+            `topics_${sub.submodule_id}`
+          ).catch(() => [] as BackendTopic[])
         );
 
         const topicsPerSubmodule = await Promise.all(topicPromises);
@@ -105,6 +135,14 @@ const ModulesSection: React.FC = () => {
 
         setCachedData({ submodules, topicsPerSubmodule });
         setModules(buildModules(submodules, topicsPerSubmodule, userProgress));
+
+        // Prefetch submodule detail pages for fast navigation
+        prefetchAll(
+          submodules.map((sub) => ({
+            url: `${BACKEND_URL}/api/submodules`,
+            cacheKey: "all_submodules",
+          }))
+        );
       } catch (err) {
         console.error("Error fetching modules:", err);
       } finally {
@@ -131,6 +169,11 @@ const ModulesSection: React.FC = () => {
   }, [cachedData, user, buildModules]);
 
   const handleModuleClick = (moduleId: string) => {
+    // Prefetch topics for the clicked module before navigation
+    prefetchAll([
+      { url: `${BACKEND_URL}/api/topics/${moduleId}`, cacheKey: `topics_${moduleId}` },
+      { url: `${BACKEND_URL}/api/submodules`, cacheKey: "all_submodules" },
+    ]);
     router.push(`/modules/${moduleId}`);
   };
 
@@ -166,8 +209,32 @@ const ModulesSection: React.FC = () => {
         </h2>
 
         {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+          // Skeleton loading UI - shows layout immediately
+          <div className="flex items-center justify-center gap-2 md:gap-4">
+            <button
+              className="z-10 flex-shrink-0 bg-white rounded-full p-2 shadow-md border border-gray-200 opacity-50"
+              aria-label="Scroll left"
+              disabled
+            >
+              <ArrowLeft/>
+            </button>
+
+            <div
+              className="flex gap-4 overflow-x-hidden p-1"
+              style={{ width: '100%' }}
+            >
+              {[1, 2, 3].map((i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+
+            <button
+              className="z-10 flex-shrink-0 bg-white rounded-full p-2 shadow-md border border-gray-200 opacity-50"
+              aria-label="Scroll right"
+              disabled
+            >
+              <ArrowRight/>
+            </button>
           </div>
         ) : modules.length === 0 ? (
           <p className="text-center text-gray-500">No modules available yet.</p>
