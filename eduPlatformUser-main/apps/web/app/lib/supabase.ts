@@ -386,6 +386,61 @@ export function getCompletedTopics(userId: string, moduleId: number): number[] {
 }
 
 // =============================================
+// SCROLL POSITION FUNCTIONS (localStorage-based)
+// =============================================
+
+const getScrollKey = (userId: string) => `edu_scroll_${userId}`;
+
+// Save the scroll progress percentage for a topic so we can restore it later
+export function saveTopicScrollPosition(userId: string, topicId: number, progressPercent: number): void {
+  if (!userId || typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem(getScrollKey(userId));
+    const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+    map[String(topicId)] = progressPercent;
+    localStorage.setItem(getScrollKey(userId), JSON.stringify(map));
+  } catch (e) {
+    console.warn("Failed to save scroll position:", e);
+  }
+}
+
+// Get the saved scroll progress percentage for a topic
+export function getTopicScrollPosition(userId: string, topicId: number): number {
+  if (!userId || typeof window === "undefined") return 0;
+  try {
+    const raw = localStorage.getItem(getScrollKey(userId));
+    if (!raw) return 0;
+    const map: Record<string, number> = JSON.parse(raw);
+    return map[String(topicId)] || 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Clear saved scroll positions for all topics in a module
+export function clearModuleScrollPositions(userId: string, topicIds: number[]): void {
+  if (!userId || typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem(getScrollKey(userId));
+    if (!raw) return;
+    const map: Record<string, number> = JSON.parse(raw);
+    for (const id of topicIds) {
+      delete map[String(id)];
+    }
+    localStorage.setItem(getScrollKey(userId), JSON.stringify(map));
+  } catch {}
+}
+
+// Reset all progress for a specific module (removes entries from localStorage)
+export function resetModuleProgress(userId: string, moduleId: number): void {
+  if (!userId) return;
+  const all = readUserProgress(userId);
+  const filtered = all.filter((p) => p.module_id !== moduleId);
+  writeUserProgress(userId, filtered);
+  dispatchProgressEvent(userId, 0, moduleId);
+}
+
+// =============================================
 // REALTIME SUBSCRIPTION (Optional)
 // =============================================
 

@@ -6,7 +6,7 @@ import { ArrowRight, ArrowDown } from "../common/icons";
 import { Highlightable } from "../common/Highlightable";
 import { UserProfileButton } from "../common/UserProfileButton";
 import { useAnnotation } from "../common/AnnotationProvider";
-import { markTopicCompleted, getCompletedTopics } from "../../lib/supabase";
+import { markTopicCompleted, getCompletedTopics, resetModuleProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions } from "../../lib/supabase";
 import { cachedFetch } from "../../lib/apiCache";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
@@ -124,6 +124,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const initialScrollRef = useRef(0);
   const [topicProgressMap, setTopicProgressMap] = useState<Record<number, number>>({});
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Mark the currently selected topic as completed in sidebar + localStorage
   const markCurrentTopicDone = useCallback(() => {
@@ -146,6 +147,39 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       }))
     );
   }, [selectedTopic, user, currentSubmodule, submoduleId]);
+
+  // Reset all progress for the current submodule
+  const handleResetProgress = useCallback(() => {
+    if (!user) return;
+    const subId = currentSubmodule?.submodule_id ?? submoduleId;
+
+    // Clear from localStorage
+    resetModuleProgress(user.id, subId);
+
+    // Clear saved scroll positions for all topics in this module
+    clearModuleScrollPositions(user.id, topics.map(t => t.topic_id));
+
+    // Clear in-memory scroll progress
+    setTopicProgressMap({});
+
+    // Reset all sidebar topics to "available", mark first as "current"
+    setSidebarModules((prev) =>
+      prev.map((mod) => ({
+        ...mod,
+        topics: mod.topics.map((t, i) => ({
+          ...t,
+          status: i === 0 ? ("current" as const) : ("available" as const),
+        })),
+      }))
+    );
+
+    // Jump back to first topic
+    if (topics.length > 0) {
+      setSelectedTopic(topics[0]);
+    }
+
+    setShowResetConfirm(false);
+  }, [user, currentSubmodule, submoduleId, topics]);
 
   // Auto-mark topic completed when user scrolls to the bottom of content
   useEffect(() => {
@@ -219,6 +253,54 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       window.removeEventListener("scroll", calculateProgress);
     };
   }, [selectedTopic]);
+
+  // Persist scroll progress to localStorage whenever it changes
+  useEffect(() => {
+    if (!user || !selectedTopic) return;
+    const progress = topicProgressMap[selectedTopic.topic_id];
+    if (progress != null && progress > 0) {
+      saveTopicScrollPosition(user.id, selectedTopic.topic_id, progress);
+    }
+  }, [topicProgressMap, selectedTopic, user]);
+
+  // Auto-scroll to saved reading position when returning to a topic
+  useEffect(() => {
+    if (!user || !selectedTopic) return;
+    const contentEl = contentWrapperRef.current;
+    if (!contentEl) return;
+
+    const savedProgress = getTopicScrollPosition(user.id, selectedTopic.topic_id);
+    if (savedProgress <= 0) return;
+
+    // Restore the in-memory progress map so the sidebar circle shows correctly
+    setTopicProgressMap(prev => {
+      const current = prev[selectedTopic.topic_id] || 0;
+      return savedProgress > current
+        ? { ...prev, [selectedTopic.topic_id]: savedProgress }
+        : prev;
+    });
+
+    // Wait for content to render, then scroll to the saved position
+    const timer = setTimeout(() => {
+      const rect = contentEl.getBoundingClientRect();
+      const contentTopAbsolute = window.scrollY + rect.top;
+      const contentHeight = rect.height;
+      const viewportHeight = window.innerHeight;
+
+      // Total scrollable distance for this content
+      const totalDistance = (contentTopAbsolute + contentHeight) - viewportHeight - contentTopAbsolute;
+      if (totalDistance <= 0) return;
+
+      const targetScroll = contentTopAbsolute + (savedProgress / 100) * totalDistance;
+      window.scrollTo({ top: targetScroll, behavior: "smooth" });
+
+      // Update the baseline so further scroll tracking works correctly
+      initialScrollRef.current = targetScroll;
+    }, 300);
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTopic?.topic_id, user]);
 
   // Fetch topics for a specific submodule (with cache)
   const fetchTopicsForSubmodule = useCallback(async (subId: number): Promise<Topic[]> => {
@@ -645,6 +727,45 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                 )}
               </div>
             ))}
+
+            {/* Reset Progress */}
+            {user && (
+              <div className="mt-3 px-1">
+                {!showResetConfirm ? (
+                  <button
+                    onClick={() => setShowResetConfirm(true)}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] sm:text-xs font-medium text-gray-500 hover:text-red-600 bg-white rounded-xl lg:rounded-2xl shadow-sm hover:bg-red-50 transition-all duration-200"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 7l1.5 9.5a1 1 0 001 .5h7a1 1 0 001-.5L16 7" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M2 5h16" strokeLinecap="round" />
+                      <path d="M8 5V3a1 1 0 011-1h2a1 1 0 011 1v2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Reset Progress
+                  </button>
+                ) : (
+                  <div className="bg-white rounded-xl lg:rounded-2xl shadow-sm p-3 space-y-2">
+                    <p className="text-[11px] text-gray-600 text-center font-medium">
+                      Reset all progress for this module?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowResetConfirm(false)}
+                        className="flex-1 px-2 py-1.5 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleResetProgress}
+                        className="flex-1 px-2 py-1.5 text-[11px] font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
