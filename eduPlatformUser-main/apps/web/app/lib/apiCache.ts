@@ -80,11 +80,28 @@ export async function cachedFetch<T>(url: string, cacheKey: string): Promise<T> 
 }
 
 async function fetchAndCache<T>(url: string, cacheKey: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
-  const data: T = await res.json();
-  setCache(cacheKey, data);
-  return data;
+  const MAX_RETRIES = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 0) {
+        // Exponential backoff: 1s, 2s
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+      const data: T = await res.json();
+      setCache(cacheKey, data);
+      return data;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      // Only retry on network errors or 5xx, not on 4xx client errors
+      if (lastError.message.match(/Fetch failed: 4\d\d/)) break;
+    }
+  }
+
+  throw lastError ?? new Error("Fetch failed after retries");
 }
 
 /**

@@ -121,6 +121,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const contentEndRef = useRef<HTMLDivElement>(null);
+  const contentWrapperRef = useRef<HTMLDivElement>(null);
+  const initialScrollRef = useRef(0);
+  const [topicProgressMap, setTopicProgressMap] = useState<Record<number, number>>({});
 
   // Mark the currently selected topic as completed in sidebar + localStorage
   const markCurrentTopicDone = useCallback(() => {
@@ -162,6 +165,61 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     return () => observer.disconnect();
   }, [selectedTopic, markCurrentTopicDone]);
 
+  // Reset scroll baseline when topic changes (progress is retained per topic)
+  useEffect(() => {
+    initialScrollRef.current = window.scrollY;
+  }, [selectedTopic?.topic_id]);
+
+  // Track reading progress via scroll position
+  useEffect(() => {
+    const contentEl = contentWrapperRef.current;
+    if (!contentEl || !selectedTopic) return;
+
+    const calculateProgress = () => {
+      const rect = contentEl.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const initialScroll = initialScrollRef.current;
+
+      // Absolute position of content bottom in document coordinates (constant)
+      const contentBottomAbsolute = window.scrollY + rect.bottom;
+
+      // Target scroll: the scrollY where content bottom aligns with viewport bottom
+      const targetScroll = contentBottomAbsolute - viewportHeight;
+
+      // Total distance user needs to scroll from their starting position
+      const totalDistance = targetScroll - initialScroll;
+
+      const topicId = selectedTopic.topic_id;
+
+      if (totalDistance <= 0) {
+        // Content bottom is already visible from the initial position
+        setTopicProgressMap(prev =>
+          (prev[topicId] || 0) < 100 ? { ...prev, [topicId]: 100 } : prev
+        );
+        return;
+      }
+
+      // How much the user has scrolled from their starting position
+      const scrolled = window.scrollY - initialScroll;
+      const progress = Math.min(100, Math.max(0, (scrolled / totalDistance) * 100));
+
+      // Only allow progress to increase, never decrease
+      setTopicProgressMap(prev => {
+        const current = prev[topicId] || 0;
+        return progress > current ? { ...prev, [topicId]: progress } : prev;
+      });
+    };
+
+    // Small delay to let layout settle after topic change
+    const timer = setTimeout(calculateProgress, 150);
+
+    window.addEventListener("scroll", calculateProgress, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("scroll", calculateProgress);
+    };
+  }, [selectedTopic]);
+
   // Fetch topics for a specific submodule (with cache)
   const fetchTopicsForSubmodule = useCallback(async (subId: number): Promise<Topic[]> => {
     try {
@@ -174,21 +232,32 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
   }, []);
 
-  // Initial data fetch
+  // Initial data fetch with retry for backend cold starts
   useEffect(() => {
-    const fetchData = async () => {
+    let cancelled = false;
+
+    const fetchData = async (retryCount = 0) => {
+      const MAX_RETRIES = 2;
+
       try {
         setLoading(true);
         setError(null);
 
         // Fetch all submodules and topics for the current submodule in parallel (with cache)
-        const [allSubmodules, topicsData] = await Promise.all([
-          cachedFetch<SubModuleData[]>(
+        const [rawSubmodules, topicsData] = await Promise.all([
+          cachedFetch<SubModuleData[] | { data?: SubModuleData[] }>(
             `${BACKEND_URL}/api/submodules`,
             "all_submodules"
           ),
           fetchTopicsForSubmodule(submoduleId),
         ]);
+
+        if (cancelled) return;
+
+        // Normalize response: handle both array and { data: [...] } formats
+        const allSubmodules: SubModuleData[] = Array.isArray(rawSubmodules)
+          ? rawSubmodules
+          : (rawSubmodules as { data?: SubModuleData[] }).data || [];
 
         // Find the current submodule
         const current = allSubmodules.find(
@@ -197,6 +266,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         setCurrentSubmodule(current || null);
 
         if (!current) {
+          // If we got an empty response, the backend might still be waking up — retry
+          if (allSubmodules.length === 0 && retryCount < MAX_RETRIES) {
+            await new Promise((r) => setTimeout(r, 1500 * (retryCount + 1)));
+            if (!cancelled) return fetchData(retryCount + 1);
+            return;
+          }
           setError("Submodule not found");
           setLoading(false);
           return;
@@ -243,14 +318,22 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           setSelectedTopic(topicsData[startIndex]);
         }
       } catch (err) {
+        if (cancelled) return;
+        // Retry on network/server errors (backend cold start)
+        if (retryCount < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, 1500 * (retryCount + 1)));
+          if (!cancelled) return fetchData(retryCount + 1);
+          return;
+        }
         setError(err instanceof Error ? err.message : "An error occurred");
         console.error("Error fetching data:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchData();
+    return () => { cancelled = true; };
   }, [submoduleId, fetchTopicsForSubmodule, user]);
 
   // Toggle a sidebar module (expand/collapse) and lazy-load its topics
@@ -304,48 +387,21 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const topic = topics.find((t) => t.topic_id === topicIdNum);
     if (!topic) return;
 
-    const isSameTopic = selectedTopic?.topic_id === topicIdNum;
-
-    // Clicking the current topic → mark it completed
-    if (isSameTopic) {
-      if (user) {
-        const subId = currentSubmodule?.submodule_id ?? submoduleId;
-        markTopicCompleted(user.id, topicIdNum, subId, true);
-      }
-      setSidebarModules((prev) =>
-        prev.map((mod) => {
-          if (mod.submoduleId === parentSubmoduleId && mod.topics) {
-            return {
-              ...mod,
-              topics: mod.topics.map((t) =>
-                t.id === topicId ? { ...t, status: "completed" as const } : t
-              ),
-            };
-          }
-          return mod;
-        })
-      );
-      return;
-    }
-
-    // Clicking a different topic → mark the previous topic as completed
-    if (user && selectedTopic) {
-      const prevSubId = currentSubmodule?.submodule_id ?? submoduleId;
-      markTopicCompleted(user.id, selectedTopic.topic_id, prevSubId, true);
-    }
+    // Clicking the already selected topic → do nothing
+    if (selectedTopic?.topic_id === topicIdNum) return;
 
     setSelectedTopic(topic);
 
-    // Update sidebar topic statuses
+    // Update sidebar: mark clicked topic as "current", keep others as-is
     setSidebarModules((prev) =>
       prev.map((mod) => {
         if (mod.submoduleId === parentSubmoduleId && mod.topics) {
           return {
             ...mod,
             topics: mod.topics.map((t) => {
-              // Mark previously selected topic as "completed"
-              if (t.id === `topic-${selectedTopic?.topic_id}`)
-                return { ...t, status: "completed" as const };
+              // Mark the previously selected topic back to "available" (unless already completed)
+              if (t.id === `topic-${selectedTopic?.topic_id}` && t.status !== "completed")
+                return { ...t, status: "available" as const };
               // Mark the clicked topic as "current" only if not already completed
               if (t.id === topicId && t.status !== "completed")
                 return { ...t, status: "current" as const };
@@ -401,10 +457,17 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   if (error) {
     return (
       <div className="w-full min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-xl text-red-600 mb-4">Error: {error}</p>
+        <div className="text-center px-4">
+          <p className="text-xl text-red-600 mb-2">Error: {error}</p>
+          <p className="text-sm text-gray-500 mb-4">The server may be starting up. Please try again.</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              // Clear the stale cache entry and force a fresh fetch
+              try { sessionStorage.removeItem("edu_api_all_submodules"); } catch {}
+              window.location.reload();
+            }}
             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
           >
             Retry
@@ -504,61 +567,66 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                 {/* Topics */}
                 {mod.expanded && mod.topics && mod.topics.length > 0 && (
                   <div className="mt-2 bg-white rounded-xl lg:rounded-2xl shadow-sm overflow-hidden">
-                    {mod.topics.map((topic, index) => (
-                      <div
-                        key={topic.id}
-                        onClick={() => handleTopicClick(topic.id, mod.submoduleId)}
-                        className={`flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${
-                          index !== mod.topics.length - 1 ? "border-b border-gray-100" : ""
-                        }`}
-                      >
-                        <span
-                          className={`text-[11px] sm:text-xs font-medium ${
-                            topic.status === "current"
-                              ? "text-blue-500"
-                              : topic.status === "completed"
-                                ? "text-green-600"
-                                : "text-gray-700"
+                    {mod.topics.map((topic, index) => {
+                      const topicNumId = parseInt(topic.id.replace("topic-", ""));
+                      const topicProgress = topicProgressMap[topicNumId] || 0;
+                      return (
+                        <div
+                          key={topic.id}
+                          onClick={() => handleTopicClick(topic.id, mod.submoduleId)}
+                          className={`flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${
+                            index !== mod.topics.length - 1 ? "border-b border-gray-100" : ""
                           }`}
                         >
-                          {topic.title}
-                        </span>
-                        {/* Status Icon - Progress Circle */}
-                        <div className="flex-shrink-0">
-                          {topic.status === "completed" ? (
-                            <svg className="w-4 h-4" viewBox="0 0 20 20">
-                              <circle cx="10" cy="10" r="8" fill="#22c55e" />
-                              <path d="M6 10l3 3 5-5" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          ) : topic.status === "current" ? (
-                            <svg className="w-4 h-4" viewBox="0 0 20 20">
-                              <circle
-                                cx="10"
-                                cy="10"
-                                r="8"
-                                fill="none"
-                                stroke="#e5e7eb"
-                                strokeWidth="2"
-                              />
-                              <circle
-                                cx="10"
-                                cy="10"
-                                r="8"
-                                fill="none"
-                                stroke="#3b82f6"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeDasharray="50.26"
-                                strokeDashoffset="12.5"
-                                transform="rotate(-90 10 10)"
-                              />
-                            </svg>
-                          ) : (
-                            <div className="w-4 h-4 rounded-full border-2 border-gray-300"></div>
-                          )}
+                          <span
+                            className={`text-[11px] sm:text-xs font-medium ${
+                              topic.status === "current"
+                                ? "text-blue-500"
+                                : topic.status === "completed"
+                                  ? "text-green-600"
+                                  : "text-gray-700"
+                            }`}
+                          >
+                            {topic.title}
+                          </span>
+                          {/* Status Icon - Progress Circle */}
+                          <div className="flex-shrink-0">
+                            {topic.status === "completed" ? (
+                              <svg className="w-4 h-4" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" fill="#22c55e" />
+                                <path d="M6 10l3 3 5-5" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            ) : topicProgress > 0 ? (
+                              <svg className="w-4 h-4" viewBox="0 0 20 20">
+                                <circle
+                                  cx="10"
+                                  cy="10"
+                                  r="8"
+                                  fill="none"
+                                  stroke="#e5e7eb"
+                                  strokeWidth="2"
+                                />
+                                <circle
+                                  cx="10"
+                                  cy="10"
+                                  r="8"
+                                  fill="none"
+                                  stroke="#3b82f6"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeDasharray="50.26"
+                                  strokeDashoffset={50.26 * (1 - topicProgress / 100)}
+                                  style={{ transition: "stroke-dashoffset 0.3s ease" }}
+                                  transform="rotate(-90 10 10)"
+                                />
+                              </svg>
+                            ) : (
+                              <div className="w-4 h-4 rounded-full border-2 border-gray-300"></div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
@@ -585,7 +653,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           <div className="max-w-2xl mx-auto lg:mx-0">
             <Highlightable pageId={selectedTopic ? `topic-${selectedTopic.topic_id}` : "default"}>
               {selectedTopic ? (
-                <div className="ai-content-wrapper">
+                <div ref={contentWrapperRef} className="ai-content-wrapper">
                   <section className="mb-6 sm:mb-8">
                     {/* Topic Title from backend */}
                     {selectedTopic.title && (
