@@ -6,7 +6,7 @@ import { ArrowRight, ArrowDown } from "../common/icons";
 import { Highlightable } from "../common/Highlightable";
 import { UserProfileButton } from "../common/UserProfileButton";
 import { useAnnotation } from "../common/AnnotationProvider";
-import { markTopicCompleted, getCompletedTopics, resetModuleProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions } from "../../lib/supabase";
+import { markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions } from "../../lib/supabase";
 import { cachedFetch } from "../../lib/apiCache";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
@@ -125,6 +125,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const initialScrollRef = useRef(0);
   const [topicProgressMap, setTopicProgressMap] = useState<Record<number, number>>({});
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetTopicId, setResetTopicId] = useState<number | null>(null);
 
   // Mark the currently selected topic as completed in sidebar + localStorage
   const markCurrentTopicDone = useCallback(() => {
@@ -180,6 +181,38 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
     setShowResetConfirm(false);
   }, [user, currentSubmodule, submoduleId, topics]);
+
+  // Reset progress for a single topic
+  const handleResetTopicProgress = useCallback((topicId: number) => {
+    if (!user) return;
+    const subId = currentSubmodule?.submodule_id ?? submoduleId;
+
+    // Clear from localStorage
+    resetTopicProgress(user.id, topicId, subId);
+
+    // Clear saved scroll position for this topic
+    clearModuleScrollPositions(user.id, [topicId]);
+
+    // Clear in-memory scroll progress for this topic
+    setTopicProgressMap(prev => {
+      const next = { ...prev };
+      delete next[topicId];
+      return next;
+    });
+
+    // Reset sidebar topic status to "available"
+    const topicKey = `topic-${topicId}`;
+    setSidebarModules(prev =>
+      prev.map(mod => ({
+        ...mod,
+        topics: mod.topics.map(t =>
+          t.id === topicKey ? { ...t, status: "available" as const } : t
+        ),
+      }))
+    );
+
+    setResetTopicId(null);
+  }, [user, currentSubmodule, submoduleId]);
 
   // Auto-mark topic completed when user scrolls to the bottom of content
   useEffect(() => {
@@ -652,11 +685,43 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                     {mod.topics.map((topic, index) => {
                       const topicNumId = parseInt(topic.id.replace("topic-", ""));
                       const topicProgress = topicProgressMap[topicNumId] || 0;
+                      const isConfirmingReset = resetTopicId === topicNumId;
+
+                      // Inline confirmation for per-topic reset
+                      if (isConfirmingReset && user) {
+                        return (
+                          <div
+                            key={topic.id}
+                            className={`px-3 sm:px-4 py-2 ${
+                              index !== mod.topics.length - 1 ? "border-b border-gray-100" : ""
+                            }`}
+                          >
+                            <p className="text-[10px] text-gray-600 text-center mb-1.5 font-medium">
+                              Reset this topic?
+                            </p>
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setResetTopicId(null); }}
+                                className="flex-1 px-2 py-1 text-[10px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleResetTopicProgress(topicNumId); }}
+                                className="flex-1 px-2 py-1 text-[10px] font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors"
+                              >
+                                Reset
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div
                           key={topic.id}
                           onClick={() => handleTopicClick(topic.id, mod.submoduleId)}
-                          className={`flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${
+                          className={`group flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${
                             index !== mod.topics.length - 1 ? "border-b border-gray-100" : ""
                           }`}
                         >
@@ -671,8 +736,21 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                           >
                             {topic.title}
                           </span>
-                          {/* Status Icon - Progress Circle */}
-                          <div className="flex-shrink-0">
+                          {/* Status Icon + Reset button */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {/* Per-topic reset button - shown on hover for completed or in-progress topics */}
+                            {user && (topic.status === "completed" || topicProgress > 0) && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setResetTopicId(topicNumId); }}
+                                className="hidden group-hover:flex w-4 h-4 items-center justify-center text-gray-400 hover:text-red-500 transition-colors"
+                                title="Reset topic progress"
+                              >
+                                <svg className="w-3 h-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <path d="M4 4l12 12M16 4L4 16" strokeLinecap="round" />
+                                </svg>
+                              </button>
+                            )}
+                            {/* Progress circle */}
                             {topic.status === "completed" ? (
                               <svg className="w-4 h-4" viewBox="0 0 20 20">
                                 <circle cx="10" cy="10" r="8" fill="#22c55e" />

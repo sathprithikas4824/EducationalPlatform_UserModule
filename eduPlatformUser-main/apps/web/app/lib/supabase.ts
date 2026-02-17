@@ -431,6 +431,15 @@ export function clearModuleScrollPositions(userId: string, topicIds: number[]): 
   } catch {}
 }
 
+// Reset progress for a single topic
+export function resetTopicProgress(userId: string, topicId: number, moduleId: number): void {
+  if (!userId) return;
+  const all = readUserProgress(userId);
+  const filtered = all.filter((p) => !(p.topic_id === topicId && p.user_id === userId));
+  writeUserProgress(userId, filtered);
+  dispatchProgressEvent(userId, topicId, moduleId);
+}
+
 // Reset all progress for a specific module (removes entries from localStorage)
 export function resetModuleProgress(userId: string, moduleId: number): void {
   if (!userId) return;
