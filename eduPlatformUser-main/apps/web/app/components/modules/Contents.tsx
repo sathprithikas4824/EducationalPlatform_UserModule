@@ -5,7 +5,6 @@ import Link from "next/link";
 import localFont from "next/font/local";
 import { ArrowRight, ArrowDown } from "../common/icons";
 import { Highlightable } from "../common/Highlightable";
-import { UserProfileButton } from "../common/UserProfileButton";
 import { useAnnotation } from "../common/AnnotationProvider";
 import { markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions } from "../../lib/supabase";
 import { cachedFetch } from "../../lib/apiCache";
@@ -128,15 +127,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetTopicId, setResetTopicId] = useState<number | null>(null);
 
-  // Mark the currently selected topic as completed in sidebar + localStorage
+  // Mark the currently selected topic as completed in Supabase
   // Only runs for logged-in users — guests cannot track progress
-  const markCurrentTopicDone = useCallback(() => {
+  const markCurrentTopicDone = useCallback(async () => {
     if (!selectedTopic || !user) return;
     const topicKey = `topic-${selectedTopic.topic_id}`;
 
-    // Persist to localStorage
+    // Persist to Supabase
     const subId = currentSubmodule?.submodule_id ?? submoduleId;
-    markTopicCompleted(user.id, selectedTopic.topic_id, subId, true);
+    await markTopicCompleted(user.id, selectedTopic.topic_id, subId, true);
 
     // Update sidebar UI
     setSidebarModules((prev) =>
@@ -150,12 +149,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   }, [selectedTopic, user, currentSubmodule, submoduleId]);
 
   // Reset all progress for the current submodule
-  const handleResetProgress = useCallback(() => {
+  const handleResetProgress = useCallback(async () => {
     if (!user) return;
     const subId = currentSubmodule?.submodule_id ?? submoduleId;
 
-    // Clear from localStorage
-    resetModuleProgress(user.id, subId);
+    // Clear from Supabase
+    await resetModuleProgress(user.id, subId);
 
     // Clear saved scroll positions for all topics in this module
     clearModuleScrollPositions(user.id, topics.map(t => t.topic_id));
@@ -183,12 +182,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   }, [user, currentSubmodule, submoduleId, topics]);
 
   // Reset progress for a single topic
-  const handleResetTopicProgress = useCallback((topicId: number) => {
+  const handleResetTopicProgress = useCallback(async (topicId: number) => {
     if (!user) return;
     const subId = currentSubmodule?.submodule_id ?? submoduleId;
 
-    // Clear from localStorage
-    resetTopicProgress(user.id, topicId, subId);
+    // Clear from Supabase
+    await resetTopicProgress(user.id, topicId, subId);
 
     // Clear saved scroll position for this topic
     clearModuleScrollPositions(user.id, [topicId]);
@@ -394,8 +393,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
         setTopics(topicsData);
 
-        // Fetch completed topics from localStorage for current demo user
-        const completedTopicIds = user ? getCompletedTopics(user.id, submoduleId) : [];
+        // Fetch completed topics from Supabase for current user
+        const completedTopicIds = user ? await getCompletedTopics(user.id, submoduleId) : [];
 
         // Find the first uncompleted topic index
         const firstUncompletedIndex = topicsData.findIndex(
@@ -469,7 +468,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     // If expanding and topics not loaded yet, fetch them
     if (!mod.topicsLoaded) {
       const fetchedTopics = await fetchTopicsForSubmodule(mod.submoduleId);
-      const completedTopicIds = user ? getCompletedTopics(user.id, mod.submoduleId) : [];
+      const completedTopicIds = user ? await getCompletedTopics(user.id, mod.submoduleId) : [];
 
       const sidebarTopics: SidebarTopic[] = fetchedTopics.map((topic) => ({
         id: `topic-${topic.topic_id}`,
@@ -535,13 +534,6 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       <div
         className={`w-full min-h-screen bg-white jakarta-font ${fuzzyBubblesBoldFont.variable}`}
       >
-        {/* Header */}
-        <div className="w-full bg-white px-4 sm:px-6 md:px-10 py-3 border-b border-gray-100">
-          <div className="max-w-6xl mx-auto flex justify-end">
-            <UserProfileButton />
-          </div>
-        </div>
-
         {/* Hero Skeleton */}
         <HeroSkeleton />
 
@@ -596,13 +588,6 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     <div
       className={`w-full min-h-screen bg-white jakarta-font ${fuzzyBubblesBoldFont.variable}`}
     >
-      {/* Header with Login Button */}
-      <div className="w-full bg-white px-4 sm:px-6 md:px-10 py-3 border-b border-gray-100">
-        <div className="max-w-6xl mx-auto flex justify-end">
-          <UserProfileButton />
-        </div>
-      </div>
-
       {/* Hero Section - Responsive */}
       <div className="w-full bg-white py-6 sm:py-8 md:py-12 px-4 sm:px-6 md:px-10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-6 md:gap-12 items-center">

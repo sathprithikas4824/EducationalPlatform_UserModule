@@ -17,6 +17,8 @@ export interface Highlight {
   start_offset: number;
   end_offset: number;
   color: string;
+  prefix_context?: string;
+  suffix_context?: string;
   created_at: string;
   updated_at: string;
 }
@@ -65,7 +67,7 @@ export async function getAllUserHighlights(): Promise<Highlight[]> {
     .from("highlights")
     .select("*")
     .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: true });
 
   if (error) {
     console.error("Error fetching highlights:", error);
@@ -82,6 +84,8 @@ export async function addHighlight(highlight: {
   startOffset: number;
   endOffset: number;
   color: string;
+  prefixContext?: string;
+  suffixContext?: string;
 }): Promise<Highlight | null> {
   if (!supabase) return null;
   const { data: { user } } = await supabase.auth.getUser();
@@ -96,6 +100,8 @@ export async function addHighlight(highlight: {
       start_offset: highlight.startOffset,
       end_offset: highlight.endOffset,
       color: highlight.color,
+      prefix_context: highlight.prefixContext,
+      suffix_context: highlight.suffixContext,
     })
     .select()
     .single();
@@ -134,6 +140,25 @@ export async function updateHighlightColor(id: string, color: string): Promise<b
 
   if (error) {
     console.error("Error updating highlight:", error);
+    return false;
+  }
+
+  return true;
+}
+
+// Delete all highlights for a user
+export async function deleteAllUserHighlights(): Promise<boolean> {
+  if (!supabase) return false;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { error } = await supabase
+    .from("highlights")
+    .delete()
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("Error deleting all highlights:", error);
     return false;
   }
 
@@ -249,7 +274,7 @@ export async function updateProfile(updates: Partial<Profile>): Promise<boolean>
 }
 
 // =============================================
-// MODULE PROGRESS FUNCTIONS (localStorage-based for demo login)
+// MODULE PROGRESS FUNCTIONS (Supabase-based)
 // =============================================
 
 export interface TopicProgress {
@@ -273,32 +298,6 @@ export interface ModuleProgress {
 // Custom event name for cross-component realtime progress updates
 export const PROGRESS_UPDATED_EVENT = "edu-progress-updated";
 
-// localStorage key for a user's progress
-const getProgressKey = (userId: string) => `edu_progress_${userId}`;
-
-// Internal: read all progress entries for a user from localStorage
-function readUserProgress(userId: string): TopicProgress[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(getProgressKey(userId));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-// Internal: write all progress entries for a user to localStorage
-function writeUserProgress(userId: string, progress: TopicProgress[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(getProgressKey(userId), JSON.stringify(progress));
-  } catch (e) {
-    console.warn("Failed to save progress to localStorage:", e);
-  }
-}
-
 // Dispatch a custom event so other components (e.g. ModulesSection) can react in realtime
 function dispatchProgressEvent(userId: string, topicId: number, moduleId: number) {
   if (typeof window === "undefined") return;
@@ -309,58 +308,64 @@ function dispatchProgressEvent(userId: string, topicId: number, moduleId: number
   );
 }
 
-// Mark a topic as completed (or uncompleted) — works with demo login userId
-export function markTopicCompleted(
+// Mark a topic as completed (or uncompleted) in Supabase
+export async function markTopicCompleted(
   userId: string,
   topicId: number,
   moduleId: number,
   completed: boolean = true
-): TopicProgress | null {
-  if (!userId) return null;
+): Promise<TopicProgress | null> {
+  if (!supabase || !userId) return null;
 
-  const all = readUserProgress(userId);
   const now = new Date().toISOString();
 
-  const existingIndex = all.findIndex(
-    (p) => p.topic_id === topicId && p.user_id === userId
-  );
+  const { data, error } = await supabase
+    .from("user_topic_progress")
+    .upsert(
+      {
+        user_id: userId,
+        topic_id: topicId,
+        module_id: moduleId,
+        completed,
+        completed_at: completed ? now : null,
+        updated_at: now,
+      },
+      { onConflict: "user_id,topic_id" }
+    )
+    .select()
+    .single();
 
-  const entry: TopicProgress = {
-    id: existingIndex >= 0 ? all[existingIndex].id : `${userId}_${topicId}_${Date.now()}`,
-    user_id: userId,
-    topic_id: topicId,
-    module_id: moduleId,
-    completed,
-    completed_at: completed ? now : null,
-    created_at: existingIndex >= 0 ? all[existingIndex].created_at : now,
-    updated_at: now,
-  };
-
-  if (existingIndex >= 0) {
-    all[existingIndex] = entry;
-  } else {
-    all.push(entry);
+  if (error) {
+    console.error("Error marking topic completed:", error);
+    return null;
   }
 
-  writeUserProgress(userId, all);
   dispatchProgressEvent(userId, topicId, moduleId);
-  return entry;
+  return data;
 }
 
 // Get progress for a specific module
-export function getModuleProgress(
+export async function getModuleProgress(
   userId: string,
   moduleId: number,
   totalTopics: number
-): ModuleProgress {
-  if (!userId) {
-    return { module_id: moduleId, total_topics: totalTopics, completed_topics: 0, completion_percentage: 0 };
+): Promise<ModuleProgress> {
+  const empty = { module_id: moduleId, total_topics: totalTopics, completed_topics: 0, completion_percentage: 0 };
+  if (!supabase || !userId) return empty;
+
+  const { data, error } = await supabase
+    .from("user_topic_progress")
+    .select("topic_id")
+    .eq("user_id", userId)
+    .eq("module_id", moduleId)
+    .eq("completed", true);
+
+  if (error) {
+    console.error("Error fetching module progress:", error);
+    return empty;
   }
 
-  const all = readUserProgress(userId);
-  const completedTopics = all.filter(
-    (p) => p.module_id === moduleId && p.completed
-  ).length;
+  const completedTopics = (data || []).length;
   const percentage = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
 
   return {
@@ -371,22 +376,81 @@ export function getModuleProgress(
   };
 }
 
-// Get all completed progress entries for a user
-export function getAllModulesProgress(userId: string): TopicProgress[] {
-  if (!userId) return [];
-  return readUserProgress(userId).filter((p) => p.completed);
+// Get all completed progress entries for a user (across all modules)
+export async function getAllModulesProgress(userId: string): Promise<TopicProgress[]> {
+  if (!supabase || !userId) return [];
+
+  const { data, error } = await supabase
+    .from("user_topic_progress")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("completed", true);
+
+  if (error) {
+    console.error("Error fetching all progress:", error);
+    return [];
+  }
+
+  return data || [];
 }
 
 // Get completed topic IDs for a specific module
-export function getCompletedTopics(userId: string, moduleId: number): number[] {
-  if (!userId) return [];
-  return readUserProgress(userId)
-    .filter((p) => p.module_id === moduleId && p.completed)
-    .map((p) => p.topic_id);
+export async function getCompletedTopics(userId: string, moduleId: number): Promise<number[]> {
+  if (!supabase || !userId) return [];
+
+  const { data, error } = await supabase
+    .from("user_topic_progress")
+    .select("topic_id")
+    .eq("user_id", userId)
+    .eq("module_id", moduleId)
+    .eq("completed", true);
+
+  if (error) {
+    console.error("Error fetching completed topics:", error);
+    return [];
+  }
+
+  return (data || []).map((p) => p.topic_id);
+}
+
+// Reset progress for a single topic
+export async function resetTopicProgress(userId: string, topicId: number, moduleId: number): Promise<void> {
+  if (!supabase || !userId) return;
+
+  const { error } = await supabase
+    .from("user_topic_progress")
+    .delete()
+    .eq("user_id", userId)
+    .eq("topic_id", topicId);
+
+  if (error) {
+    console.error("Error resetting topic progress:", error);
+    return;
+  }
+
+  dispatchProgressEvent(userId, topicId, moduleId);
+}
+
+// Reset all progress for a specific module
+export async function resetModuleProgress(userId: string, moduleId: number): Promise<void> {
+  if (!supabase || !userId) return;
+
+  const { error } = await supabase
+    .from("user_topic_progress")
+    .delete()
+    .eq("user_id", userId)
+    .eq("module_id", moduleId);
+
+  if (error) {
+    console.error("Error resetting module progress:", error);
+    return;
+  }
+
+  dispatchProgressEvent(userId, 0, moduleId);
 }
 
 // =============================================
-// SCROLL POSITION FUNCTIONS (localStorage-based)
+// SCROLL POSITION FUNCTIONS (localStorage-based UI state)
 // =============================================
 
 const getScrollKey = (userId: string) => `edu_scroll_${userId}`;
@@ -429,24 +493,6 @@ export function clearModuleScrollPositions(userId: string, topicIds: number[]): 
     }
     localStorage.setItem(getScrollKey(userId), JSON.stringify(map));
   } catch {}
-}
-
-// Reset progress for a single topic
-export function resetTopicProgress(userId: string, topicId: number, moduleId: number): void {
-  if (!userId) return;
-  const all = readUserProgress(userId);
-  const filtered = all.filter((p) => !(p.topic_id === topicId && p.user_id === userId));
-  writeUserProgress(userId, filtered);
-  dispatchProgressEvent(userId, topicId, moduleId);
-}
-
-// Reset all progress for a specific module (removes entries from localStorage)
-export function resetModuleProgress(userId: string, moduleId: number): void {
-  if (!userId) return;
-  const all = readUserProgress(userId);
-  const filtered = all.filter((p) => p.module_id !== moduleId);
-  writeUserProgress(userId, filtered);
-  dispatchProgressEvent(userId, 0, moduleId);
 }
 
 // =============================================

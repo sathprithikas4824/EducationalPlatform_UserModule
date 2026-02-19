@@ -131,7 +131,7 @@ const ModulesSection: React.FC = () => {
         );
 
         const topicsPerSubmodule = await Promise.all(topicPromises);
-        const userProgress = user ? getAllModulesProgress(user.id) : [];
+        const userProgress = user ? await getAllModulesProgress(user.id) : [];
 
         setCachedData({ submodules, topicsPerSubmodule });
         setModules(buildModules(submodules, topicsPerSubmodule, userProgress));
@@ -157,8 +157,8 @@ const ModulesSection: React.FC = () => {
   useEffect(() => {
     if (!cachedData || !user) return;
 
-    const handleProgressUpdate = () => {
-      const userProgress = getAllModulesProgress(user.id);
+    const handleProgressUpdate = async () => {
+      const userProgress = await getAllModulesProgress(user.id);
       setModules(buildModules(cachedData.submodules, cachedData.topicsPerSubmodule, userProgress));
     };
 
