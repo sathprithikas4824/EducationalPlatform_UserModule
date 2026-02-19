@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight } from "../common/icons";
 import { useAnnotation } from "../common/AnnotationProvider";
-import { getAllModulesProgress, PROGRESS_UPDATED_EVENT, type TopicProgress } from "../../lib/supabase";
+import { getAllModulesProgress, getLastUserId, PROGRESS_UPDATED_EVENT, type TopicProgress } from "../../lib/supabase";
 import { cachedFetch, prefetchAll, getCachedSync } from "../../lib/apiCache";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
@@ -67,6 +67,8 @@ const ModulesSection: React.FC = () => {
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
   const modulesRef = useRef<Module[]>([]);
+  // ID used to load progress when no user is logged in (reads from persistent cookie)
+  const [guestUserId, setGuestUserId] = useState<string | null>(null);
 
   // Cache submodule/topic data so we only fetch it once
   const [cachedData, setCachedData] = useState<{
@@ -132,7 +134,9 @@ const ModulesSection: React.FC = () => {
         );
 
         const topicsPerSubmodule = await Promise.all(topicPromises);
-        const userProgress = user ? await getAllModulesProgress(user.id) : [];
+        const progressUserId = user?.id ?? getLastUserId();
+        if (!user) setGuestUserId(progressUserId);
+        const userProgress = progressUserId ? await getAllModulesProgress(progressUserId) : [];
 
         setCachedData({ submodules, topicsPerSubmodule });
         const built = buildModules(submodules, topicsPerSubmodule, userProgress);
@@ -157,7 +161,9 @@ const ModulesSection: React.FC = () => {
           const topicsPerSub = subs.map((sub) =>
             getCachedSync<BackendTopic[]>(`topics_${sub.submodule_id}`) || []
           );
-          const userProgress = user ? await getAllModulesProgress(user.id).catch(() => []) : [];
+          const fallbackUserId = user?.id ?? getLastUserId();
+          if (!user) setGuestUserId(fallbackUserId);
+          const userProgress = fallbackUserId ? await getAllModulesProgress(fallbackUserId).catch(() => []) : [];
           setCachedData({ submodules: subs, topicsPerSubmodule: topicsPerSub });
           const built = buildModules(subs, topicsPerSub, userProgress);
           modulesRef.current = built;
@@ -173,10 +179,11 @@ const ModulesSection: React.FC = () => {
 
   // Listen for realtime progress updates from Contents component
   useEffect(() => {
-    if (!cachedData || !user) return;
+    const effectiveUserId = user?.id ?? guestUserId;
+    if (!cachedData || !effectiveUserId) return;
 
     const handleProgressUpdate = async () => {
-      const userProgress = await getAllModulesProgress(user.id);
+      const userProgress = await getAllModulesProgress(effectiveUserId);
       const built = buildModules(cachedData.submodules, cachedData.topicsPerSubmodule, userProgress);
       modulesRef.current = built;
       setModules(built);
@@ -186,7 +193,7 @@ const ModulesSection: React.FC = () => {
     return () => {
       window.removeEventListener(PROGRESS_UPDATED_EVENT, handleProgressUpdate);
     };
-  }, [cachedData, user, buildModules]);
+  }, [cachedData, user, guestUserId, buildModules]);
 
   const handleModuleClick = (moduleId: string) => {
     // Prefetch topics for the clicked module before navigation
@@ -304,26 +311,30 @@ const ModulesSection: React.FC = () => {
                     </h3>
 
                     <div className="flex items-center justify-between mt-auto">
-                      <div className="flex items-center gap-1">
-                        <div className="relative w-3 h-3">
-                          <svg className="w-3 h-3 transform -rotate-90">
-                            <circle cx="6" cy="6" r="5" stroke="#9CA3AF" strokeWidth="1.5" fill="none" />
-                            <circle
-                              cx="6"
-                              cy="6"
-                              r="5"
-                              stroke="#3B82F6"
-                              strokeWidth="1.5"
-                              fill="none"
-                              strokeDasharray={`${2 * Math.PI * 5}`}
-                              strokeDashoffset={`${2 * Math.PI * 5 * (1 - module.completionPercentage / 100)}`}
-                            />
-                          </svg>
+                      {(user || guestUserId) ? (
+                        <div className="flex items-center gap-1">
+                          <div className="relative w-3 h-3">
+                            <svg className="w-3 h-3 transform -rotate-90">
+                              <circle cx="6" cy="6" r="5" stroke="#9CA3AF" strokeWidth="1.5" fill="none" />
+                              <circle
+                                cx="6"
+                                cy="6"
+                                r="5"
+                                stroke="#3B82F6"
+                                strokeWidth="1.5"
+                                fill="none"
+                                strokeDasharray={`${2 * Math.PI * 5}`}
+                                strokeDashoffset={`${2 * Math.PI * 5 * (1 - module.completionPercentage / 100)}`}
+                              />
+                            </svg>
+                          </div>
+                          <span className="text-[7px] font-bold text-gray-700 whitespace-nowrap">
+                            {module.completionPercentage}% Completed
+                          </span>
                         </div>
-                        <span className="text-[7px] font-bold text-gray-700 whitespace-nowrap">
-                          {module.completionPercentage}% Completed
-                        </span>
-                      </div>
+                      ) : (
+                        <span className="text-[7px] text-gray-400 whitespace-nowrap">Log in to track</span>
+                      )}
 
                       <button className="bg-black text-white text-[9px] font-bold px-3 py-1 rounded shadow-sm hover:bg-gray-800 transition-colors">
                         View

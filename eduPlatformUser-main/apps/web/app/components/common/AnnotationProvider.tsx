@@ -7,6 +7,8 @@ import {
   removeHighlight as removeHighlightFromSupabase,
   getAllUserHighlights,
   deleteAllUserHighlights,
+  saveLastUserId,
+  backupProgressToCookies,
   type Highlight as SupabaseHighlight,
 } from "../../lib/supabase";
 
@@ -47,7 +49,11 @@ interface AnnotationContextType {
 
 const AnnotationContext = createContext<AnnotationContextType | undefined>(undefined);
 
-// Cookie helper functions (used only for auth session)
+// Regex to detect real Supabase UUID user IDs vs demo user IDs
+const SUPABASE_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isSupabaseUUID = (id: string) => SUPABASE_UUID_REGEX.test(id);
+
+// ---- Cookie helpers (auth session only) ----
 const setCookie = (name: string, value: string, days: number = 30) => {
   if (typeof document === "undefined") return;
   try {
@@ -88,15 +94,41 @@ const deleteCookie = (name: string) => {
   }
 };
 
-// Generate unique ID (for demo/fallback mode)
-const generateId = () => Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+// ---- localStorage helpers for highlight persistence ----
+const getHighlightsKey = (userId: string) => `edu_highlights_${userId}`;
 
-// Generate user ID from email (for demo/fallback mode only)
-const generateUserId = (email: string) => {
-  return btoa(email.toLowerCase().trim()).replace(/[^a-zA-Z0-9]/g, "").substring(0, 16);
+const saveHighlightsToStorage = (userId: string, items: Highlight[]): void => {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(getHighlightsKey(userId), JSON.stringify(items));
+  } catch (e) {
+    console.warn("Failed to save highlights to localStorage:", e);
+  }
 };
 
-// Map Supabase highlight (snake_case) to our internal format (camelCase)
+const loadHighlightsFromStorage = (userId: string): Highlight[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(getHighlightsKey(userId));
+    return raw ? (JSON.parse(raw) as Highlight[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const clearHighlightsFromStorage = (userId: string): void => {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(getHighlightsKey(userId));
+  } catch {}
+};
+
+// ---- Misc helpers ----
+const generateId = () => Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+
+const generateUserId = (email: string) =>
+  btoa(email.toLowerCase().trim()).replace(/[^a-zA-Z0-9]/g, "").substring(0, 16);
+
 const mapSupabaseHighlight = (h: SupabaseHighlight, userId: string): Highlight => ({
   id: h.id,
   userId,
@@ -120,25 +152,34 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setHighlightModeEnabled((prev) => !prev);
   }, []);
 
-  // Load all highlights for the logged-in user from Supabase
+  // Load highlights for a Supabase user — tries Supabase first, falls back to localStorage cache
   const loadHighlightsForUser = useCallback(async (userId: string) => {
     if (!supabase) return;
     const data = await getAllUserHighlights();
-    setHighlights(data.map((h) => mapSupabaseHighlight(h, userId)));
+    if (data.length > 0) {
+      const mapped = data.map((h) => mapSupabaseHighlight(h, userId));
+      setHighlights(mapped);
+      saveHighlightsToStorage(userId, mapped); // Keep localStorage in sync
+    } else {
+      // Supabase returned nothing (table may not be set up, or no highlights yet)
+      // Fall back to localStorage cache so highlights survive logout/login
+      const cached = loadHighlightsFromStorage(userId);
+      setHighlights(cached);
+    }
   }, []);
 
-  // Driven entirely by onAuthStateChange which fires INITIAL_SESSION on mount
-  // (immediately, with the current session or null), then on every auth change.
+  // Initialise auth state. Supports both Supabase auth and demo (cookie) login.
   useEffect(() => {
     // No Supabase configured — use cookie-based demo user only
     if (!supabase) {
       const savedUser = getCookie("edu_user");
       if (savedUser) {
         try {
-          const parsedUser = JSON.parse(savedUser);
+          const parsedUser = JSON.parse(savedUser) as User;
           setUser(parsedUser);
+          setHighlights(loadHighlightsFromStorage(parsedUser.id));
         } catch {
-          // ignore
+          // ignore corrupted cookie
         }
       }
       setIsInitialized(true);
@@ -148,6 +189,7 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // Supabase configured: subscribe first — INITIAL_SESSION fires synchronously
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
+        // Real Supabase-authenticated user
         const u = session.user;
         const supabaseUser: User = {
           id: u.id,
@@ -156,9 +198,30 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         };
         setUser(supabaseUser);
         setCookie("edu_user", JSON.stringify(supabaseUser));
-        // Load highlights from Supabase
+        saveLastUserId(u.id);
         loadHighlightsForUser(u.id);
+        // Sync all Supabase progress to cookie so it's visible after logout
+        backupProgressToCookies(u.id);
       } else {
+        // No Supabase session — check whether a demo (cookie) user is logged in.
+        // We must NOT delete the demo user cookie here, as it belongs to a
+        // different auth path (email/name demo login, not Supabase auth).
+        const savedUser = getCookie("edu_user");
+        if (savedUser) {
+          try {
+            const parsedUser = JSON.parse(savedUser) as User;
+            // Only restore if this is a demo user (non-UUID id)
+            if (!isSupabaseUUID(parsedUser.id)) {
+              setUser(parsedUser);
+              setHighlights(loadHighlightsFromStorage(parsedUser.id));
+              setIsInitialized(true);
+              return;
+            }
+          } catch {
+            // ignore corrupted cookie
+          }
+        }
+        // No valid demo cookie either — fully logged out
         setUser(null);
         setHighlights([]);
         deleteCookie("edu_user");
@@ -170,53 +233,56 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [loadHighlightsForUser]);
 
   const login = useCallback((email: string, name?: string) => {
-    // Demo/fallback mode only (no Supabase)
     const userId = generateUserId(email);
     const newUser: User = {
       id: userId,
       email: email.toLowerCase().trim(),
       name: name || email.split("@")[0],
     };
-    setHighlights([]);
+    // Restore any previously saved highlights for this user
+    const savedHighlights = loadHighlightsFromStorage(userId);
+    setHighlights(savedHighlights);
     setUser(newUser);
     setCookie("edu_user", JSON.stringify(newUser));
+    saveLastUserId(userId);
   }, []);
 
   const logout = useCallback(() => {
+    // Backup all Supabase progress to cookie BEFORE signing out (session must still be active).
+    // This ensures every module's progress is visible after logout on the same device.
+    const userId = user?.id;
+    if (userId && isSupabaseUUID(userId)) {
+      backupProgressToCookies(userId).finally(() => {
+        if (supabase) supabase.auth.signOut();
+      });
+    } else if (supabase) {
+      supabase.auth.signOut();
+    }
     setHighlights([]);
     setUser(null);
     deleteCookie("edu_user");
-    if (supabase) {
-      supabase.auth.signOut(); // fire-and-forget; onAuthStateChange will handle state update
-    }
-  }, []);
+  }, [user]);
 
   const addHighlight = useCallback(async (highlight: Omit<Highlight, "id" | "createdAt" | "userId">) => {
     if (!user) return;
 
-    if (!supabase) {
-      // Demo/fallback mode — keep in memory only
-      const newHighlight: Highlight = {
-        ...highlight,
-        id: generateId(),
-        userId: user.id,
-        createdAt: new Date().toISOString(),
-      };
-      setHighlights((prev) => [...prev, newHighlight]);
-      return;
-    }
-
-    // Optimistically add with a temp ID for instant UI feedback
+    // Always add to state immediately so highlighting feels instant
     const tempId = generateId();
-    const optimistic: Highlight = {
+    const newHighlight: Highlight = {
       ...highlight,
       id: tempId,
       userId: user.id,
       createdAt: new Date().toISOString(),
     };
-    setHighlights((prev) => [...prev, optimistic]);
+    setHighlights((prev) => {
+      const updated = [...prev, newHighlight];
+      saveHighlightsToStorage(user.id, updated); // Persist so it survives logout/login
+      return updated;
+    });
 
-    // Save to Supabase and replace temp ID with real Supabase ID
+    // Only attempt Supabase for real authenticated users (UUID)
+    if (!supabase || !isSupabaseUUID(user.id)) return;
+
     const saved = await addHighlightToSupabase({
       pageId: highlight.pageId,
       text: highlight.text,
@@ -228,27 +294,28 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
 
     if (saved) {
-      setHighlights((prev) =>
-        prev.map((h) =>
-          h.id === tempId
-            ? { ...h, id: saved.id, createdAt: saved.created_at }
-            : h
-        )
-      );
-    } else {
-      // Revert if Supabase save failed
-      setHighlights((prev) => prev.filter((h) => h.id !== tempId));
+      // Replace temp ID with the real Supabase-assigned ID
+      setHighlights((prev) => {
+        const updated = prev.map((h) =>
+          h.id === tempId ? { ...h, id: saved.id, createdAt: saved.created_at } : h
+        );
+        saveHighlightsToStorage(user.id, updated);
+        return updated;
+      });
     }
+    // If Supabase fails, localStorage already has the highlight — no revert
   }, [user]);
 
   const removeHighlight = useCallback(async (id: string) => {
     if (!user) return;
 
-    // Optimistically remove from state
-    setHighlights((prev) => prev.filter((h) => !(h.id === id && h.userId === user.id)));
+    setHighlights((prev) => {
+      const updated = prev.filter((h) => !(h.id === id && h.userId === user.id));
+      saveHighlightsToStorage(user.id, updated);
+      return updated;
+    });
 
-    if (supabase) {
-      // Delete from Supabase (fire-and-forget; state already updated optimistically)
+    if (supabase && isSupabaseUUID(user.id)) {
       await removeHighlightFromSupabase(id);
     }
   }, [user]);
@@ -261,7 +328,8 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const clearAllHighlights = useCallback(async () => {
     if (!user) return;
     setHighlights([]);
-    if (supabase) {
+    clearHighlightsFromStorage(user.id);
+    if (supabase && isSupabaseUUID(user.id)) {
       await deleteAllUserHighlights();
     }
   }, [user]);

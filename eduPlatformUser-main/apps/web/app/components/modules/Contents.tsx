@@ -6,7 +6,7 @@ import localFont from "next/font/local";
 import { ArrowRight, ArrowDown } from "../common/icons";
 import { Highlightable } from "../common/Highlightable";
 import { useAnnotation } from "../common/AnnotationProvider";
-import { markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions } from "../../lib/supabase";
+import { markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions, getLastUserId } from "../../lib/supabase";
 import { cachedFetch } from "../../lib/apiCache";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
@@ -393,8 +393,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
         setTopics(topicsData);
 
-        // Fetch completed topics from Supabase for current user
-        const completedTopicIds = user ? await getCompletedTopics(user.id, submoduleId) : [];
+        // Fetch completed topics — use last user ID cookie so progress shows after logout
+        const progressUserId = user?.id ?? getLastUserId();
+        const completedTopicIds = progressUserId ? await getCompletedTopics(progressUserId, submoduleId) : [];
 
         // Find the first uncompleted topic index
         const firstUncompletedIndex = topicsData.findIndex(
@@ -468,7 +469,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     // If expanding and topics not loaded yet, fetch them
     if (!mod.topicsLoaded) {
       const fetchedTopics = await fetchTopicsForSubmodule(mod.submoduleId);
-      const completedTopicIds = user ? await getCompletedTopics(user.id, mod.submoduleId) : [];
+      const effectiveUserId = user?.id ?? getLastUserId();
+      const completedTopicIds = effectiveUserId ? await getCompletedTopics(effectiveUserId, mod.submoduleId) : [];
 
       const sidebarTopics: SidebarTopic[] = fetchedTopics.map((topic) => ({
         id: `topic-${topic.topic_id}`,
@@ -864,22 +866,6 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                   {/* Sentinel: when this scrolls into view, topic is marked complete */}
                   <div ref={contentEndRef} className="h-1" />
 
-                  {/* Login prompt for guests — shown at the end of every topic */}
-                  {!user && (
-                    <div className="mt-8 p-5 rounded-2xl border flex items-center justify-between gap-4" style={{ background: "linear-gradient(135deg, #f5f3ff, #faf5ff)", borderColor: "rgba(122, 18, 250, 0.15)" }}>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">Save your progress</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Log in to track completed topics and pick up where you left off</p>
-                      </div>
-                      <Link
-                        href="/login"
-                        className="flex-shrink-0 px-4 py-2 text-xs font-bold text-white rounded-xl"
-                        style={{ backgroundImage: "linear-gradient(90deg, #7a12fa, #b614ef)", boxShadow: "0 2px 6px rgba(122,18,250,0.3)" }}
-                      >
-                        Log in
-                      </Link>
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12">
