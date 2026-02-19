@@ -124,7 +124,9 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setHighlightModeEnabled((prev) => !prev);
   }, []);
 
-  // Load user and highlights from cookies/Supabase on mount
+  // Driven entirely by onAuthStateChange which fires INITIAL_SESSION on mount
+  // (immediately, with the current session or null), then on every auth change.
+  // This correctly handles: page refresh, post-login navigation, and logout.
   useEffect(() => {
     clearOldCookies();
 
@@ -145,7 +147,8 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
     };
 
-    const loadCookieUser = () => {
+    // No Supabase configured — use cookie-based demo user only
+    if (!supabase) {
       const savedUser = getCookie("edu_user");
       if (savedUser) {
         try {
@@ -157,34 +160,13 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       }
       setIsInitialized(true);
-    };
+      return;
+    }
 
-    // Try Supabase session first; fall back to cookie-based demo user
-    const init = async () => {
-      if (supabase) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const u = session.user;
-          const supabaseUser: User = {
-            id: u.id,
-            email: u.email!,
-            name: u.user_metadata?.full_name || u.email!.split("@")[0],
-          };
-          setUser(supabaseUser);
-          loadHighlightsForUser(supabaseUser.id);
-          setIsInitialized(true);
-          return;
-        }
-      }
-      loadCookieUser();
-    };
-
-    init();
-
-    // Listen for Supabase auth state changes (login / logout)
-    if (!supabase) return;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
+    // Supabase configured: subscribe first — INITIAL_SESSION fires synchronously
+    // giving us the current session state before any other event.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
         const u = session.user;
         const supabaseUser: User = {
           id: u.id,
@@ -194,11 +176,12 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setUser(supabaseUser);
         setCookie("edu_user", JSON.stringify(supabaseUser));
         loadHighlightsForUser(supabaseUser.id);
-      } else if (event === "SIGNED_OUT") {
+      } else {
         setUser(null);
         setHighlights([]);
         deleteCookie("edu_user");
       }
+      setIsInitialized(true);
     });
 
     return () => subscription.unsubscribe();

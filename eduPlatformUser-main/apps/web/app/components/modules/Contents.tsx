@@ -237,10 +237,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     initialScrollRef.current = window.scrollY;
   }, [selectedTopic?.topic_id]);
 
-  // Track reading progress via scroll position
+  // Track reading progress via scroll position — guests see 0%, no tracking
   useEffect(() => {
     const contentEl = contentWrapperRef.current;
-    if (!contentEl || !selectedTopic) return;
+    if (!contentEl || !selectedTopic || !user) return;
 
     const calculateProgress = () => {
       const rect = contentEl.getBoundingClientRect();
@@ -285,7 +285,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       clearTimeout(timer);
       window.removeEventListener("scroll", calculateProgress);
     };
-  }, [selectedTopic]);
+  }, [selectedTopic, user]);
 
   // Persist scroll progress to localStorage whenever it changes
   useEffect(() => {
