@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useAnnotation } from "../common/AnnotationProvider";
 
 const HamburgerIcon = () => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -81,6 +83,99 @@ const MobileMenu = ({ isOpen, onClose }) => {
   );
 };
 
+const UserAvatar: React.FC<{ size?: "sm" | "md" }> = ({ size = "md" }) => {
+  const { user, isLoggedIn, logout } = useAnnotation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  if (!isLoggedIn) return null;
+
+  const avatarSize = size === "sm" ? "w-6 h-6 text-xs" : "w-7 h-7 text-xs";
+  const initial = user?.name?.charAt(0).toUpperCase() || "U";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-100 rounded-lg transition-all duration-200"
+      >
+        <div
+          className={`${avatarSize} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0`}
+          style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
+        >
+          {initial}
+        </div>
+        <span className="text-sm font-medium text-gray-700 max-w-[100px] truncate hidden sm:block">{user?.name}</span>
+        <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 z-[9999] overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <p className="text-sm font-semibold text-gray-800 truncate">{user?.name}</p>
+            <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+          </div>
+          <div className="p-1.5">
+            <button
+              onClick={() => { logout(); setOpen(false); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AuthSection: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
+  const { isLoggedIn } = useAnnotation();
+  const pathname = usePathname();
+  const loginHref = `/login?redirect=${encodeURIComponent(pathname)}`;
+
+  if (isLoggedIn) {
+    return <UserAvatar size={compact ? "sm" : "md"} />;
+  }
+
+  const px = compact ? "px-3" : "px-3.5";
+  const py = compact ? "py-1.5" : "py-1.5";
+  const signupPx = compact ? "px-4" : "px-5";
+  const signupPy = compact ? "py-2" : "py-2.5";
+  const textSize = compact ? "text-xs" : "text-sm";
+
+  return (
+    <>
+      <Link
+        href={loginHref}
+        className={`${px} ${py} ${textSize} font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200`}
+      >
+        Log in
+      </Link>
+      <Link
+        href="/signup"
+        className={`${signupPx} ${signupPy} -my-1 ${textSize} font-black text-white rounded-lg shadow-sm relative overflow-hidden border gradient-wave`}
+        style={{ backgroundImage: "linear-gradient(90deg, #7a12fa, #b614ef, #7a12fa)", borderColor: "#9513f4" }}
+      >
+        Sign Up
+      </Link>
+    </>
+  );
+};
+
 export default function MainNavbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -153,20 +248,8 @@ export default function MainNavbar() {
             </div>
 
           {/* Auth Section */}
-          <div className="flex items-center gap-0.5 px-2 py-2.5 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: 'rgba(140, 140, 170, 0.4)', boxShadow: '0 2px 4px 0 rgba(124, 58, 237, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-            <Link
-              href="/login"
-              className="px-3.5 py-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
-            >
-              Log in
-            </Link>
-            <Link
-              href="/signup"
-              className="px-5 py-2.5 -my-1 text-sm font-black text-white rounded-lg shadow-sm relative overflow-hidden border gradient-wave"
-              style={{ backgroundImage: 'linear-gradient(90deg, #7a12fa, #b614ef, #7a12fa)', borderColor: '#9513f4' }}
-            >
-              Sign Up
-            </Link>
+          <div className="flex items-center gap-0.5 px-2 py-2.5 rounded-2xl border relative overflow-visible backdrop-blur-md" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: 'rgba(140, 140, 170, 0.4)', boxShadow: '0 2px 4px 0 rgba(124, 58, 237, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+            <AuthSection />
           </div>
         </div>
 
@@ -213,20 +296,8 @@ export default function MainNavbar() {
           </div>
 
           {/* Auth Section */}
-          <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: 'rgba(140, 140, 170, 0.4)', boxShadow: '0 2px 4px 0 rgba(124, 58, 237, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-            <Link
-              href="/login"
-              className="px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200"
-            >
-              Log in
-            </Link>
-            <Link
-              href="/signup"
-              className="px-4 py-2.5 -my-1 text-xs font-black text-white rounded-lg shadow-sm relative overflow-hidden border gradient-wave"
-              style={{ backgroundImage: 'linear-gradient(90deg, #7a12fa, #b614ef, #7a12fa)', borderColor: '#9513f4' }}
-            >
-              Sign Up
-            </Link>
+          <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-visible backdrop-blur-md" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: 'rgba(140, 140, 170, 0.4)', boxShadow: '0 2px 4px 0 rgba(124, 58, 237, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+            <AuthSection compact />
           </div>
         </div>
 
@@ -253,20 +324,8 @@ export default function MainNavbar() {
           </div>
 
           {/* Login/Signup Pill */}
-          <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: 'rgba(140, 140, 170, 0.4)', boxShadow: '0 2px 4px 0 rgba(124, 58, 237, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-            <Link
-              href="/login"
-              className="px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200"
-            >
-              Log in
-            </Link>
-            <Link
-              href="/signup"
-              className="px-3.5 py-2.5 -my-1 text-xs font-black text-white rounded-lg shadow-sm relative overflow-hidden border gradient-wave"
-              style={{ backgroundImage: 'linear-gradient(90deg, #7a12fa, #b614ef, #7a12fa)', borderColor: '#9513f4' }}
-            >
-              Sign Up
-            </Link>
+          <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-visible backdrop-blur-md" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: 'rgba(140, 140, 170, 0.4)', boxShadow: '0 2px 4px 0 rgba(124, 58, 237, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+            <AuthSection compact />
           </div>
         </div>
       </nav>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useAnnotation, Highlight } from "./AnnotationProvider";
 
 interface HighlightableProps {
@@ -2142,12 +2143,33 @@ export const Highlightable: React.FC<HighlightableProps> = ({
         </>
       )}
 
-      {!isLoggedIn && (
-        <div className="mt-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
-          <p className="text-xs text-purple-600 text-center">
-            Login to highlight and save annotations
-          </p>
-        </div>
+      {/* Login prompt popup — appears at selection position when guest selects text */}
+      {(showColorPicker || showMobileHighlightButton) && !isLoggedIn && selectedText && (
+        <>
+          <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
+          <div
+            className="absolute z-[100] bg-white rounded-2xl shadow-2xl border p-4 text-center"
+            style={{
+              left: pickerPosition.x,
+              top: pickerPosition.y,
+              transform: "translateX(-50%) translateY(-100%) translateY(-12px)",
+              borderColor: "rgba(122, 18, 250, 0.2)",
+              minWidth: "180px",
+            }}
+          >
+            <svg className="w-5 h-5 mx-auto mb-2" style={{ color: "#7a12fa" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <p className="text-xs text-gray-500 mb-3">Log in to save highlights</p>
+            <Link
+              href="/login"
+              className="block px-4 py-2 text-xs font-bold text-white rounded-xl"
+              style={{ backgroundImage: "linear-gradient(90deg, #7a12fa, #b614ef)" }}
+            >
+              Log in
+            </Link>
+          </div>
+        </>
       )}
 
       {/* Mobile styles to contain selection within content area and suppress native menus */}

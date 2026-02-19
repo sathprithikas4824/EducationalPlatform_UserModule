@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import localFont from "next/font/local";
 import { ArrowRight, ArrowDown } from "../common/icons";
 import { Highlightable } from "../common/Highlightable";
@@ -128,15 +129,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [resetTopicId, setResetTopicId] = useState<number | null>(null);
 
   // Mark the currently selected topic as completed in sidebar + localStorage
+  // Only runs for logged-in users — guests cannot track progress
   const markCurrentTopicDone = useCallback(() => {
-    if (!selectedTopic) return;
+    if (!selectedTopic || !user) return;
     const topicKey = `topic-${selectedTopic.topic_id}`;
 
     // Persist to localStorage
-    if (user) {
-      const subId = currentSubmodule?.submodule_id ?? submoduleId;
-      markTopicCompleted(user.id, selectedTopic.topic_id, subId, true);
-    }
+    const subId = currentSubmodule?.submodule_id ?? submoduleId;
+    markTopicCompleted(user.id, selectedTopic.topic_id, subId, true);
 
     // Update sidebar UI
     setSidebarModules((prev) =>
@@ -878,6 +878,23 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                   </section>
                   {/* Sentinel: when this scrolls into view, topic is marked complete */}
                   <div ref={contentEndRef} className="h-1" />
+
+                  {/* Login prompt for guests — shown at the end of every topic */}
+                  {!user && (
+                    <div className="mt-8 p-5 rounded-2xl border flex items-center justify-between gap-4" style={{ background: "linear-gradient(135deg, #f5f3ff, #faf5ff)", borderColor: "rgba(122, 18, 250, 0.15)" }}>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Save your progress</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Log in to track completed topics and pick up where you left off</p>
+                      </div>
+                      <Link
+                        href="/login"
+                        className="flex-shrink-0 px-4 py-2 text-xs font-bold text-white rounded-xl"
+                        style={{ backgroundImage: "linear-gradient(90deg, #7a12fa, #b614ef)", boxShadow: "0 2px 6px rgba(122,18,250,0.3)" }}
+                      >
+                        Log in
+                      </Link>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12">

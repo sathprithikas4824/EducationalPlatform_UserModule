@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { supabase } from "../../lib/supabase";
 
 // Types
 export interface Highlight {
@@ -123,35 +124,84 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setHighlightModeEnabled((prev) => !prev);
   }, []);
 
-  // Load user and highlights from cookies on mount
+  // Load user and highlights from cookies/Supabase on mount
   useEffect(() => {
-    // Clear old cookies without version prefix
     clearOldCookies();
 
-    const savedUser = getCookie("edu_user");
-    if (savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser);
-        setUser(parsedUser);
-
-        // Load highlights ONLY for this specific user (with version prefix)
-        const savedHighlights = getCookie(getHighlightCookieKey(parsedUser.id));
-        if (savedHighlights) {
+    const loadHighlightsForUser = (userId: string) => {
+      const savedHighlights = getCookie(getHighlightCookieKey(userId));
+      if (savedHighlights) {
+        try {
           const parsed = JSON.parse(savedHighlights);
-          // Filter to ensure only this user's highlights and valid data
           const userHighlights = Array.isArray(parsed)
-            ? parsed.filter((h: Highlight) => h.userId === parsedUser.id && h.id && h.text)
+            ? parsed.filter((h: Highlight) => h.userId === userId && h.id && h.text)
             : [];
           setHighlights(userHighlights);
-        } else {
+        } catch {
           setHighlights([]);
         }
-      } catch (e) {
-        console.error("Error parsing user data:", e);
+      } else {
         setHighlights([]);
       }
-    }
-    setIsInitialized(true);
+    };
+
+    const loadCookieUser = () => {
+      const savedUser = getCookie("edu_user");
+      if (savedUser) {
+        try {
+          const parsedUser = JSON.parse(savedUser);
+          setUser(parsedUser);
+          loadHighlightsForUser(parsedUser.id);
+        } catch {
+          setHighlights([]);
+        }
+      }
+      setIsInitialized(true);
+    };
+
+    // Try Supabase session first; fall back to cookie-based demo user
+    const init = async () => {
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const u = session.user;
+          const supabaseUser: User = {
+            id: u.id,
+            email: u.email!,
+            name: u.user_metadata?.full_name || u.email!.split("@")[0],
+          };
+          setUser(supabaseUser);
+          loadHighlightsForUser(supabaseUser.id);
+          setIsInitialized(true);
+          return;
+        }
+      }
+      loadCookieUser();
+    };
+
+    init();
+
+    // Listen for Supabase auth state changes (login / logout)
+    if (!supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        const u = session.user;
+        const supabaseUser: User = {
+          id: u.id,
+          email: u.email!,
+          name: u.user_metadata?.full_name || u.email!.split("@")[0],
+        };
+        setUser(supabaseUser);
+        setCookie("edu_user", JSON.stringify(supabaseUser));
+        loadHighlightsForUser(supabaseUser.id);
+      } else if (event === "SIGNED_OUT") {
+        setUser(null);
+        setHighlights([]);
+        deleteCookie("edu_user");
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Save highlights to cookies whenever they change (only if initialized)
@@ -195,10 +245,12 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   const logout = useCallback(() => {
-    // Clear highlights from state only (keep in cookie for when user logs back in)
     setHighlights([]);
     setUser(null);
     deleteCookie("edu_user");
+    if (supabase) {
+      supabase.auth.signOut(); // fire-and-forget; onAuthStateChange will handle state update
+    }
   }, []);
 
   const addHighlight = useCallback((highlight: Omit<Highlight, "id" | "createdAt" | "userId">) => {
