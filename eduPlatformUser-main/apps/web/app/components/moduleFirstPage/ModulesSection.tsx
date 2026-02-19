@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight } from "../common/icons";
 import { useAnnotation } from "../common/AnnotationProvider";
 import { getAllModulesProgress, PROGRESS_UPDATED_EVENT, type TopicProgress } from "../../lib/supabase";
-import { cachedFetch, prefetchAll } from "../../lib/apiCache";
+import { cachedFetch, prefetchAll, getCachedSync } from "../../lib/apiCache";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 const CATEGORY_ID = 185; // AI course category
@@ -66,6 +66,7 @@ const ModulesSection: React.FC = () => {
   const { user } = useAnnotation();
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
+  const modulesRef = useRef<Module[]>([]);
 
   // Cache submodule/topic data so we only fetch it once
   const [cachedData, setCachedData] = useState<{
@@ -134,7 +135,9 @@ const ModulesSection: React.FC = () => {
         const userProgress = user ? await getAllModulesProgress(user.id) : [];
 
         setCachedData({ submodules, topicsPerSubmodule });
-        setModules(buildModules(submodules, topicsPerSubmodule, userProgress));
+        const built = buildModules(submodules, topicsPerSubmodule, userProgress);
+        modulesRef.current = built;
+        setModules(built);
 
         // Prefetch submodule detail pages for fast navigation
         prefetchAll(
@@ -145,6 +148,21 @@ const ModulesSection: React.FC = () => {
         );
       } catch (err) {
         console.error("Error fetching modules:", err);
+        // If fetch failed (e.g. 429 rate limit), try to use whatever is in the cache
+        const staleSubmodules = getCachedSync<BackendSubmodule[] | { data?: BackendSubmodule[] }>(`submodules_cat_${CATEGORY_ID}`);
+        if (staleSubmodules && modulesRef.current.length === 0) {
+          const subs: BackendSubmodule[] = Array.isArray(staleSubmodules)
+            ? staleSubmodules
+            : (staleSubmodules as { data?: BackendSubmodule[] }).data || [];
+          const topicsPerSub = subs.map((sub) =>
+            getCachedSync<BackendTopic[]>(`topics_${sub.submodule_id}`) || []
+          );
+          const userProgress = user ? await getAllModulesProgress(user.id).catch(() => []) : [];
+          setCachedData({ submodules: subs, topicsPerSubmodule: topicsPerSub });
+          const built = buildModules(subs, topicsPerSub, userProgress);
+          modulesRef.current = built;
+          setModules(built);
+        }
       } finally {
         setLoading(false);
       }
@@ -159,7 +177,9 @@ const ModulesSection: React.FC = () => {
 
     const handleProgressUpdate = async () => {
       const userProgress = await getAllModulesProgress(user.id);
-      setModules(buildModules(cachedData.submodules, cachedData.topicsPerSubmodule, userProgress));
+      const built = buildModules(cachedData.submodules, cachedData.topicsPerSubmodule, userProgress);
+      modulesRef.current = built;
+      setModules(built);
     };
 
     window.addEventListener(PROGRESS_UPDATED_EVENT, handleProgressUpdate);

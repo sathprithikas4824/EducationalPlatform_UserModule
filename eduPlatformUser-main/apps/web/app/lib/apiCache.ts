@@ -80,24 +80,36 @@ export async function cachedFetch<T>(url: string, cacheKey: string): Promise<T> 
 }
 
 async function fetchAndCache<T>(url: string, cacheKey: string): Promise<T> {
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 4;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       if (attempt > 0) {
-        // Exponential backoff: 1s, 2s
-        await new Promise((r) => setTimeout(r, 1000 * attempt));
+        // Exponential backoff: 1.5s, 3s, 6s — longer waits for rate limiting
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
       }
       const res = await fetch(url);
+
+      // 429 = rate limited — always retry with backoff
+      if (res.status === 429) {
+        lastError = new Error(`Fetch failed: 429`);
+        continue;
+      }
+
+      // Other 4xx = permanent client error, don't retry
+      if (res.status >= 400 && res.status < 500) {
+        throw new Error(`Fetch failed: ${res.status}`);
+      }
+
       if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
       const data: T = await res.json();
       setCache(cacheKey, data);
       return data;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      // Only retry on network errors or 5xx, not on 4xx client errors
-      if (lastError.message.match(/Fetch failed: 4\d\d/)) break;
+      // Don't retry permanent 4xx errors
+      if (lastError.message.match(/Fetch failed: 4(?!29)\d\d/)) break;
     }
   }
 
