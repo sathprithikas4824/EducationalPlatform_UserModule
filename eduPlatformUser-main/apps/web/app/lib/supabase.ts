@@ -28,6 +28,7 @@ export interface Profile {
   email: string;
   full_name: string;
   avatar_url: string;
+  auth_providers: string[];
   created_at: string;
   updated_at: string;
 }
@@ -208,8 +209,8 @@ export async function signIn(email: string, password: string) {
   return { data, error };
 }
 
-// Sign in with OAuth (Google, GitHub, etc.)
-export async function signInWithOAuth(provider: "google" | "github") {
+// Sign in with OAuth (Google, Notion, GitHub, etc.)
+export async function signInWithOAuth(provider: "google" | "notion" | "github") {
   if (!supabase) return { data: null, error: new Error("Supabase not configured") };
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
@@ -219,6 +220,24 @@ export async function signInWithOAuth(provider: "google" | "github") {
   });
 
   return { data, error };
+}
+
+// Update user's auth_providers in profile by reading all linked identities
+export async function updateUserProviders(userId: string): Promise<void> {
+  if (!supabase || !userId) return;
+  try {
+    const { data, error } = await supabase.auth.getUserIdentities();
+    if (error || !data) return;
+
+    const providers = data.identities.map((identity) => identity.provider);
+
+    await supabase
+      .from("profiles")
+      .update({ auth_providers: providers, updated_at: new Date().toISOString() })
+      .eq("id", userId);
+  } catch {
+    // Silently ignore — provider tracking is best-effort
+  }
 }
 
 // Sign out
