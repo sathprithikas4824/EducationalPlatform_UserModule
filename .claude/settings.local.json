@@ -7,7 +7,8 @@
       "Bash(git ls-tree:*)",
       "Bash(git rev-parse:*)",
       "Bash(npx tsc:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(xargs grep -l \"profile\\\\|Profile\")"
     ]
   }
 }
