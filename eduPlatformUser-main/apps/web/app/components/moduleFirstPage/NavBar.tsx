@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 // Import icons
 import { SearchDuotoneIcon, PenEditIcon } from "../icons";
@@ -120,55 +120,28 @@ const MobileMenu = ({ isOpen, onClose, activeTab, setActiveTab }) => {
   );
 };
 
-// Reusable auth pill: shows user avatar+dropdown when logged in, Login/Signup when not
+// Reusable auth pill: navigates to /profile when logged in, Login/Signup when not
 const NavAuthSection = ({ compact = false }: { compact?: boolean }) => {
-  const { user, isLoggedIn, logout } = useAnnotation();
+  const { user, isLoggedIn } = useAnnotation();
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  const router = useRouter();
 
   if (isLoggedIn && user) {
     const initial = user.name?.charAt(0).toUpperCase() || "U";
     const textSize = compact ? "text-xs" : "text-sm";
     return (
-      <div className="relative">
-        <button
-          onClick={() => setOpen(!open)}
-          className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-100 rounded-lg transition-all duration-200"
+      <button
+        onClick={() => router.push("/profile")}
+        className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-100 rounded-lg transition-all duration-200"
+      >
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
         >
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
-          >
-            {initial}
-          </div>
-          <span className={`${textSize} font-medium text-gray-700 max-w-[80px] truncate hidden sm:block`}>{user.name}</span>
-          <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-[9990]" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 z-[9991] overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100">
-                <p className="text-sm font-semibold text-gray-800 truncate">{user.name}</p>
-                <p className="text-xs text-gray-400 truncate">{user.email}</p>
-              </div>
-              <div className="p-1.5">
-                <button
-                  onClick={() => { logout(); setOpen(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Sign out
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+          {initial}
+        </div>
+        <span className={`${textSize} font-medium text-gray-700 max-w-[80px] truncate hidden sm:block`}>{user.name}</span>
+      </button>
     );
   }
 
