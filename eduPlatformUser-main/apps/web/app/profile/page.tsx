@@ -191,20 +191,20 @@ function AccountDetails() {
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Account Details</h2>
+    <div className="space-y-5">
+      <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Account Details</h2>
 
       {/* Avatar + name banner */}
-      <div className="flex items-center gap-5 p-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-100">
+      <div className="flex items-center gap-4 p-4 sm:p-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-100">
         <div
-          className="w-20 h-20 rounded-full flex items-center justify-center text-white text-3xl font-bold flex-shrink-0"
+          className="w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-white text-2xl sm:text-3xl font-bold flex-shrink-0"
           style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
         >
           {initial}
         </div>
-        <div>
-          <p className="text-xl font-bold text-gray-900">{user?.name}</p>
-          <p className="text-sm text-gray-500 mt-0.5">{user?.email}</p>
+        <div className="min-w-0">
+          <p className="text-base sm:text-xl font-bold text-gray-900 truncate">{user?.name}</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 truncate">{user?.email}</p>
         </div>
       </div>
 
@@ -329,7 +329,7 @@ function MyHighlights({ topicMap, dataLoaded }: { topicMap: TopicMap; dataLoaded
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">My Highlights</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Highlights</h2>
         <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm font-semibold rounded-full">
           {highlights.length} saved
         </span>
@@ -444,7 +444,7 @@ function MyProgress({
   if (loading || !dataLoaded) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900">My Progress</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Progress</h2>
         <div className="flex items-center gap-2 text-gray-400 text-sm py-10 justify-center">
           <div className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
           Loading progress…
@@ -456,7 +456,7 @@ function MyProgress({
   if (recent.length === 0) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900">My Progress</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Progress</h2>
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -471,7 +471,7 @@ function MyProgress({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">My Progress</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Progress</h2>
         <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm font-semibold rounded-full">
           Recent {recent.length}
         </span>
@@ -544,7 +544,7 @@ function MyProgress({
 function MyProjects() {
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">My Projects</h2>
+      <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Projects</h2>
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -560,7 +560,7 @@ function MyProjects() {
 function MyDownloads() {
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">My Downloads</h2>
+      <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Downloads</h2>
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -584,7 +584,7 @@ function ProfilePageInner() {
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
           <p className="text-gray-500 mb-4">You need to be logged in to view your profile.</p>
           <Link href="/login" className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition-colors">
@@ -612,25 +612,81 @@ function ProfilePageInner() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Top bar */}
+
+      {/* ── Top bar ── */}
       <header className="w-full bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-gray-700 hover:text-gray-900 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {/* Back link */}
+          <Link href="/" className="flex items-center gap-1.5 text-gray-700 hover:text-gray-900 transition-colors">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            <img src="/logo.svg" alt="Logo" className="w-5 h-5" />
-            <span className="text-sm font-semibold">Back to Home</span>
+            <img src="/logo.svg" alt="Logo" className="w-5 h-5 hidden sm:block" />
+            <span className="text-sm font-semibold hidden sm:inline">Back to Home</span>
+            <span className="text-sm font-semibold sm:hidden">Back</span>
           </Link>
+
           <span className="text-sm font-semibold text-gray-900">My Profile</span>
-          <div className="w-28" />
+
+          {/* Desktop: invisible spacer | Mobile: logout button */}
+          <div className="flex justify-end w-20 sm:w-28">
+            <button
+              onClick={handleLogout}
+              className="md:hidden flex items-center gap-1 text-sm font-medium text-red-500 hover:text-red-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-6">
-          {/* Sidebar */}
-          <aside className="w-64 flex-shrink-0">
+      {/* ── Mobile: user card + horizontal tab strip ── */}
+      <div className="md:hidden bg-white border-b border-gray-200">
+        {/* User card */}
+        <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-purple-50 to-indigo-50">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-base font-bold flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
+          >
+            {initial}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-900 truncate">{user?.name}</p>
+            <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+          </div>
+        </div>
+
+        {/* Scrollable horizontal tabs */}
+        <nav className="flex overflow-x-auto border-t border-gray-100" style={{ scrollbarWidth: "none" }}>
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <Link
+                key={tab.id}
+                href={`/profile?tab=${tab.id}`}
+                className={`flex flex-col items-center gap-1 px-4 py-3 text-xs font-medium flex-shrink-0 border-b-2 transition-colors ${
+                  isActive
+                    ? "border-purple-600 text-purple-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <span className={isActive ? "text-purple-600" : "text-gray-400"}>{tab.icon}</span>
+                <span>{tab.label.replace("My ", "")}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* ── Page body ── */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 md:py-8">
+        <div className="md:flex md:gap-6">
+
+          {/* ── Desktop sidebar ── */}
+          <aside className="hidden md:block w-64 flex-shrink-0">
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               <div className="px-5 py-5 border-b border-gray-100 bg-gradient-to-br from-purple-50 to-indigo-50">
                 <div className="flex items-center gap-3">
@@ -677,12 +733,13 @@ function ProfilePageInner() {
             </div>
           </aside>
 
-          {/* Main content */}
+          {/* ── Main content ── */}
           <main className="flex-1 min-w-0">
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 min-h-[500px]">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 min-h-[500px]">
               {renderContent()}
             </div>
           </main>
+
         </div>
       </div>
     </div>
