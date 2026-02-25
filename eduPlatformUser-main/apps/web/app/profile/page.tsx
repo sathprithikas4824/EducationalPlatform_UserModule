@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAnnotation } from "../components/common/AnnotationProvider";
@@ -85,15 +85,17 @@ function useTopicData() {
   const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
-    const fetch_ = async () => {
+    let cancelled = false;
+
+    const loadData = async (attempt: number) => {
       try {
         const res = await fetch(`${BACKEND_URL}/api/submodules`);
+        if (!res.ok) throw new Error("submodules fetch failed");
         const raw = await res.json();
         const submodules: BackendSubmodule[] = Array.isArray(raw) ? raw : (raw.data ?? []);
 
         const sMap: SubmoduleMap = {};
         for (const sm of submodules) sMap[sm.submodule_id] = sm.name;
-        setSubmoduleMap(sMap);
 
         // Fetch topics for all submodules in parallel
         const results = await Promise.all(
@@ -115,12 +117,24 @@ function useTopicData() {
             tMap[t.topic_id] = { topicName: t.name, submoduleName, submoduleId };
           }
         }
-        setTopicMap(tMap);
-      } catch { /* ignore */ } finally {
-        setDataLoaded(true);
+
+        if (!cancelled) {
+          setSubmoduleMap(sMap);
+          setTopicMap(tMap);
+          setDataLoaded(true);
+        }
+      } catch {
+        if (!cancelled && attempt < 2) {
+          // Retry once after 3 s (handles cold-start on free-tier backend)
+          setTimeout(() => loadData(attempt + 1), 3000);
+        } else if (!cancelled) {
+          setDataLoaded(true);
+        }
       }
     };
-    fetch_();
+
+    loadData(0);
+    return () => { cancelled = true; };
   }, []);
 
   return { topicMap, submoduleMap, dataLoaded };
@@ -401,20 +415,40 @@ function MyProgress({
   dataLoaded: boolean;
 }) {
   const router = useRouter();
-  const [progress, setProgress] = useState<TopicProgress[]>([]);
+  const [allProgress, setAllProgress] = useState<TopicProgress[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!userId) { setLoading(false); return; }
     getAllModulesProgress(userId).then((data) => {
-      // Sort by completed_at descending, take 10
-      const sorted = [...data]
-        .sort((a, b) => new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime())
-        .slice(0, 10);
-      setProgress(sorted);
+      setAllProgress(data);
       setLoading(false);
     });
   }, [userId]);
+
+  // 10 most-recently completed topics
+  const recent = useMemo(() =>
+    [...allProgress]
+      .sort((a, b) => new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime())
+      .slice(0, 10),
+    [allProgress]
+  );
+
+  // Completed topic count per module (across ALL progress, not just the 10 shown)
+  const completedPerModule = useMemo(() => {
+    const map: Record<number, number> = {};
+    for (const p of allProgress) map[p.module_id] = (map[p.module_id] || 0) + 1;
+    return map;
+  }, [allProgress]);
+
+  // Total topic count per module derived from the topicMap
+  const totalPerModule = useMemo(() => {
+    const map: Record<number, number> = {};
+    for (const info of Object.values(topicMap)) {
+      map[info.submoduleId] = (map[info.submoduleId] || 0) + 1;
+    }
+    return map;
+  }, [topicMap]);
 
   if (loading || !dataLoaded) {
     return (
@@ -428,7 +462,7 @@ function MyProgress({
     );
   }
 
-  if (progress.length === 0) {
+  if (recent.length === 0) {
     return (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold text-gray-900">My Progress</h2>
@@ -448,47 +482,65 @@ function MyProgress({
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900">My Progress</h2>
         <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm font-semibold rounded-full">
-          Recent {progress.length}
+          Recent {recent.length}
         </span>
       </div>
 
       <div className="space-y-3">
-        {progress.map((p, idx) => {
+        {recent.map((p, idx) => {
           const moduleName = submoduleMap[p.module_id] ?? `Module ${p.module_id}`;
           const topicInfo  = topicMap[p.topic_id];
           const topicName  = topicInfo?.topicName ?? `Topic ${p.topic_id}`;
 
+          const completed = completedPerModule[p.module_id] ?? 0;
+          const total     = totalPerModule[p.module_id] ?? 0;
+          const pct       = total > 0 ? Math.round((completed / total) * 100) : 0;
+
           return (
             <div
               key={`${p.topic_id}-${idx}`}
-              className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-purple-300 hover:shadow-sm transition-all group"
+              onClick={() => router.push(`/modules/${p.module_id}`)}
+              className="cursor-pointer p-4 bg-white rounded-xl border border-gray-200 hover:border-purple-300 hover:shadow-sm transition-all group"
             >
-              {/* Completed icon */}
-              <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
+              <div className="flex items-center gap-4">
+                {/* Completed icon */}
+                <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
 
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-purple-600 truncate">{moduleName}</p>
-                <p className="text-sm font-medium text-gray-800 truncate">{topicName}</p>
-                {p.completed_at && (
-                  <p className="text-xs text-gray-400 mt-0.5">Completed {timeAgo(p.completed_at)}</p>
-                )}
-              </div>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-purple-600 truncate">{moduleName}</p>
+                  <p className="text-sm font-medium text-gray-800 truncate">{topicName}</p>
+                  {p.completed_at && (
+                    <p className="text-xs text-gray-400 mt-0.5">Completed {timeAgo(p.completed_at)}</p>
+                  )}
+                </div>
 
-              {/* View button */}
-              <button
-                onClick={() => router.push(`/modules/${p.module_id}`)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-600 bg-purple-50 hover:bg-purple-600 hover:text-white rounded-lg transition-all flex-shrink-0 group-hover:bg-purple-600 group-hover:text-white"
-              >
-                View
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {/* Arrow */}
+                <svg className="w-4 h-4 text-gray-300 group-hover:text-purple-500 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-              </button>
+              </div>
+
+              {/* Module progress bar */}
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-gray-400">{completed}{total > 0 ? `/${total}` : ""} topics completed</span>
+                  {total > 0 && <span className="text-xs font-semibold text-purple-600">{pct}%</span>}
+                </div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: total > 0 ? `${pct}%` : "0%",
+                      backgroundImage: "linear-gradient(90deg, #7a12fa, #b614ef)",
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           );
         })}

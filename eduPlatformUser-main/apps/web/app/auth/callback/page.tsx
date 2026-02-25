@@ -28,7 +28,17 @@ export default function AuthCallbackPage() {
       // ── Password recovery flow ──────────────────────────────────
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get("type") === "recovery") {
-        // Exchange the recovery code for a session
+        // PKCE flow: the email link contains ?code=xxx — exchange it first
+        const code = urlParams.get("code");
+        if (code) {
+          const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (codeError) {
+            router.push("/login?error=auth_failed");
+            return;
+          }
+        }
+
+        // After code exchange (PKCE) or hash-token processing (implicit flow), get the session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError || !session?.user) {
           router.push("/login?error=auth_failed");
