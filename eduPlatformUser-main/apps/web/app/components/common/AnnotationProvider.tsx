@@ -116,6 +116,33 @@ const loadHighlightsFromStorage = (userId: string): Highlight[] => {
   }
 };
 
+// Scans ALL edu_highlights_* keys (handles demo→Supabase user migration)
+const loadHighlightsFromAllStorageKeys = (): Highlight[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const all: Highlight[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("edu_highlights_")) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) all.push(...(JSON.parse(raw) as Highlight[]));
+        } catch { /* skip malformed entry */ }
+      }
+    }
+    // Deduplicate by text + pageId (same highlight may exist under multiple keys)
+    const seen = new Set<string>();
+    return all.filter((h) => {
+      const sig = `${h.pageId}::${h.startOffset}::${h.endOffset}`;
+      if (seen.has(sig)) return false;
+      seen.add(sig);
+      return true;
+    });
+  } catch {
+    return [];
+  }
+};
+
 const clearHighlightsFromStorage = (userId: string): void => {
   if (typeof window === "undefined") return;
   try {
@@ -153,38 +180,44 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setHighlightModeEnabled((prev) => !prev);
   }, []);
 
-  // Load highlights for a Supabase user — tries Supabase first, falls back to localStorage cache.
-  // If Supabase is empty but localStorage has highlights, migrates them up to Supabase.
+  // Load highlights for a Supabase user — tries Supabase first, falls back to localStorage.
+  // Also scans ALL edu_highlights_* keys so demo-user highlights are migrated after sign-up.
   const loadHighlightsForUser = useCallback(async (userId: string) => {
     if (!supabase) return;
     const data = await getAllUserHighlights();
     if (data.length > 0) {
       const mapped = data.map((h) => mapSupabaseHighlight(h, userId));
       setHighlights(mapped);
-      saveHighlightsToStorage(userId, mapped); // Keep localStorage in sync
-    } else {
-      // Supabase returned nothing — load from localStorage
-      const cached = loadHighlightsFromStorage(userId);
-      setHighlights(cached);
+      saveHighlightsToStorage(userId, mapped);
+      return;
+    }
 
-      // Migrate any existing localStorage highlights up to Supabase (one-time sync)
-      if (cached.length > 0) {
-        const migrated: Highlight[] = [];
-        for (const h of cached) {
-          const saved = await addHighlightToSupabase({
-            pageId: h.pageId,
-            text: h.text,
-            startOffset: h.startOffset,
-            endOffset: h.endOffset,
-            color: h.color,
-            prefixContext: h.prefixContext,
-            suffixContext: h.suffixContext,
-          });
-          migrated.push(saved ? mapSupabaseHighlight(saved, userId) : h);
-        }
-        setHighlights(migrated);
-        saveHighlightsToStorage(userId, migrated);
+    // Supabase empty — gather from localStorage.
+    // First try the exact UUID key, then fall back to ALL edu_highlights_* keys
+    // (covers the case where highlights were created under a demo/cookie user ID).
+    let cached = loadHighlightsFromStorage(userId);
+    if (cached.length === 0) {
+      cached = loadHighlightsFromAllStorageKeys();
+    }
+    setHighlights(cached);
+
+    // Migrate to Supabase (one-time sync)
+    if (cached.length > 0) {
+      const migrated: Highlight[] = [];
+      for (const h of cached) {
+        const saved = await addHighlightToSupabase({
+          pageId: h.pageId,
+          text: h.text,
+          startOffset: h.startOffset,
+          endOffset: h.endOffset,
+          color: h.color,
+          prefixContext: h.prefixContext,
+          suffixContext: h.suffixContext,
+        });
+        migrated.push(saved ? mapSupabaseHighlight(saved, userId) : h);
       }
+      setHighlights(migrated);
+      saveHighlightsToStorage(userId, migrated);
     }
   }, []);
 
