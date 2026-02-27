@@ -45,6 +45,7 @@ interface AnnotationContextType {
   removeHighlight: (id: string) => void;
   getHighlightsForPage: (pageId: string) => Highlight[];
   clearAllHighlights: () => void;
+  syncHighlightsToSupabase: () => Promise<number>; // returns count synced
 }
 
 const AnnotationContext = createContext<AnnotationContextType | undefined>(undefined);
@@ -180,6 +181,44 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setHighlightModeEnabled((prev) => !prev);
   }, []);
 
+  // Push a batch of local highlights straight to Supabase using userId directly
+  // (avoids calling getUser() internally which can fail due to timing).
+  const migrateHighlightsToSupabase = useCallback(async (
+    userId: string,
+    items: Highlight[]
+  ): Promise<Highlight[]> => {
+    if (!supabase || items.length === 0) return items;
+    const migrated: Highlight[] = [];
+    for (const h of items) {
+      try {
+        const { data: saved, error } = await supabase
+          .from("highlights")
+          .insert({
+            user_id: userId,
+            page_id: h.pageId,
+            text: h.text,
+            start_offset: h.startOffset,
+            end_offset: h.endOffset,
+            color: h.color,
+            prefix_context: h.prefixContext ?? null,
+            suffix_context: h.suffixContext ?? null,
+          })
+          .select()
+          .single();
+        if (saved) {
+          migrated.push(mapSupabaseHighlight(saved as SupabaseHighlight, userId));
+        } else {
+          console.warn("Highlight migration failed:", error?.message);
+          migrated.push(h);
+        }
+      } catch (e) {
+        console.warn("Highlight migration error:", e);
+        migrated.push(h);
+      }
+    }
+    return migrated;
+  }, []);
+
   // Load highlights for a Supabase user — tries Supabase first, falls back to localStorage.
   // Also scans ALL edu_highlights_* keys so demo-user highlights are migrated after sign-up.
   const loadHighlightsForUser = useCallback(async (userId: string) => {
@@ -201,25 +240,13 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
     setHighlights(cached);
 
-    // Migrate to Supabase (one-time sync)
+    // Migrate to Supabase using direct insert (bypasses internal getUser() timing issues)
     if (cached.length > 0) {
-      const migrated: Highlight[] = [];
-      for (const h of cached) {
-        const saved = await addHighlightToSupabase({
-          pageId: h.pageId,
-          text: h.text,
-          startOffset: h.startOffset,
-          endOffset: h.endOffset,
-          color: h.color,
-          prefixContext: h.prefixContext,
-          suffixContext: h.suffixContext,
-        });
-        migrated.push(saved ? mapSupabaseHighlight(saved, userId) : h);
-      }
+      const migrated = await migrateHighlightsToSupabase(userId, cached);
       setHighlights(migrated);
       saveHighlightsToStorage(userId, migrated);
     }
-  }, []);
+  }, [migrateHighlightsToSupabase]);
 
   // Initialise auth state. Supports both Supabase auth and demo (cookie) login.
   useEffect(() => {
@@ -384,6 +411,40 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   }, [user]);
 
+  // Manual sync: push all localStorage highlights to Supabase. Returns count synced.
+  const syncHighlightsToSupabase = useCallback(async (): Promise<number> => {
+    if (!user || !supabase || !isSupabaseUUID(user.id)) return 0;
+
+    // Gather all local highlights (all keys)
+    let local = loadHighlightsFromStorage(user.id);
+    if (local.length === 0) local = loadHighlightsFromAllStorageKeys();
+    if (local.length === 0) return 0;
+
+    // Fetch what's already in Supabase to avoid duplicates
+    const existing = await getAllUserHighlights();
+    const existingSigs = new Set(
+      existing.map((h) => `${h.page_id}::${h.start_offset}::${h.end_offset}`)
+    );
+    const toSync = local.filter(
+      (h) => !existingSigs.has(`${h.pageId}::${h.startOffset}::${h.endOffset}`)
+    );
+
+    if (toSync.length === 0) return 0;
+
+    const migrated = await migrateHighlightsToSupabase(user.id, toSync);
+    const successCount = migrated.filter((h) => !toSync.includes(h)).length;
+
+    // Reload fresh from Supabase
+    const fresh = await getAllUserHighlights();
+    if (fresh.length > 0) {
+      const mapped = fresh.map((h) => mapSupabaseHighlight(h, user.id));
+      setHighlights(mapped);
+      saveHighlightsToStorage(user.id, mapped);
+    }
+
+    return successCount || toSync.length;
+  }, [user, migrateHighlightsToSupabase]);
+
   return (
     <AnnotationContext.Provider
       value={{
@@ -398,6 +459,7 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         removeHighlight,
         getHighlightsForPage,
         clearAllHighlights,
+        syncHighlightsToSupabase,
       }}
     >
       {children}
