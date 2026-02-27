@@ -120,7 +120,9 @@ const clearHighlightsFromStorage = (userId: string): void => {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(getHighlightsKey(userId));
-  } catch {}
+  } catch (_) {
+    // ignore
+  }
 };
 
 // ---- Misc helpers ----
@@ -145,14 +147,14 @@ const mapSupabaseHighlight = (h: SupabaseHighlight, userId: string): Highlight =
 export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
   const [highlightModeEnabled, setHighlightModeEnabled] = useState(false);
 
   const toggleHighlightMode = useCallback(() => {
     setHighlightModeEnabled((prev) => !prev);
   }, []);
 
-  // Load highlights for a Supabase user — tries Supabase first, falls back to localStorage cache
+  // Load highlights for a Supabase user — tries Supabase first, falls back to localStorage cache.
+  // If Supabase is empty but localStorage has highlights, migrates them up to Supabase.
   const loadHighlightsForUser = useCallback(async (userId: string) => {
     if (!supabase) return;
     const data = await getAllUserHighlights();
@@ -161,10 +163,28 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setHighlights(mapped);
       saveHighlightsToStorage(userId, mapped); // Keep localStorage in sync
     } else {
-      // Supabase returned nothing (table may not be set up, or no highlights yet)
-      // Fall back to localStorage cache so highlights survive logout/login
+      // Supabase returned nothing — load from localStorage
       const cached = loadHighlightsFromStorage(userId);
       setHighlights(cached);
+
+      // Migrate any existing localStorage highlights up to Supabase (one-time sync)
+      if (cached.length > 0) {
+        const migrated: Highlight[] = [];
+        for (const h of cached) {
+          const saved = await addHighlightToSupabase({
+            pageId: h.pageId,
+            text: h.text,
+            startOffset: h.startOffset,
+            endOffset: h.endOffset,
+            color: h.color,
+            prefixContext: h.prefixContext,
+            suffixContext: h.suffixContext,
+          });
+          migrated.push(saved ? mapSupabaseHighlight(saved, userId) : h);
+        }
+        setHighlights(migrated);
+        saveHighlightsToStorage(userId, migrated);
+      }
     }
   }, []);
 
@@ -182,7 +202,6 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           // ignore corrupted cookie
         }
       }
-      setIsInitialized(true);
       return;
     }
 
@@ -214,8 +233,7 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             if (!isSupabaseUUID(parsedUser.id)) {
               setUser(parsedUser);
               setHighlights(loadHighlightsFromStorage(parsedUser.id));
-              setIsInitialized(true);
-              return;
+                      return;
             }
           } catch {
             // ignore corrupted cookie
@@ -226,7 +244,6 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setHighlights([]);
         deleteCookie("edu_user");
       }
-      setIsInitialized(true);
     });
 
     return () => subscription.unsubscribe();
