@@ -8,6 +8,7 @@ import { Highlightable } from "../common/Highlightable";
 import { useAnnotation } from "../common/AnnotationProvider";
 import { markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions, getLastUserId } from "../../lib/supabase";
 import { cachedFetch } from "../../lib/apiCache";
+import { saveDownload } from "../../lib/downloads";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 
@@ -126,6 +127,76 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [topicProgressMap, setTopicProgressMap] = useState<Record<number, number>>({});
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetTopicId, setResetTopicId] = useState<number | null>(null);
+  const [downloadedSet, setDownloadedSet] = useState<Set<string>>(new Set());
+
+  // Strip HTML tags for plain-text downloads
+  const stripHtml = (html: string): string =>
+    html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+
+  const handleDownload = useCallback(
+    (materialType: "notes" | "summary" | "exercises") => {
+      if (!selectedTopic) return;
+
+      const topicName = selectedTopic.name;
+      const moduleName = currentSubmodule?.name || "Module";
+      const titleText = selectedTopic.title ? stripHtml(selectedTopic.title) : topicName;
+      const descText = selectedTopic.description ? stripHtml(selectedTopic.description) : "";
+
+      let content = "";
+      let fileName = "";
+
+      const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+
+      switch (materialType) {
+        case "notes":
+          fileName = `${safeName}_Notes.txt`;
+          content = `TOPIC NOTES\n${"=".repeat(40)}\nModule: ${moduleName}\nTopic:  ${topicName}\n\n${titleText}\n\n${descText}`;
+          break;
+        case "summary":
+          fileName = `${safeName}_Quick_Reference.txt`;
+          content = `QUICK REFERENCE GUIDE\n${"=".repeat(40)}\nModule: ${moduleName}\nTopic:  ${topicName}\n\nKey Points:\n${titleText}\n\n${descText.split(".").slice(0, 3).join(".")}`;
+          break;
+        case "exercises":
+          fileName = `${safeName}_Practice_Exercises.txt`;
+          content = `PRACTICE EXERCISES\n${"=".repeat(40)}\nModule: ${moduleName}\nTopic:  ${topicName}\n\n1. Review the key concepts:\n   ${titleText}\n\n2. Summarise the main points in your own words.\n\n3. Apply what you learned to a real-world scenario.\n\n4. Identify 3 questions you still have about this topic.\n\n5. Teach the concept to a peer or write it down from memory.`;
+          break;
+      }
+
+      // Trigger real browser download
+      const blob = new Blob([content], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Visual feedback
+      setDownloadedSet((prev) => new Set([...prev, materialType]));
+      setTimeout(() => {
+        setDownloadedSet((prev) => {
+          const next = new Set(prev);
+          next.delete(materialType);
+          return next;
+        });
+      }, 2000);
+
+      // Persist record so it shows up in Profile → My Downloads
+      if (user) {
+        saveDownload(user.id, {
+          userId: user.id,
+          topicId: selectedTopic.topic_id,
+          topicName,
+          moduleName,
+          fileName,
+          fileType: "txt",
+        });
+      }
+    },
+    [selectedTopic, currentSubmodule, user]
+  );
 
   // Mark the currently selected topic as completed in Supabase
   // Only runs for logged-in users — guests cannot track progress
@@ -231,9 +302,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     return () => observer.disconnect();
   }, [selectedTopic, markCurrentTopicDone]);
 
-  // Reset scroll baseline when topic changes (progress is retained per topic)
+  // Reset scroll baseline and download feedback when topic changes
   useEffect(() => {
     initialScrollRef.current = window.scrollY;
+    setDownloadedSet(new Set());
   }, [selectedTopic?.topic_id]);
 
   // Track reading progress via scroll position — guests see 0%, no tracking
@@ -863,6 +935,95 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                       </p>
                     )}
                   </section>
+                  {/* ── Reference Materials ── */}
+                  <div className="mt-8 pt-6 border-t border-gray-200">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-3">
+                      <svg className="w-4 h-4 text-purple-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                      </svg>
+                      Reference Materials
+                    </h3>
+
+                    <div className="space-y-2">
+                      {(
+                        [
+                          {
+                            key: "notes" as const,
+                            label: "Topic Notes",
+                            desc: "Full topic content as plain text",
+                            icon: (
+                              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            ),
+                          },
+                          {
+                            key: "summary" as const,
+                            label: "Quick Reference Guide",
+                            desc: "Key points at a glance",
+                            icon: (
+                              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                              </svg>
+                            ),
+                          },
+                          {
+                            key: "exercises" as const,
+                            label: "Practice Exercises",
+                            desc: "Self-assessment activities",
+                            icon: (
+                              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            ),
+                          },
+                        ] as const
+                      ).map((mat) => {
+                        const done = downloadedSet.has(mat.key);
+                        return (
+                          <div
+                            key={mat.key}
+                            className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200 hover:border-purple-200 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center flex-shrink-0">
+                                {mat.icon}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-800 truncate">{mat.label}</p>
+                                <p className="text-xs text-gray-400 truncate">{mat.desc}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleDownload(mat.key)}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex-shrink-0 ml-2 ${
+                                done
+                                  ? "bg-green-50 text-green-600 border border-green-200"
+                                  : "bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100"
+                              }`}
+                            >
+                              {done ? (
+                                <>
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  Saved
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                  </svg>
+                                  Download
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* Sentinel: when this scrolls into view, topic is marked complete */}
                   <div ref={contentEndRef} className="h-1" />
 
