@@ -650,33 +650,34 @@ function MyDownloads() {
                 </div>
 
                 {/* Re-download button */}
-                {d.content && (
-                  <button
-                    onClick={() => handleRedownload(d)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex-shrink-0 border ${
-                      isDone
+                <button
+                  onClick={() => d.content ? handleRedownload(d) : undefined}
+                  disabled={!d.content}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex-shrink-0 border ${
+                    !d.content
+                      ? "bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed opacity-50"
+                      : isDone
                         ? "bg-green-50 text-green-600 border-green-200"
                         : "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100"
-                    }`}
-                    title="Download again"
-                  >
-                    {isDone ? (
-                      <>
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                        Done
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download
-                      </>
-                    )}
-                  </button>
-                )}
+                  }`}
+                  title={d.content ? "Download again" : "Re-download not available — please re-download from the module"}
+                >
+                  {isDone ? (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Done
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download
+                    </>
+                  )}
+                </button>
 
                 {/* Remove button */}
                 <button
