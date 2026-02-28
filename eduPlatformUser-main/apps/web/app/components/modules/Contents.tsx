@@ -129,11 +129,21 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [resetTopicId, setResetTopicId] = useState<number | null>(null);
   const [downloadedSet, setDownloadedSet] = useState<Set<string>>(new Set());
 
-  // Strip HTML tags AND decode entities (e.g. &lt; → <) for plain-text downloads
+  // Strip HTML tags AND decode entities, preserving paragraph/block-level whitespace
   const stripHtml = (html: string): string => {
     try {
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      return (doc.body.textContent || "").replace(/\s+/g, " ").trim();
+      // Insert newline markers at block-level boundaries before parsing
+      const prepared = html
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/(p|div|h[1-6]|li|dt|dd|tr|section|article|header|footer|blockquote|pre)>/gi, "\n\n")
+        .replace(/<(p|div|h[1-6]|li|dt|dd|tr|section|article|header|footer|blockquote|pre)[^>]*>/gi, "");
+      const doc = new DOMParser().parseFromString(prepared, "text/html");
+      return (doc.body.textContent || "")
+        .replace(/[ \t]+/g, " ")        // collapse horizontal whitespace only
+        .replace(/\n[ \t]+/g, "\n")     // remove leading spaces after newlines
+        .replace(/[ \t]+\n/g, "\n")     // remove trailing spaces before newlines
+        .replace(/\n{3,}/g, "\n\n")     // max two consecutive blank lines
+        .trim();
     } catch {
       return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
     }
@@ -152,19 +162,136 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       let fileName = "";
 
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+      const date = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+      const line  = "=".repeat(64);
+      const thin  = "-".repeat(64);
 
       switch (materialType) {
         case "notes":
           fileName = `${safeName}_Notes.txt`;
-          content = `TOPIC NOTES\n${"=".repeat(40)}\nModule: ${moduleName}\nTopic:  ${topicName}\n\n${titleText}\n\n${descText}`;
+          content = [
+            line,
+            "  TOPIC NOTES",
+            line,
+            "",
+            `  Module : ${moduleName}`,
+            `  Topic  : ${topicName}`,
+            `  Date   : ${date}`,
+            "",
+            line,
+            "",
+            ...(titleText && titleText !== topicName ? [titleText, "", thin, ""] : []),
+            descText,
+            "",
+            line,
+            "  End of Topic Notes",
+            line,
+          ].join("\n");
           break;
-        case "summary":
+
+        case "summary": {
           fileName = `${safeName}_Quick_Reference.txt`;
-          content = `QUICK REFERENCE GUIDE\n${"=".repeat(40)}\nModule: ${moduleName}\nTopic:  ${topicName}\n\nKey Points:\n${titleText}\n\n${descText.split(".").slice(0, 3).join(".")}`;
+          // Extract non-trivial lines (skip very short fragments) as bullet points
+          const bullets = descText
+            .split(/\n+/)
+            .map((l) => l.trim())
+            .filter((l) => l.length > 30)
+            .slice(0, 8)
+            .map((l) => `  •  ${l}`)
+            .join("\n\n");
+          content = [
+            line,
+            "  QUICK REFERENCE GUIDE",
+            line,
+            "",
+            `  Module : ${moduleName}`,
+            `  Topic  : ${topicName}`,
+            `  Date   : ${date}`,
+            "",
+            line,
+            "",
+            "KEY CONCEPTS",
+            thin,
+            "",
+            bullets || descText,
+            "",
+            line,
+            "  End of Quick Reference",
+            line,
+          ].join("\n");
           break;
+        }
+
         case "exercises":
           fileName = `${safeName}_Practice_Exercises.txt`;
-          content = `PRACTICE EXERCISES\n${"=".repeat(40)}\nModule: ${moduleName}\nTopic:  ${topicName}\n\n1. Review the key concepts:\n   ${titleText}\n\n2. Summarise the main points in your own words.\n\n3. Apply what you learned to a real-world scenario.\n\n4. Identify 3 questions you still have about this topic.\n\n5. Teach the concept to a peer or write it down from memory.`;
+          content = [
+            line,
+            "  PRACTICE EXERCISES",
+            line,
+            "",
+            `  Module : ${moduleName}`,
+            `  Topic  : ${topicName}`,
+            `  Date   : ${date}`,
+            "",
+            line,
+            "",
+            "TOPIC OVERVIEW",
+            thin,
+            titleText !== topicName ? titleText : descText.split("\n")[0] || topicName,
+            "",
+            line,
+            "",
+            "EXERCISE 1  —  Review Key Concepts",
+            thin,
+            "  Read through the topic notes and list the main concepts",
+            "  from this topic in your own words.",
+            "",
+            "  Answer:",
+            "  ________________________________________________________________",
+            "  ________________________________________________________________",
+            "  ________________________________________________________________",
+            "",
+            "EXERCISE 2  —  Summarise Without Notes",
+            thin,
+            "  Write a 3–5 sentence summary of this topic without looking",
+            "  at any reference material.",
+            "",
+            "  Answer:",
+            "  ________________________________________________________________",
+            "  ________________________________________________________________",
+            "  ________________________________________________________________",
+            "",
+            "EXERCISE 3  —  Real-World Application",
+            thin,
+            "  Describe one real-world scenario where you would apply the",
+            "  concepts from this topic.",
+            "",
+            "  Answer:",
+            "  ________________________________________________________________",
+            "  ________________________________________________________________",
+            "  ________________________________________________________________",
+            "",
+            "EXERCISE 4  —  Self-Assessment Questions",
+            thin,
+            "  Write 3 questions you still have about this topic:",
+            "",
+            "  Q1: _____________________________________________________________",
+            "  Q2: _____________________________________________________________",
+            "  Q3: _____________________________________________________________",
+            "",
+            "EXERCISE 5  —  Teach It Back",
+            thin,
+            "  Explain this topic as if teaching it to someone new.",
+            "",
+            "  ________________________________________________________________",
+            "  ________________________________________________________________",
+            "  ________________________________________________________________",
+            "  ________________________________________________________________",
+            "",
+            line,
+            "  End of Practice Exercises",
+            line,
+          ].join("\n");
           break;
       }
 
