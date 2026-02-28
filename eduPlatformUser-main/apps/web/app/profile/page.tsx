@@ -321,23 +321,7 @@ const colorMap: Record<string, { bg: string; border: string; dot: string }> = {
 };
 
 function MyHighlights({ topicMap, dataLoaded }: { topicMap: TopicMap; dataLoaded: boolean }) {
-  const { highlights, removeHighlight, syncHighlightsToSupabase } = useAnnotation();
-  const [syncing, setSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<string | null>(null);
-
-  const handleSync = async () => {
-    setSyncing(true);
-    setSyncMsg(null);
-    try {
-      const count = await syncHighlightsToSupabase();
-      setSyncMsg(count > 0 ? `✓ Synced ${count} highlight${count === 1 ? "" : "s"} to Supabase` : "✓ Already up to date");
-    } catch {
-      setSyncMsg("✗ Sync failed — check console");
-    } finally {
-      setSyncing(false);
-      setTimeout(() => setSyncMsg(null), 4000);
-    }
-  };
+  const { highlights, removeHighlight } = useAnnotation();
 
   const sorted = [...highlights].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -345,30 +329,12 @@ function MyHighlights({ topicMap, dataLoaded }: { topicMap: TopicMap; dataLoaded
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Highlights</h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-600 bg-purple-50 border border-purple-200 hover:bg-purple-100 rounded-lg transition-colors disabled:opacity-60"
-          >
-            {syncing
-              ? <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-              : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-            }
-            {syncing ? "Syncing…" : "Sync to Supabase"}
-          </button>
-          <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm font-semibold rounded-full">
-            {highlights.length} saved
-          </span>
-        </div>
+        <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm font-semibold rounded-full">
+          {highlights.length} saved
+        </span>
       </div>
-      {syncMsg && (
-        <p className={`text-xs font-medium px-3 py-2 rounded-lg ${syncMsg.startsWith("✓") ? "bg-green-50 text-green-700 border border-green-100" : "bg-red-50 text-red-600 border border-red-100"}`}>
-          {syncMsg}
-        </p>
-      )}
 
       {sorted.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
