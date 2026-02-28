@@ -129,9 +129,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [resetTopicId, setResetTopicId] = useState<number | null>(null);
   const [downloadedSet, setDownloadedSet] = useState<Set<string>>(new Set());
 
-  // Strip HTML tags for plain-text downloads
-  const stripHtml = (html: string): string =>
-    html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  // Strip HTML tags AND decode entities (e.g. &lt; → <) for plain-text downloads
+  const stripHtml = (html: string): string => {
+    try {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      return (doc.body.textContent || "").replace(/\s+/g, " ").trim();
+    } catch {
+      return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    }
+  };
 
   const handleDownload = useCallback(
     (materialType: "notes" | "summary" | "exercises") => {
