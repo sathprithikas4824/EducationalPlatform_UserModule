@@ -189,7 +189,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         });
       }, 2000);
 
-      // Persist record so it shows up in Profile → My Downloads
+      // Persist record (with content) so it shows up in Profile → My Downloads
       if (user) {
         saveDownload(user.id, {
           userId: user.id,
@@ -198,6 +198,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           moduleName,
           fileName,
           fileType: "txt",
+          content,
         });
       }
     },

@@ -9,6 +9,7 @@ export interface DownloadRecord {
   moduleName: string;
   fileName: string;
   fileType: string;
+  content: string;
   downloadedAt: string;
 }
 
