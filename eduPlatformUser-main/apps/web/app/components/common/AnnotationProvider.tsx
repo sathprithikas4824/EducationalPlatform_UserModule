@@ -279,6 +279,8 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setUser(supabaseUser);
         setCookie("edu_user", JSON.stringify(supabaseUser));
         saveLastUserId(u.id);
+        // Persist name+email so the login popup can show "Continue as…" on next visit
+        try { localStorage.setItem("edu_last_login", JSON.stringify({ name: supabaseUser.name, email: supabaseUser.email })); } catch { /* ignore */ }
         loadHighlightsForUser(u.id);
         // Sync all Supabase progress to cookie so it's visible after logout
         backupProgressToCookies(u.id);
