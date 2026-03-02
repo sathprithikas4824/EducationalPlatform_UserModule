@@ -11,6 +11,7 @@ import {
   backupProgressToCookies,
   type Highlight as SupabaseHighlight,
 } from "../../lib/supabase";
+import GoogleLoginPopup from "./GoogleLoginPopup";
 
 // Types
 export interface Highlight {
@@ -463,6 +464,7 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }}
     >
       {children}
+      <GoogleLoginPopup isLoggedIn={!!user} />
     </AnnotationContext.Provider>
   );
 };
