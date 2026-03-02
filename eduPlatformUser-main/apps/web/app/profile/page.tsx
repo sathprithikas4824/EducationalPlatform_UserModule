@@ -324,9 +324,20 @@ const colorMap: Record<string, { bg: string; border: string; dot: string }> = {
 function MyHighlights({ topicMap, dataLoaded }: { topicMap: TopicMap; dataLoaded: boolean }) {
   const { highlights, removeHighlight } = useAnnotation();
 
-  const sorted = [...highlights].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  // Sort all highlights newest-first, then group by pageId (topic)
+  const groups = useMemo(() => {
+    const sorted = [...highlights].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    const map = new Map<string, typeof highlights>();
+    for (const h of sorted) {
+      const bucket = map.get(h.pageId) ?? [];
+      bucket.push(h);
+      map.set(h.pageId, bucket);
+    }
+    // Return groups sorted by the newest highlight in each group
+    return Array.from(map.values());
+  }, [highlights]);
 
   return (
     <div className="space-y-6">
@@ -337,7 +348,7 @@ function MyHighlights({ topicMap, dataLoaded }: { topicMap: TopicMap; dataLoaded
         </span>
       </div>
 
-      {sorted.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
@@ -346,46 +357,65 @@ function MyHighlights({ topicMap, dataLoaded }: { topicMap: TopicMap; dataLoaded
           <p className="text-gray-400 text-sm mt-1">Start highlighting text in your modules to save them here.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {sorted.map((h) => {
-            const colors = colorMap[h.color] ?? colorMap.yellow;
-            const topicId = topicIdFromPageId(h.pageId);
-            const info = topicId != null ? topicMap[topicId] : undefined;
+        <div className="space-y-4">
+          {groups.map((groupItems) => {
+            const first    = groupItems[0];
+            const topicId  = topicIdFromPageId(first.pageId);
+            const info     = topicId != null ? topicMap[topicId] : undefined;
+            const isLoading = !dataLoaded && !info;
 
-            const moduleName = info?.submoduleName ?? (topicId != null ? `Module ${topicId}` : h.pageId);
-            const topicName  = info?.topicName     ?? (topicId != null ? `Topic ${topicId}`  : h.pageId);
-            const isLoading  = !dataLoaded && !info;
+            const moduleName = info?.submoduleName ?? (topicId != null ? `Module ${topicId}` : first.pageId);
+            const topicName  = info?.topicName     ?? (topicId != null ? `Topic ${topicId}`  : first.pageId);
 
             return (
-              <div key={h.id} className={`p-4 rounded-xl border ${colors.bg} ${colors.border}`}>
-                {/* Module + Topic row */}
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${colors.dot}`} />
-                  <span className="text-xs font-semibold text-gray-700 bg-white border border-gray-200 px-2 py-0.5 rounded-full max-w-[160px] truncate">
+              <div key={first.pageId} className="rounded-xl border border-gray-200 overflow-hidden">
+
+                {/* ── Topic header (shown once per group) ── */}
+                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 flex-wrap">
+                  <span className="text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-2.5 py-0.5 rounded-full truncate max-w-[160px]">
                     {isLoading ? "Loading…" : moduleName}
                   </span>
                   <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  <span className="text-xs text-gray-600 bg-white border border-gray-100 px-2 py-0.5 rounded-full max-w-[160px] truncate">
+                  <span className="text-xs text-gray-600 bg-white border border-gray-200 px-2.5 py-0.5 rounded-full truncate max-w-[160px]">
                     {isLoading ? "…" : topicName}
                   </span>
-                  <span className="ml-auto text-xs text-gray-400 flex-shrink-0">{timeAgo(h.createdAt)}</span>
+                  <span className="ml-auto text-xs text-gray-400 flex-shrink-0">
+                    {groupItems.length} highlight{groupItems.length !== 1 ? "s" : ""}
+                  </span>
                 </div>
 
-                {/* Highlight text */}
-                <div className="flex items-start gap-3">
-                  <p className="flex-1 text-sm text-gray-800 leading-relaxed italic min-w-0">"{h.text}"</p>
-                  <button
-                    onClick={() => removeHighlight(h.id)}
-                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                    title="Remove"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                {/* ── All highlights for this topic ── */}
+                <div className="divide-y divide-gray-100">
+                  {groupItems.map((h) => {
+                    const colors = colorMap[h.color] ?? colorMap.yellow;
+                    return (
+                      <div key={h.id} className={`flex items-start gap-3 px-4 py-3 ${colors.bg}`}>
+                        {/* Colour dot */}
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${colors.dot}`} />
+
+                        {/* Text + timestamp */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800 leading-relaxed italic">"{h.text}"</p>
+                          <p className="text-xs text-gray-400 mt-1">{timeAgo(h.createdAt)}</p>
+                        </div>
+
+                        {/* Remove */}
+                        <button
+                          onClick={() => removeHighlight(h.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                          title="Remove"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
+
               </div>
             );
           })}
