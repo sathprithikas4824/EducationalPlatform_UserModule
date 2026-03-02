@@ -563,20 +563,25 @@ function MyDownloads() {
   const { user } = useAnnotation();
   const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
   const [redownloadingId, setRedownloadingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Load downloads from localStorage whenever the user changes
+  // Load downloads from Supabase (or localStorage fallback) when user changes
   useEffect(() => {
-    if (!user?.id) { setDownloads([]); return; }
-    setDownloads(
-      [...loadDownloads(user.id)].sort(
-        (a, b) => new Date(b.downloadedAt).getTime() - new Date(a.downloadedAt).getTime()
-      )
-    );
+    if (!user?.id) { setDownloads([]); setLoading(false); return; }
+    setLoading(true);
+    loadDownloads(user.id).then((records) => {
+      setDownloads(
+        [...records].sort(
+          (a, b) => new Date(b.downloadedAt).getTime() - new Date(a.downloadedAt).getTime()
+        )
+      );
+      setLoading(false);
+    });
   }, [user?.id]);
 
-  const handleRemove = (id: string) => {
+  const handleRemove = async (id: string) => {
     if (!user?.id) return;
-    removeDownload(user.id, id);
+    await removeDownload(user.id, id);
     setDownloads((prev) => prev.filter((d) => d.id !== id));
   };
 
@@ -608,7 +613,12 @@ function MyDownloads() {
         )}
       </div>
 
-      {downloads.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center gap-2 text-gray-400 text-sm py-20 justify-center">
+          <div className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+          Loading downloads…
+        </div>
+      ) : downloads.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
