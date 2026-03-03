@@ -1,92 +1,136 @@
 "use client";
 
-/**
- * Google One Tap sign-in.
- * Loads Google's Identity Services (GSI) script and calls google.accounts.id.prompt().
- * Google renders its own native popup UI — this component outputs no HTML.
- *
- * Requires:  NEXT_PUBLIC_GOOGLE_CLIENT_ID  in .env.local
- * Supabase:  Authentication → Providers → Google must be enabled with the same Client ID.
- */
-
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 const EXCLUDED_PREFIXES = ["/login", "/auth", "/signup"];
 
-// Google Identity Services type declarations
 declare global {
   interface Window {
     google?: {
       accounts: {
         id: {
           initialize: (cfg: Record<string, unknown>) => void;
-          prompt: () => void;
+          prompt: (cb?: (n: {
+            isNotDisplayed(): boolean;
+            isSkippedMoment(): boolean;
+            getNotDisplayedReason(): string;
+            getSkippedReason(): string;
+          }) => void) => void;
           cancel: () => void;
         };
       };
     };
+    // Global callback required by Google One Tap
+    handleGoogleCredential?: (response: { credential: string }) => Promise<void>;
   }
 }
 
 interface Props { isLoggedIn: boolean; }
 
+// Generate a cryptographic nonce: raw (for Supabase) and hashed (for Google)
+async function generateNonce(): Promise<[string, string]> {
+  const rawNonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(rawNonce));
+  const hashedNonce = Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+  return [rawNonce, hashedNonce];
+}
+
 export default function GoogleLoginPopup({ isLoggedIn }: Props) {
-  const pathname = usePathname();
+  const pathname  = usePathname();
+  const clientId  = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  // Store the raw nonce so the credential callback can read it
+  const rawNonceRef = useRef<string>("");
+
+  const excluded  = EXCLUDED_PREFIXES.some((p) => pathname?.startsWith(p));
 
   useEffect(() => {
-    // Hide One Tap if already signed in
-    if (isLoggedIn) {
-      window.google?.accounts?.id?.cancel();
-      return;
-    }
+    if (isLoggedIn || !clientId || !supabase || excluded) return;
 
-    // Don't show on login / auth pages
-    if (EXCLUDED_PREFIXES.some((p) => pathname?.startsWith(p))) return;
+    // ── Credential callback ──────────────────────────────────────────────────
+    window.handleGoogleCredential = async ({ credential }: { credential: string }) => {
+      console.log("[GoogleOneTap] Credential received, signing in with Supabase...");
 
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId || !supabase) return;
-
-    const initAndPrompt = () => {
-      window.google?.accounts.id.initialize({
-        client_id: clientId,
-        // Called by Google with a signed JWT credential after the user picks an account
-        callback: async ({ credential }: { credential: string }) => {
-          // Exchange the Google JWT for a Supabase session directly — no redirect needed
-          await supabase.auth.signInWithIdToken({
-            provider: "google",
-            token: credential,
-          });
-          // AnnotationProvider's onAuthStateChange picks up the new session automatically
-        },
-        auto_select: false,          // don't silently sign in without showing the popup
-        cancel_on_tap_outside: true, // dismiss when user clicks elsewhere
-        context: "signin",
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: credential,
+        nonce: rawNonceRef.current || undefined,
       });
-      window.google?.accounts.id.prompt();
+
+      if (error) {
+        console.error("[GoogleOneTap] signInWithIdToken error:", error.message, error);
+        // Fallback: standard OAuth redirect (handles the case where Supabase's
+        // Google provider is configured but One Tap token exchange fails)
+        console.log("[GoogleOneTap] Falling back to Google OAuth redirect...");
+        await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: `${window.location.origin}/auth/callback` },
+        });
+        return;
+      }
+
+      console.log("[GoogleOneTap] Signed in successfully:", data.user?.email);
+      // Reload so the full page picks up the new Supabase session cleanly
+      window.location.reload();
     };
 
-    // If the GSI script was already loaded (e.g. navigating between pages), init directly
+    // ── Initialise One Tap with nonce, then prompt ───────────────────────────
+    const initAndPrompt = async () => {
+      const [rawNonce, hashedNonce] = await generateNonce();
+      rawNonceRef.current = rawNonce;
+
+      window.google?.accounts.id.initialize({
+        client_id:             clientId,
+        callback:              window.handleGoogleCredential,
+        auto_select:           false,
+        cancel_on_tap_outside: true,
+        itp_support:           true,   // Safari Intelligent Tracking Prevention
+        context:               "signin",
+        nonce:                 hashedNonce,
+      });
+
+      window.google?.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed()) {
+          console.warn(
+            "[GoogleOneTap] Not displayed — reason:",
+            notification.getNotDisplayedReason(),
+            "\nFix: add your domain to Google Cloud Console → Credentials → Authorized JavaScript origins"
+          );
+        }
+        if (notification.isSkippedMoment()) {
+          console.info("[GoogleOneTap] Skipped:", notification.getSkippedReason());
+        }
+      });
+    };
+
+    // Script already loaded (e.g. navigating back to page)
     if (window.google?.accounts?.id) {
       initAndPrompt();
-      return;
+      return () => { window.google?.accounts?.id?.cancel(); };
     }
 
-    // Dynamically load the GSI script once
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.onload = initAndPrompt;
-    document.head.appendChild(script);
+    // Avoid duplicate <script> tags
+    if (!document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
+      const script      = document.createElement("script");
+      script.src        = "https://accounts.google.com/gsi/client";
+      script.async      = true;
+      script.defer      = true;
+      script.onload     = initAndPrompt;
+      document.head.appendChild(script);
+    }
 
-    return () => {
-      // Cancel the prompt when the component unmounts or conditions change
-      window.google?.accounts?.id?.cancel();
-    };
-  }, [isLoggedIn, pathname]);
+    return () => { window.google?.accounts?.id?.cancel(); };
+  }, [isLoggedIn, pathname, clientId, excluded]);
 
-  // Google renders its own native One Tap overlay — no custom markup needed
+  // Cancel One Tap when user logs in
+  useEffect(() => {
+    if (isLoggedIn) window.google?.accounts?.id?.cancel();
+  }, [isLoggedIn]);
+
+  // Pure JS initialisation — no HTML div so the nonce is always applied correctly
   return null;
 }
