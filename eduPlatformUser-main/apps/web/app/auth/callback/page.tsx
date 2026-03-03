@@ -59,7 +59,8 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      await updateUserProviders(session.user.id);
+      // Fire-and-forget — don't block navigation on this analytics call
+      updateUserProviders(session.user.id);
 
       const dest =
         typeof sessionStorage !== "undefined"
@@ -86,7 +87,6 @@ export default function AuthCallbackPage() {
         setShowPasswordSetup(true);
       } else {
         router.push(dest);
-        router.refresh();
       }
     };
 

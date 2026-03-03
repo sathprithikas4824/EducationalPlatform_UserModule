@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 const EXCLUDED_PREFIXES = ["/login", "/auth", "/signup"];
@@ -42,6 +42,7 @@ async function generateNonce(): Promise<[string, string]> {
 
 export default function GoogleLoginPopup({ isLoggedIn }: Props) {
   const pathname  = usePathname();
+  const router    = useRouter();
   const clientId  = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   // Store the raw nonce so the credential callback can read it
   const rawNonceRef = useRef<string>("");
@@ -74,8 +75,9 @@ export default function GoogleLoginPopup({ isLoggedIn }: Props) {
       }
 
       console.log("[GoogleOneTap] Signed in successfully:", data.user?.email);
-      // Reload so the full page picks up the new Supabase session cleanly
-      window.location.reload();
+      // onAuthStateChange in AnnotationProvider already updates React state instantly.
+      // router.refresh() re-fetches server components without a full page reload.
+      router.refresh();
     };
 
     // ── Initialise One Tap with nonce, then prompt ───────────────────────────

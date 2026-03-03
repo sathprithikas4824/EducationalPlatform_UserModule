@@ -25,10 +25,9 @@ function LoginForm() {
       if (signInError) {
         setError(signInError.message);
       } else if (data?.user) {
-        // Track email provider in DB
-        await updateUserProviders(data.user.id);
+        // Fire-and-forget — don't block navigation on this analytics call
+        updateUserProviders(data.user.id);
         router.push(redirectTo);
-        router.refresh();
       }
     } catch {
       setError("An unexpected error occurred. Please try again.");
