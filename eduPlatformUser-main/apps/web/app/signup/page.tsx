@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { signUp, signInWithOAuth } from "../lib/supabase";
+import { useRouter } from "next/navigation";
+import { signUp, signIn, signInWithOAuth, supabase } from "../lib/supabase";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -12,7 +14,9 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  // "confirm" = waiting for email verification, "done" = already logged in
+  const [stage, setStage] = useState<"form" | "confirm">("form");
+  const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,8 +36,19 @@ export default function SignupPage() {
       const { data, error: signUpError } = await signUp(email, password, fullName);
       if (signUpError) {
         setError(signUpError.message);
-      } else if (data?.user) {
-        setSuccess(true);
+        return;
+      }
+
+      if (data?.user) {
+        // Try to sign in immediately — succeeds when email confirmation is disabled in Supabase
+        const { data: signInData } = await signIn(email, password);
+        if (signInData?.user) {
+          // Email confirmation not required → go straight to the app
+          router.push("/");
+          return;
+        }
+        // Email confirmation required → show the confirmation screen
+        setStage("confirm");
       }
     } catch {
       setError("An unexpected error occurred. Please try again.");
@@ -42,11 +57,21 @@ export default function SignupPage() {
     }
   };
 
+  const handleResend = async () => {
+    if (!email || !supabase) return;
+    setResendStatus("sending");
+    try {
+      await supabase.auth.resend({ type: "signup", email });
+      setResendStatus("sent");
+    } catch {
+      setResendStatus("idle");
+    }
+  };
+
   const handleOAuthSignup = async (provider: "google") => {
     setError(null);
     setOauthLoading(provider);
     try {
-      // Store destination so callback can redirect there
       if (typeof sessionStorage !== "undefined") {
         sessionStorage.setItem("auth_redirect", "/");
       }
@@ -55,14 +80,14 @@ export default function SignupPage() {
         setError(oauthError.message);
         setOauthLoading(null);
       }
-      // On success the browser redirects to /auth/callback
     } catch {
       setError("An unexpected error occurred. Please try again.");
       setOauthLoading(null);
     }
   };
 
-  if (success) {
+  // ── Confirm email screen ─────────────────────────────────────────────────────
+  if (stage === "confirm") {
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "linear-gradient(135deg, #f5f3ff 0%, #faf5ff 50%, #f0f9ff 100%)" }}>
         <div className="w-full max-w-md text-center">
@@ -74,10 +99,29 @@ export default function SignupPage() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Check your email</h2>
             <p className="text-gray-500 text-sm mb-1">We sent a confirmation link to</p>
-            <p className="font-semibold text-gray-800 mb-6">{email}</p>
+            <p className="font-semibold text-gray-800 mb-4">{email}</p>
             <p className="text-gray-400 text-xs mb-6">
-              Click the link in the email to activate your account. Check your spam folder if you don&apos;t see it.
+              Click the link in the email to activate your account.{" "}
+              <strong className="text-gray-500">Check your spam / junk folder</strong> if you don&apos;t see it.
             </p>
+
+            {/* Resend button */}
+            <div className="mb-6">
+              {resendStatus === "sent" ? (
+                <p className="text-sm font-medium text-green-600">Email resent! Check your inbox (and spam).</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendStatus === "sending"}
+                  className="text-sm font-semibold hover:underline disabled:opacity-60"
+                  style={{ color: "#7a12fa" }}
+                >
+                  {resendStatus === "sending" ? "Sending…" : "Didn't get it? Resend confirmation email"}
+                </button>
+              )}
+            </div>
+
             <Link
               href="/login"
               className="inline-flex items-center gap-2 text-sm font-semibold hover:underline"
@@ -91,6 +135,7 @@ export default function SignupPage() {
     );
   }
 
+  // ── Signup form ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "linear-gradient(135deg, #f5f3ff 0%, #faf5ff 50%, #f0f9ff 100%)" }}>
       <div className="w-full max-w-md">
@@ -118,9 +163,8 @@ export default function SignupPage() {
             </div>
           )}
 
-          {/* OAuth Buttons */}
-          <div className="space-y-3 mb-5">
-            {/* Google */}
+          {/* Google */}
+          <div className="mb-5">
             <button
               type="button"
               onClick={() => handleOAuthSignup("google")}
@@ -139,7 +183,6 @@ export default function SignupPage() {
               )}
               Sign up with Google
             </button>
-
           </div>
 
           {/* Divider */}
