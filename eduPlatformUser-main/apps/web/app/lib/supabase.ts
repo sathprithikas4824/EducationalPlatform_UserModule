@@ -733,6 +733,103 @@ export function clearModuleScrollPositions(userId: string, topicIds: number[]): 
 }
 
 // =============================================
+// SURVEY FUNCTIONS
+// =============================================
+
+export interface SurveyData {
+  profession: string;
+  // Student
+  education_level?: string;
+  career_goal?: string;
+  field_of_study?: string;
+  // Teacher
+  subject_taught?: string;
+  teaching_level?: string;
+  experience_years?: string;
+  // Professional
+  industry?: string;
+  job_role?: string;
+  platform_use?: string;
+  // Job seeker
+  target_role?: string;
+  // Other
+  other_description?: string;
+  // Common
+  topics_interested: string[];
+  weekly_hours: string;
+  primary_goal: string;
+}
+
+// Check if the current user has already completed the survey
+export async function checkSurveyCompleted(userId: string): Promise<boolean> {
+  if (!supabase || !userId) return false;
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("survey_completed")
+      .eq("id", userId)
+      .single();
+    if (error || !data) return false;
+    return data.survey_completed === true;
+  } catch {
+    return false;
+  }
+}
+
+// Save survey response and mark profile as completed
+export async function saveSurveyResponse(data: SurveyData): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { error: insertError } = await supabase
+      .from("user_surveys")
+      .insert({
+        user_id: user.id,
+        email: user.email,
+        ...data,
+      });
+
+    if (insertError) {
+      console.error("Error saving survey:", insertError);
+      return false;
+    }
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ survey_completed: true })
+      .eq("id", user.id);
+
+    if (updateError) {
+      console.error("Error marking survey complete:", updateError);
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Admin: get all survey responses (requires role='admin' in profiles — enforced by RLS)
+export async function getSurveyResponses(): Promise<(SurveyData & { id: string; user_id: string; email: string; created_at: string })[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("user_surveys")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Error fetching surveys:", error);
+      return [];
+    }
+    return data || [];
+  } catch {
+    return [];
+  }
+}
+
+// =============================================
 // REALTIME SUBSCRIPTION (Optional)
 // =============================================
 

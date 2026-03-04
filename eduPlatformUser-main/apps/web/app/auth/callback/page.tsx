@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase, updateUserProviders } from "../../lib/supabase";
+import { supabase, updateUserProviders, checkSurveyCompleted } from "../../lib/supabase";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -74,12 +74,14 @@ export default function AuthCallbackPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) updateUserProviders(user.id);
 
-        const dest =
+        const storedDest =
           typeof sessionStorage !== "undefined"
             ? sessionStorage.getItem("auth_redirect") || "/"
             : "/";
         if (typeof sessionStorage !== "undefined") sessionStorage.removeItem("auth_redirect");
-        router.push(dest);
+
+        const surveyDone = user ? await checkSurveyCompleted(user.id) : true;
+        router.push(surveyDone ? storedDest : "/survey");
         return;
       }
 
@@ -93,12 +95,13 @@ export default function AuthCallbackPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) updateUserProviders(user.id);
 
-        const dest =
+        const dest2 =
           typeof sessionStorage !== "undefined"
             ? sessionStorage.getItem("auth_redirect") || "/"
             : "/";
         if (typeof sessionStorage !== "undefined") sessionStorage.removeItem("auth_redirect");
-        router.push(dest);
+        const surveyDone2 = user ? await checkSurveyCompleted(user.id) : true;
+        router.push(surveyDone2 ? dest2 : "/survey");
         return;
       }
 
@@ -140,10 +143,16 @@ export default function AuthCallbackPage() {
         );
       }
 
+      const surveyDone = await checkSurveyCompleted(session.user.id);
+      const finalDest = surveyDone ? dest : "/survey";
+
       if (!hasEmailProvider) {
+        // Show optional password setup — after that, the handleSkip/handleSetPassword
+        // will redirect to finalDest. Store it so those handlers use the right target.
+        setRedirectTo(finalDest);
         setShowPasswordSetup(true);
       } else {
-        router.push(dest);
+        router.push(finalDest);
       }
     };
 

@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn, signInWithOAuth, updateUserProviders } from "../lib/supabase";
+import { signIn, signInWithOAuth, updateUserProviders, checkSurveyCompleted } from "../lib/supabase";
 
 function LoginForm() {
   const router = useRouter();
@@ -31,7 +31,8 @@ function LoginForm() {
         }
       } else if (data?.user) {
         updateUserProviders(data.user.id);
-        router.push(redirectTo);
+        const surveyDone = await checkSurveyCompleted(data.user.id);
+        router.push(surveyDone ? redirectTo : "/survey");
       }
     } catch {
       setError("An unexpected error occurred. Please try again.");
