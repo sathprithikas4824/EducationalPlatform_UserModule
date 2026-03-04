@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase";
+import { supabase, checkSurveyCompleted } from "../../lib/supabase";
 
 const EXCLUDED_PREFIXES = ["/login", "/auth", "/signup"];
 
@@ -75,9 +75,12 @@ export default function GoogleLoginPopup({ isLoggedIn }: Props) {
       }
 
       console.log("[GoogleOneTap] Signed in successfully:", data.user?.email);
-      // onAuthStateChange in AnnotationProvider already updates React state instantly.
-      // router.refresh() re-fetches server components without a full page reload.
-      router.refresh();
+      const surveyDone = data.user ? await checkSurveyCompleted(data.user.id) : true;
+      if (!surveyDone) {
+        router.push("/survey");
+      } else {
+        router.refresh();
+      }
     };
 
     // ── Initialise One Tap with nonce, then prompt ───────────────────────────
