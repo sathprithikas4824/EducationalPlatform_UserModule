@@ -58,10 +58,10 @@ export default function AuthCallbackPage() {
       // Supabase sends ?token_hash=xxx&type=signup (or email_change) when the
       // user clicks a confirmation link. We must call verifyOtp to exchange it
       // and establish a session so the user is logged in automatically.
-      if ((type === "signup" || type === "email_change") && tokenHash) {
+      if ((type === "signup" || type === "email_change" || type === "email") && tokenHash) {
         const { error: verifyError } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
-          type: type as "signup" | "email_change",
+          type: type as "signup" | "email_change" | "email",
         });
 
         if (verifyError) {
@@ -84,7 +84,7 @@ export default function AuthCallbackPage() {
       }
 
       // Handle email confirmation via PKCE code (some Supabase configurations)
-      if ((type === "signup" || type === "email_change") && code) {
+      if ((type === "signup" || type === "email_change" || type === "email") && code) {
         const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
         if (codeError) {
           router.push("/login?error=verify_failed");

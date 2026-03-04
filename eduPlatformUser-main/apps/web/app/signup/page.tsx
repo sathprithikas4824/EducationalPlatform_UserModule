@@ -47,7 +47,12 @@ export default function SignupPage() {
           router.push("/");
           return;
         }
-        // Email confirmation required → show the confirmation screen
+        // Email confirmation required → send via Resend and show the confirmation screen
+        fetch("/api/send-verification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        }).catch(() => {/* silently ignore — user can resend manually */});
         setStage("confirm");
       }
     } catch {
@@ -58,11 +63,15 @@ export default function SignupPage() {
   };
 
   const handleResend = async () => {
-    if (!email || !supabase) return;
+    if (!email) return;
     setResendStatus("sending");
     try {
-      await supabase.auth.resend({ type: "signup", email });
-      setResendStatus("sent");
+      const res = await fetch("/api/send-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setResendStatus(res.ok ? "sent" : "idle");
     } catch {
       setResendStatus("idle");
     }

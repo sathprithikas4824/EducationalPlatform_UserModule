@@ -62,11 +62,15 @@ function LoginForm() {
   };
 
   const handleResendConfirmation = async () => {
-    if (!email || !supabase) return;
+    if (!email) return;
     setResendStatus("sending");
     try {
-      await supabase.auth.resend({ type: "signup", email });
-      setResendStatus("sent");
+      const res = await fetch("/api/send-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setResendStatus(res.ok ? "sent" : "idle");
     } catch {
       setResendStatus("idle");
     }
