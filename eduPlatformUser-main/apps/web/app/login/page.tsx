@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn, signInWithOAuth, updateUserProviders, supabase } from "../lib/supabase";
+import { signIn, signInWithOAuth, updateUserProviders } from "../lib/supabase";
 
 function LoginForm() {
   const router = useRouter();
@@ -14,71 +14,34 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | null>(null);
-  const [error, setError] = useState<string | null>(() => {
-    // Show a helpful message if arriving from a broken verification link
-    const e = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("error") : null;
-    if (e === "verify_failed") return "Your email verification link has expired or is invalid. Enter your email below and click 'Resend confirmation email'.";
-    if (e === "auth_failed") return "Authentication failed. Please try signing in again.";
-    return null;
-  });
-  const [errorType, setErrorType] = useState<"unconfirmed" | "invalid" | "other" | null>(() => {
-    const e = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("error") : null;
-    if (e === "verify_failed") return "unconfirmed";
-    if (e === "auth_failed") return "other";
-    return null;
-  });
-  const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
+  const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setErrorType(null);
-    setResendStatus("idle");
     setLoading(true);
     try {
       const { data, error: signInError } = await signIn(email, password);
       if (signInError) {
         const msg = signInError.message || "";
-        if (msg.toLowerCase().includes("email not confirmed")) {
-          setErrorType("unconfirmed");
-          setError("Your email address hasn't been confirmed yet. Check your inbox for the confirmation link.");
-        } else if (msg.toLowerCase().includes("invalid login credentials")) {
-          setErrorType("invalid");
+        if (msg.toLowerCase().includes("invalid login credentials")) {
           setError("Incorrect email or password.");
         } else {
-          setErrorType("other");
           setError(msg);
         }
       } else if (data?.user) {
-        updateUserProviders(data.user.id); // fire-and-forget
+        updateUserProviders(data.user.id);
         router.push(redirectTo);
       }
     } catch {
       setError("An unexpected error occurred. Please try again.");
-      setErrorType("other");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResendConfirmation = async () => {
-    if (!email) return;
-    setResendStatus("sending");
-    try {
-      const res = await fetch("/api/send-verification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      setResendStatus(res.ok ? "sent" : "idle");
-    } catch {
-      setResendStatus("idle");
-    }
-  };
-
   const handleOAuthLogin = async (provider: "google") => {
     setError(null);
-    setErrorType(null);
     setOauthLoading(provider);
     try {
       if (typeof sessionStorage !== "undefined") {
@@ -114,55 +77,28 @@ function LoginForm() {
 
           {/* Error */}
           {error && (
-            <div className="mb-4 rounded-xl overflow-hidden" style={{ border: "1px solid #fecaca", background: "#fff5f5" }}>
-              <div className="p-3 flex items-start gap-2">
-                <svg className="w-4 h-4 flex-shrink-0 mt-0.5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-red-600">{error}</p>
-
-                  {/* Email not confirmed — offer resend */}
-                  {errorType === "unconfirmed" && (
-                    <div className="mt-2">
-                      {resendStatus === "sent" ? (
-                        <p className="text-xs text-green-600 font-medium">Confirmation email sent! Check your inbox.</p>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleResendConfirmation}
-                          disabled={resendStatus === "sending"}
-                          className="text-xs font-semibold underline text-red-500 hover:text-red-700 disabled:opacity-60"
-                        >
-                          {resendStatus === "sending" ? "Sending…" : "Resend confirmation email"}
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Invalid credentials — helpful hints */}
-                  {errorType === "invalid" && (
-                    <div className="mt-2 space-y-1">
-                      <p className="text-xs text-red-400">
-                        If you signed up with Google, use{" "}
-                        <button
-                          type="button"
-                          onClick={() => handleOAuthLogin("google")}
-                          className="font-semibold underline hover:text-red-600"
-                        >
-                          Continue with Google
-                        </button>{" "}
-                        instead.
-                      </p>
-                      <p className="text-xs text-red-400">
-                        Forgot your password?{" "}
-                        <Link href="/forgot-password" className="font-semibold underline hover:text-red-600">
-                          Reset it here.
-                        </Link>
-                      </p>
-                    </div>
-                  )}
-                </div>
+            <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600 flex items-start gap-2">
+              <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p>{error}</p>
+                {error.toLowerCase().includes("incorrect email or password") && (
+                  <p className="text-xs text-red-400 mt-1">
+                    If you signed up with Google, use{" "}
+                    <button
+                      type="button"
+                      onClick={() => handleOAuthLogin("google")}
+                      className="font-semibold underline hover:text-red-600"
+                    >
+                      Continue with Google
+                    </button>{" "}
+                    instead. Or{" "}
+                    <Link href="/forgot-password" className="font-semibold underline hover:text-red-600">
+                      reset your password.
+                    </Link>
+                  </p>
+                )}
               </div>
             </div>
           )}
