@@ -189,9 +189,11 @@ export async function signUp(email: string, password: string, fullName?: string)
     email,
     password,
     options: {
-      data: {
-        full_name: fullName,
-      },
+      data: { full_name: fullName },
+      emailRedirectTo:
+        typeof window !== "undefined"
+          ? `${window.location.origin}/auth/callback`
+          : undefined,
     },
   });
 
