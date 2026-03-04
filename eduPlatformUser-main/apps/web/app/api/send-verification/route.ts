@@ -2,24 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
-// Server-side Supabase admin client (service role key — never expose to the browser)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(req: NextRequest) {
+  // Read env vars inside the handler so missing vars cause a 500 at runtime,
+  // not a crash at module-load / build time.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const resendKey = process.env.RESEND_API_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey || !resendKey) {
+    console.error("Missing env vars: SUPABASE_SERVICE_ROLE_KEY or RESEND_API_KEY");
+    return NextResponse.json({ error: "Server not configured" }, { status: 500 });
+  }
+
   try {
     const { email } = await req.json();
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
+    // Server-side Supabase admin client (service role — never expose to the browser)
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const resend = new Resend(resendKey);
+
     // Use the request origin so the link works in both dev and production
-    const origin = req.headers.get("origin") || "http://localhost:3001";
+    const origin = req.headers.get("origin") || "https://localhost:3001";
 
     // Generate a magic link via the Supabase Admin API.
     // A magic link both confirms the email AND logs the user in — perfect for
@@ -38,11 +46,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Send via Resend
-    // NOTE: Without a verified domain in Resend the "from" address must be
-    // onboarding@resend.dev, and emails can only be delivered to the email
-    // address that owns the Resend account (fine for development/testing).
-    // For production: verify a domain at resend.com and update the from address.
+    // Send via Resend.
+    // NOTE: Without a verified domain in Resend, "from" must be onboarding@resend.dev
+    // and emails can only be delivered to the Resend account owner's email (fine for testing).
+    // For production: verify a domain at resend.com and update the from address below.
     const { error: emailError } = await resend.emails.send({
       from: "EduPlatform <onboarding@resend.dev>",
       to: [email],
