@@ -35,11 +35,21 @@ export default function SignupPage() {
       const { data, error: signUpError } = await signUp(email, password, fullName);
 
       if (signUpError) {
-        setError(signUpError.message);
-        return;
+        // "Error sending confirmation email" means user was created in Supabase
+        // but the SMTP delivery failed — treat it as a successful signup.
+        const isSmtpFailure =
+          signUpError.message.toLowerCase().includes("sending confirmation") ||
+          signUpError.message.toLowerCase().includes("error sending") ||
+          signUpError.message.toLowerCase().includes("sending email");
+
+        if (!isSmtpFailure) {
+          setError(signUpError.message);
+          return;
+        }
+        // SMTP failed but user exists — fall through to sign-in attempt
       }
 
-      if (data?.user) {
+      if (data?.user || signUpError) {
         // Try immediate sign-in — succeeds when email confirmation is disabled
         const { data: signInData } = await signIn(email, password);
         if (signInData?.user) {
