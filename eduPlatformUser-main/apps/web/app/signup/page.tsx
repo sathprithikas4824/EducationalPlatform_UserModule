@@ -34,12 +34,26 @@ export default function SignupPage() {
     setLoading(true);
     try {
       const { data, error: signUpError } = await signUp(email, password, fullName);
+
       if (signUpError) {
-        setError(signUpError.message);
-        return;
+        // Supabase's free-tier SMTP often fails to send the confirmation email,
+        // returning "Error sending confirmation email". The user IS created in the
+        // database despite this error — we handle delivery via Resend, so we can
+        // safely bypass this specific error and continue.
+        const isEmailDeliveryFailure =
+          signUpError.message.toLowerCase().includes("sending confirmation") ||
+          signUpError.message.toLowerCase().includes("error sending") ||
+          signUpError.message.toLowerCase().includes("sending email");
+
+        if (!isEmailDeliveryFailure) {
+          // Real error (e.g. already registered, weak password) — show it
+          setError(signUpError.message);
+          return;
+        }
+        // Email delivery failure — user was created, fall through to Resend flow
       }
 
-      if (data?.user) {
+      if (data?.user || signUpError) {
         // Try to sign in immediately — succeeds when email confirmation is disabled in Supabase
         const { data: signInData } = await signIn(email, password);
         if (signInData?.user) {
