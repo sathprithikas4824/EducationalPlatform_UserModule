@@ -192,6 +192,12 @@ export async function signUp(email: string, password: string, fullName?: string)
       data: {
         full_name: fullName,
       },
+      // Redirect confirmation email to the auth callback so the session is
+      // established automatically when the user clicks the link.
+      emailRedirectTo:
+        typeof window !== "undefined"
+          ? `${window.location.origin}/auth/callback`
+          : undefined,
     },
   });
 

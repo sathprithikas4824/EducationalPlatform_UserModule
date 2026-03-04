@@ -27,9 +27,12 @@ export default function AuthCallbackPage() {
 
       // ── Password recovery flow ──────────────────────────────────
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("type") === "recovery") {
+      const type = urlParams.get("type");
+      const code = urlParams.get("code");
+      const tokenHash = urlParams.get("token_hash");
+
+      if (type === "recovery") {
         // PKCE flow: the email link contains ?code=xxx — exchange it first
-        const code = urlParams.get("code");
         if (code) {
           const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
           if (codeError) {
@@ -51,7 +54,61 @@ export default function AuthCallbackPage() {
         return;
       }
 
+      // ── Email confirmation / email change flow ──────────────────
+      // Supabase sends ?token_hash=xxx&type=signup (or email_change) when the
+      // user clicks a confirmation link. We must call verifyOtp to exchange it
+      // and establish a session so the user is logged in automatically.
+      if ((type === "signup" || type === "email_change") && tokenHash) {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: type as "signup" | "email_change",
+        });
+
+        if (verifyError) {
+          // Verification failed (e.g. link expired) — send to login with a hint
+          router.push("/login?error=verify_failed");
+          return;
+        }
+
+        // Session established — fire-and-forget provider sync, then go home
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) updateUserProviders(user.id);
+
+        const dest =
+          typeof sessionStorage !== "undefined"
+            ? sessionStorage.getItem("auth_redirect") || "/"
+            : "/";
+        if (typeof sessionStorage !== "undefined") sessionStorage.removeItem("auth_redirect");
+        router.push(dest);
+        return;
+      }
+
+      // Handle email confirmation via PKCE code (some Supabase configurations)
+      if ((type === "signup" || type === "email_change") && code) {
+        const { error: codeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (codeError) {
+          router.push("/login?error=verify_failed");
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) updateUserProviders(user.id);
+
+        const dest =
+          typeof sessionStorage !== "undefined"
+            ? sessionStorage.getItem("auth_redirect") || "/"
+            : "/";
+        if (typeof sessionStorage !== "undefined") sessionStorage.removeItem("auth_redirect");
+        router.push(dest);
+        return;
+      }
+
       // ── OAuth flow ──────────────────────────────────────────────
+      // For OAuth PKCE: if a code is present and wasn't handled above, exchange it.
+      if (code) {
+        await supabase.auth.exchangeCodeForSession(code);
+        // Ignore errors here — detectSessionInUrl may have already handled it
+      }
+
       const { data: { session }, error } = await supabase.auth.getSession();
 
       if (error || !session?.user) {

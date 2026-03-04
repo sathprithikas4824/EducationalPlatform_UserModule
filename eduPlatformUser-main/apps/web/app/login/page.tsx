@@ -14,8 +14,19 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [errorType, setErrorType] = useState<"unconfirmed" | "invalid" | "other" | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    // Show a helpful message if arriving from a broken verification link
+    const e = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("error") : null;
+    if (e === "verify_failed") return "Your email verification link has expired or is invalid. Enter your email below and click 'Resend confirmation email'.";
+    if (e === "auth_failed") return "Authentication failed. Please try signing in again.";
+    return null;
+  });
+  const [errorType, setErrorType] = useState<"unconfirmed" | "invalid" | "other" | null>(() => {
+    const e = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("error") : null;
+    if (e === "verify_failed") return "unconfirmed";
+    if (e === "auth_failed") return "other";
+    return null;
+  });
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
 
   const handleLogin = async (e: React.FormEvent) => {
