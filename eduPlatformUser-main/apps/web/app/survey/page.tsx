@@ -92,8 +92,7 @@ export default function SurveyPage() {
     setError(null);
     setSaving(true);
     try {
-      const ok = await saveSurveyResponse({
-        profession,
+      const ok = await saveSurveyResponse(profession, {
         education_level: educationLevel || undefined,
         career_goal: careerGoal || undefined,
         field_of_study: fieldOfStudy || undefined,
@@ -103,7 +102,7 @@ export default function SurveyPage() {
         industry: industry || undefined,
         job_role: jobRole || undefined,
         platform_use: platformUse || undefined,
-        target_role: targetRole || (seekerEducation ? undefined : undefined),
+        target_role: targetRole || undefined,
         other_description: otherDescription || undefined,
         topics_interested: topicsInterested,
         weekly_hours: weeklyHours,

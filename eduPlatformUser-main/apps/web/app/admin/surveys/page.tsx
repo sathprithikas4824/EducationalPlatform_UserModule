@@ -3,11 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase, getSurveyResponses } from "../../lib/supabase";
 
-interface SurveyRow {
-  id: string;
-  user_id: string;
-  email: string;
-  profession: string;
+interface SurveyAnswers {
   education_level?: string;
   career_goal?: string;
   field_of_study?: string;
@@ -22,6 +18,14 @@ interface SurveyRow {
   topics_interested: string[];
   weekly_hours: string;
   primary_goal: string;
+}
+
+interface SurveyRow {
+  id: string;
+  user_id: string;
+  email: string;
+  profession: string;
+  answers: SurveyAnswers;
   created_at: string;
 }
 
@@ -34,11 +38,12 @@ const PROFESSION_LABELS: Record<string, string> = {
 };
 
 function getProfessionDetail(row: SurveyRow): string {
-  if (row.profession === "student") return row.career_goal || row.education_level || "—";
-  if (row.profession === "teacher") return row.subject_taught || "—";
-  if (row.profession === "professional") return row.job_role || row.industry || "—";
-  if (row.profession === "jobseeker") return row.target_role || "—";
-  return row.other_description?.slice(0, 60) || "—";
+  const a = row.answers || {};
+  if (row.profession === "student") return a.career_goal || a.education_level || "—";
+  if (row.profession === "teacher") return a.subject_taught || "—";
+  if (row.profession === "professional") return a.job_role || a.industry || "—";
+  if (row.profession === "jobseeker") return a.target_role || "—";
+  return a.other_description?.slice(0, 60) || "—";
 }
 
 function formatDate(iso: string) {
@@ -75,19 +80,19 @@ function exportCSV(rows: SurveyRow[]) {
       r.email,
       PROFESSION_LABELS[r.profession] || r.profession,
       getProfessionDetail(r),
-      r.education_level || "",
-      r.career_goal || "",
-      r.field_of_study || "",
-      r.subject_taught || "",
-      r.teaching_level || "",
-      r.experience_years || "",
-      r.industry || "",
-      r.job_role || "",
-      r.platform_use || "",
-      r.target_role || "",
-      (r.topics_interested || []).join("; "),
-      r.weekly_hours || "",
-      r.primary_goal || "",
+      r.answers?.education_level || "",
+      r.answers?.career_goal || "",
+      r.answers?.field_of_study || "",
+      r.answers?.subject_taught || "",
+      r.answers?.teaching_level || "",
+      r.answers?.experience_years || "",
+      r.answers?.industry || "",
+      r.answers?.job_role || "",
+      r.answers?.platform_use || "",
+      r.answers?.target_role || "",
+      (r.answers?.topics_interested || []).join("; "),
+      r.answers?.weekly_hours || "",
+      r.answers?.primary_goal || "",
       formatDate(r.created_at),
     ]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -131,7 +136,7 @@ export default function AdminSurveysPage() {
       }
 
       const data = await getSurveyResponses();
-      setRows(data as SurveyRow[]);
+      setRows(data);
       setLoading(false);
     };
 
@@ -298,7 +303,7 @@ export default function AdminSurveysPage() {
                       </td>
                       <td className="px-4 py-3 max-w-[200px]">
                         <div className="flex flex-wrap gap-1">
-                          {(row.topics_interested || []).slice(0, 3).map((t) => (
+                          {(row.answers?.topics_interested || []).slice(0, 3).map((t) => (
                             <span
                               key={t}
                               className="inline-block px-2 py-0.5 rounded text-xs"
@@ -307,18 +312,18 @@ export default function AdminSurveysPage() {
                               {t}
                             </span>
                           ))}
-                          {(row.topics_interested || []).length > 3 && (
+                          {(row.answers?.topics_interested || []).length > 3 && (
                             <span className="text-xs text-gray-400">
-                              +{row.topics_interested.length - 3}
+                              +{(row.answers?.topics_interested || []).length - 3}
                             </span>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                        {row.weekly_hours || "—"}
+                        {row.answers?.weekly_hours || "—"}
                       </td>
                       <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">
-                        {row.primary_goal || "—"}
+                        {row.answers?.primary_goal || "—"}
                       </td>
                       <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
                         {formatDate(row.created_at)}

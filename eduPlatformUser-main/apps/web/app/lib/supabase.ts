@@ -736,8 +736,9 @@ export function clearModuleScrollPositions(userId: string, topicIds: number[]): 
 // SURVEY FUNCTIONS
 // =============================================
 
-export interface SurveyData {
-  profession: string;
+// All conditional/common form fields — stored together in a JSONB column.
+// Optimised: avoids sparse NULLs from having one column per question.
+export interface SurveyAnswers {
   // Student
   education_level?: string;
   career_goal?: string;
@@ -760,6 +761,16 @@ export interface SurveyData {
   primary_goal: string;
 }
 
+// Row shape returned from the database
+export interface SurveyRow {
+  id: string;
+  user_id: string;
+  email: string;
+  profession: string;
+  answers: SurveyAnswers;
+  created_at: string;
+}
+
 // Check if the current user has already completed the survey
 export async function checkSurveyCompleted(userId: string): Promise<boolean> {
   if (!supabase || !userId) return false;
@@ -776,8 +787,13 @@ export async function checkSurveyCompleted(userId: string): Promise<boolean> {
   }
 }
 
-// Save survey response and mark profile as completed
-export async function saveSurveyResponse(data: SurveyData): Promise<boolean> {
+// Save survey response and mark profile as completed.
+// Optimised: only `profession` is a top-level column (for fast filtering/index);
+// all other answers are packed into a single JSONB `answers` column.
+export async function saveSurveyResponse(
+  profession: string,
+  answers: SurveyAnswers
+): Promise<boolean> {
   if (!supabase) return false;
   try {
     const { data: { user } } = await supabase.auth.getUser();
@@ -785,11 +801,7 @@ export async function saveSurveyResponse(data: SurveyData): Promise<boolean> {
 
     const { error: insertError } = await supabase
       .from("user_surveys")
-      .insert({
-        user_id: user.id,
-        email: user.email,
-        ...data,
-      });
+      .insert({ user_id: user.id, email: user.email, profession, answers });
 
     if (insertError) {
       console.error("Error saving survey:", insertError);
@@ -801,29 +813,26 @@ export async function saveSurveyResponse(data: SurveyData): Promise<boolean> {
       .update({ survey_completed: true })
       .eq("id", user.id);
 
-    if (updateError) {
-      console.error("Error marking survey complete:", updateError);
-    }
-
+    if (updateError) console.error("Error marking survey complete:", updateError);
     return true;
   } catch {
     return false;
   }
 }
 
-// Admin: get all survey responses (requires role='admin' in profiles — enforced by RLS)
-export async function getSurveyResponses(): Promise<(SurveyData & { id: string; user_id: string; email: string; created_at: string })[]> {
+// Admin: fetch all survey responses (RLS enforces admin-only access)
+export async function getSurveyResponses(): Promise<SurveyRow[]> {
   if (!supabase) return [];
   try {
     const { data, error } = await supabase
       .from("user_surveys")
-      .select("*")
+      .select("id, user_id, email, profession, answers, created_at")
       .order("created_at", { ascending: false });
     if (error) {
       console.error("Error fetching surveys:", error);
       return [];
     }
-    return data || [];
+    return (data as SurveyRow[]) || [];
   } catch {
     return [];
   }
