@@ -38,7 +38,7 @@ const PROFESSION_LABELS: Record<string, string> = {
 };
 
 function getProfessionDetail(row: SurveyRow): string {
-  const a = row.answers || {};
+  const a: SurveyAnswers = row.answers ?? {} as SurveyAnswers;
   if (row.profession === "student") return a.career_goal || a.education_level || "—";
   if (row.profession === "teacher") return a.subject_taught || "—";
   if (row.profession === "professional") return a.job_role || a.industry || "—";
