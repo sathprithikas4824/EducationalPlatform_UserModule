@@ -4,13 +4,13 @@ import React, { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAnnotation } from "../components/common/AnnotationProvider";
-import { supabase, getAllModulesProgress, type TopicProgress } from "../lib/supabase";
+import { supabase, getAllModulesProgress, getUserSurvey, type TopicProgress, type SurveyRow } from "../lib/supabase";
 import { loadDownloads, removeDownload, type DownloadRecord } from "../lib/downloads";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 
-type Tab = "account" | "highlights" | "progress" | "projects" | "downloads";
+type Tab = "account" | "highlights" | "progress" | "projects" | "downloads" | "survey";
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   {
@@ -46,6 +46,15 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+      </svg>
+    ),
+  },
+  {
+    id: "survey",
+    label: "My Survey",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
       </svg>
     ),
   },
@@ -572,6 +581,153 @@ function MyProgress({
   );
 }
 
+
+const PROFESSION_LABELS: Record<string, string> = {
+  student: "Student",
+  teacher: "Teacher / Educator",
+  professional: "Working Professional",
+  jobseeker: "Job Seeker",
+  other: "Other",
+};
+
+// ── My Survey ──────────────────────────────────────────────────────────────────────────────
+function MySurvey() {
+  const [survey, setSurvey] = useState<SurveyRow | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getUserSurvey().then((data) => { setSurvey(data); setLoading(false); });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Survey</h2>
+        <div className="flex items-center gap-2 text-gray-400 text-sm py-10">
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-purple-500 rounded-full animate-spin" />
+          Loading...
+        </div>
+      </div>
+    );
+  }
+
+  if (!survey) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Survey</h2>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+          <p className="text-gray-500 font-medium">No survey completed yet</p>
+          <p className="text-gray-400 text-sm mt-1 mb-5">Complete the survey to personalise your experience.</p>
+          <a
+            href="/survey"
+            className="px-5 py-2.5 text-white text-sm font-semibold rounded-xl"
+            style={{ backgroundImage: "linear-gradient(90deg, #7a12fa, #b614ef)", boxShadow: "0 2px 8px 0 rgba(122,18,250,0.3)" }}
+          >
+            Take the survey
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  const a = survey.answers;
+
+  const professionDetail: { label: string; value: string }[] = [];
+  if (survey.profession === "student") {
+    if (a.education_level) professionDetail.push({ label: "Education Level", value: a.education_level });
+    if (a.field_of_study)  professionDetail.push({ label: "Field of Study",  value: a.field_of_study });
+    if (a.career_goal)     professionDetail.push({ label: "Career Goal",     value: a.career_goal });
+  } else if (survey.profession === "teacher") {
+    if (a.subject_taught)   professionDetail.push({ label: "Subject Taught",  value: a.subject_taught });
+    if (a.teaching_level)   professionDetail.push({ label: "Teaching Level",  value: a.teaching_level });
+    if (a.experience_years) professionDetail.push({ label: "Experience",      value: a.experience_years });
+  } else if (survey.profession === "professional") {
+    if (a.industry)     professionDetail.push({ label: "Industry",     value: a.industry });
+    if (a.job_role)     professionDetail.push({ label: "Role / Title", value: a.job_role });
+    if (a.platform_use) professionDetail.push({ label: "Using for",   value: a.platform_use });
+  } else if (survey.profession === "jobseeker") {
+    if (a.target_role)     professionDetail.push({ label: "Target Role",     value: a.target_role });
+    if (a.education_level) professionDetail.push({ label: "Education Level", value: a.education_level });
+  } else if (a.other_description) {
+    professionDetail.push({ label: "About you", value: a.other_description });
+  }
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Survey</h2>
+
+      {/* Profession card */}
+      <div className="bg-white rounded-2xl p-6" style={{ border: "1px solid rgba(140,140,170,0.18)", boxShadow: "0 2px 12px 0 rgba(124,58,237,0.06)" }}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #7a12fa22, #b614ef22)" }}>
+            <svg className="w-5 h-5" style={{ color: "#7a12fa" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Profession</p>
+            <p className="text-base font-bold text-gray-900">{PROFESSION_LABELS[survey.profession] || survey.profession}</p>
+          </div>
+        </div>
+        {professionDetail.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-gray-100">
+            {professionDetail.map((item) => (
+              <div key={item.label} className="bg-gray-50 rounded-xl px-4 py-3">
+                <p className="text-xs text-gray-400 font-medium mb-0.5">{item.label}</p>
+                <p className="text-sm font-semibold text-gray-800">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Topics card */}
+      {(a.topics_interested || []).length > 0 && (
+        <div className="bg-white rounded-2xl p-6" style={{ border: "1px solid rgba(140,140,170,0.18)", boxShadow: "0 2px 12px 0 rgba(124,58,237,0.06)" }}>
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">Topics Interested In</p>
+          <div className="flex flex-wrap gap-2">
+            {(a.topics_interested || []).map((t) => (
+              <span
+                key={t}
+                className="px-3 py-1.5 rounded-full text-sm font-medium text-white"
+                style={{ backgroundImage: "linear-gradient(90deg, #7a12fa, #b614ef)" }}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Learning preferences card */}
+      <div className="bg-white rounded-2xl p-6" style={{ border: "1px solid rgba(140,140,170,0.18)", boxShadow: "0 2px 12px 0 rgba(124,58,237,0.06)" }}>
+        <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">Learning Preferences</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {a.weekly_hours && (
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-400 font-medium mb-0.5">Time per week</p>
+              <p className="text-sm font-semibold text-gray-800">{a.weekly_hours}</p>
+            </div>
+          )}
+          {a.primary_goal && (
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <p className="text-xs text-gray-400 font-medium mb-0.5">Primary Goal</p>
+              <p className="text-sm font-semibold text-gray-800">{a.primary_goal}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-400 text-center">
+        Submitted on {new Date(survey.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
+      </p>
+    </div>
+  );
+}
+
 // ── My Projects ────────────────────────────────────────────────────────────────
 function MyProjects() {
   return (
@@ -770,6 +926,7 @@ function ProfilePageInner() {
       case "progress":   return <MyProgress userId={user?.id} topicMap={topicMap} submoduleMap={submoduleMap} dataLoaded={dataLoaded} />;
       case "projects":   return <MyProjects />;
       case "downloads":  return <MyDownloads />;
+      case "survey":     return <MySurvey />;
       default:           return <AccountDetails />;
     }
   };

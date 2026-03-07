@@ -820,6 +820,24 @@ export async function saveSurveyResponse(
   }
 }
 
+// Get the current user's own survey response
+export async function getUserSurvey(): Promise<SurveyRow | null> {
+  if (!supabase) return null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from("user_surveys")
+      .select("id, user_id, email, profession, answers, created_at")
+      .eq("user_id", user.id)
+      .single();
+    if (error || !data) return null;
+    return data as SurveyRow;
+  } catch {
+    return null;
+  }
+}
+
 // Admin: fetch all survey responses (RLS enforces admin-only access)
 export async function getSurveyResponses(): Promise<SurveyRow[]> {
   if (!supabase) return [];
