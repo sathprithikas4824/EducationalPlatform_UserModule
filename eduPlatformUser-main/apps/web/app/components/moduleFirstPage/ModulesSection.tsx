@@ -68,6 +68,7 @@ const ModulesSection: React.FC = () => {
   const { user } = useAnnotation();
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
+  const [wakingUp, setWakingUp] = useState(false);
   const modulesRef = useRef<Module[]>([]);
   // ID used to load progress when no user is logged in (reads from persistent cookie)
   const [guestUserId, setGuestUserId] = useState<string | null>(null);
@@ -116,9 +117,11 @@ const ModulesSection: React.FC = () => {
   // Initial fetch: submodules, topics, and progress
   useEffect(() => {
     const fetchModulesAndProgress = async () => {
+      setLoading(true);
+      setWakingUp(false);
+      // Show "waking up backend" hint after 6s with no response
+      const wakingTimer = setTimeout(() => setWakingUp(true), 6000);
       try {
-        setLoading(true);
-
         // Use cached fetch for submodules
         const submodulesData = await cachedFetch<{ data?: BackendSubmodule[] } | BackendSubmodule[]>(
           `${BACKEND_URL}/api/submodules/category/${CATEGORY_ID}`,
@@ -155,7 +158,7 @@ const ModulesSection: React.FC = () => {
         );
       } catch (err) {
         console.error("Error fetching modules:", err);
-        // If fetch failed (e.g. 429 rate limit), try to use whatever is in the cache
+        // If fetch failed, try to use whatever is in the cache
         const staleSubmodules = getCachedSync<BackendSubmodule[] | { data?: BackendSubmodule[] }>(`submodules_cat_${CATEGORY_ID}`);
         if (staleSubmodules && modulesRef.current.length === 0) {
           const subs: BackendSubmodule[] = Array.isArray(staleSubmodules)
@@ -173,6 +176,8 @@ const ModulesSection: React.FC = () => {
           setModules(built);
         }
       } finally {
+        clearTimeout(wakingTimer);
+        setWakingUp(false);
         setLoading(false);
       }
     };
@@ -266,7 +271,13 @@ const ModulesSection: React.FC = () => {
 
         {loading ? (
           // Skeleton loading UI - shows layout immediately
-          <div className="flex items-center justify-center gap-2 md:gap-4">
+          <div className="flex flex-col items-center gap-4">
+            {wakingUp && (
+              <p className="text-sm text-gray-400 animate-pulse">
+                Waking up the server, this may take a moment…
+              </p>
+            )}
+          <div className="flex items-center justify-center gap-2 md:gap-4 w-full">
             <button
               className="z-10 flex-shrink-0 bg-white rounded-full p-2 shadow-md border border-gray-200 opacity-50"
               aria-label="Scroll left"
@@ -291,6 +302,7 @@ const ModulesSection: React.FC = () => {
             >
               <ArrowRight/>
             </button>
+          </div>
           </div>
         ) : modules.length === 0 ? (
           <p className="text-center text-gray-500">No modules available yet.</p>

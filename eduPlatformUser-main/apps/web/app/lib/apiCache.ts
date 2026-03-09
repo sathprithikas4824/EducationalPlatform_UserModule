@@ -80,16 +80,22 @@ export async function cachedFetch<T>(url: string, cacheKey: string): Promise<T> 
 }
 
 async function fetchAndCache<T>(url: string, cacheKey: string): Promise<T> {
-  const MAX_RETRIES = 4;
+  const MAX_RETRIES = 6;
+  // Per-attempt timeout: 25s to accommodate Render.com cold starts (~30-60s to wake)
+  const ATTEMPT_TIMEOUT_MS = 25000;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       if (attempt > 0) {
-        // Exponential backoff: 1.5s, 3s, 6s — longer waits for rate limiting
-        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        // Fixed 5s gap between retries — keeps total window ~2.5 min for cold starts
+        await new Promise((r) => setTimeout(r, 5000));
       }
-      const res = await fetch(url);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
+      const res = await fetch(url, { signal: controller.signal }).finally(() =>
+        clearTimeout(timeoutId)
+      );
 
       // 429 = rate limited — always retry with backoff
       if (res.status === 429) {
@@ -110,6 +116,7 @@ async function fetchAndCache<T>(url: string, cacheKey: string): Promise<T> {
       lastError = err instanceof Error ? err : new Error(String(err));
       // Don't retry permanent 4xx errors
       if (lastError.message.match(/Fetch failed: 4(?!29)\d\d/)) break;
+      // AbortError = timeout — always retry
     }
   }
 
