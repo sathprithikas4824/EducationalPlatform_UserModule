@@ -135,18 +135,20 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   // Load topic bookmarks when user changes
   useEffect(() => {
     if (!user?.id) { setBookmarkedTopicIds(new Set()); return; }
-    const records = loadBookmarks(user.id).filter((b) => b.type === "topic");
-    setBookmarkedTopicIds(new Set(records.map((b) => b.topicId as number)));
+    loadBookmarks(user.id).then((records) => {
+      const topicRecords = records.filter((b) => b.type === "topic");
+      setBookmarkedTopicIds(new Set(topicRecords.map((b) => b.topicId as number)));
+    });
   }, [user?.id]);
 
-  const handleTopicBookmark = useCallback((
+  const handleTopicBookmark = useCallback(async (
     topicId: number,
     topicName: string,
     moduleId: number,
     moduleName: string
   ) => {
     if (!user?.id) return;
-    const nowBookmarked = toggleBookmark(user.id, {
+    const nowBookmarked = await toggleBookmark(user.id, {
       type: "topic",
       moduleId,
       moduleName,

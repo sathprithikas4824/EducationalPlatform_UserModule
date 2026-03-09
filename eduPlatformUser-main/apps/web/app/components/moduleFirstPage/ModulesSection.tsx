@@ -183,14 +183,16 @@ const ModulesSection: React.FC = () => {
   // Load bookmarks when user changes
   useEffect(() => {
     if (!user?.id) { setBookmarkedModuleIds(new Set()); return; }
-    const records = loadBookmarks(user.id).filter((b) => b.type === "module");
-    setBookmarkedModuleIds(new Set(records.map((b) => b.moduleId)));
+    loadBookmarks(user.id).then((records) => {
+      const moduleRecords = records.filter((b) => b.type === "module");
+      setBookmarkedModuleIds(new Set(moduleRecords.map((b) => b.moduleId)));
+    });
   }, [user?.id]);
 
-  const handleModuleBookmark = useCallback((e: React.MouseEvent, module: Module) => {
+  const handleModuleBookmark = useCallback(async (e: React.MouseEvent, module: Module) => {
     e.stopPropagation();
     if (!user?.id) return;
-    const nowBookmarked = toggleBookmark(user.id, {
+    const nowBookmarked = await toggleBookmark(user.id, {
       type: "module",
       moduleId: module.submoduleId,
       moduleName: module.title,

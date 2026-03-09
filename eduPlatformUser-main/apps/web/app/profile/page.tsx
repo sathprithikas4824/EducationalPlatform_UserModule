@@ -908,19 +908,21 @@ function MyBookmarks({ userId }: { userId: string | undefined }) {
 
   useEffect(() => {
     if (!userId) { setBookmarks([]); return; }
-    setBookmarks(
-      loadBookmarks(userId).sort(
-        (a, b) => new Date(b.bookmarkedAt).getTime() - new Date(a.bookmarkedAt).getTime()
-      )
-    );
+    loadBookmarks(userId).then((records) => {
+      setBookmarks(
+        records.sort(
+          (a, b) => new Date(b.bookmarkedAt).getTime() - new Date(a.bookmarkedAt).getTime()
+        )
+      );
+    });
   }, [userId]);
 
   const moduleBookmarks = bookmarks.filter((b) => b.type === "module");
   const topicBookmarks  = bookmarks.filter((b) => b.type === "topic");
 
-  const handleRemove = (bookmarkId: string) => {
+  const handleRemove = async (bookmarkId: string) => {
     if (!userId) return;
-    removeBookmark(userId, bookmarkId);
+    await removeBookmark(userId, bookmarkId);
     setBookmarks((prev) => prev.filter((b) => b.id !== bookmarkId));
   };
 
