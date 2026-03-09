@@ -6,6 +6,8 @@ import { ArrowLeft, ArrowRight } from "../common/icons";
 import { useAnnotation } from "../common/AnnotationProvider";
 import { getAllModulesProgress, getLastUserId, PROGRESS_UPDATED_EVENT, type TopicProgress } from "../../lib/supabase";
 import { cachedFetch, prefetchAll, getCachedSync } from "../../lib/apiCache";
+import { loadBookmarks, toggleBookmark } from "../../lib/bookmarks";
+import { BookmarkHeart } from "../common/icons/BookmarkHeart";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 const CATEGORY_ID = 185; // AI course category
@@ -69,6 +71,7 @@ const ModulesSection: React.FC = () => {
   const modulesRef = useRef<Module[]>([]);
   // ID used to load progress when no user is logged in (reads from persistent cookie)
   const [guestUserId, setGuestUserId] = useState<string | null>(null);
+  const [bookmarkedModuleIds, setBookmarkedModuleIds] = useState<Set<number>>(new Set());
 
   // Cache submodule/topic data so we only fetch it once
   const [cachedData, setCachedData] = useState<{
@@ -176,6 +179,30 @@ const ModulesSection: React.FC = () => {
 
     fetchModulesAndProgress();
   }, [user, buildModules]);
+
+  // Load bookmarks when user changes
+  useEffect(() => {
+    if (!user?.id) { setBookmarkedModuleIds(new Set()); return; }
+    const records = loadBookmarks(user.id).filter((b) => b.type === "module");
+    setBookmarkedModuleIds(new Set(records.map((b) => b.moduleId)));
+  }, [user?.id]);
+
+  const handleModuleBookmark = useCallback((e: React.MouseEvent, module: Module) => {
+    e.stopPropagation();
+    if (!user?.id) return;
+    const nowBookmarked = toggleBookmark(user.id, {
+      type: "module",
+      moduleId: module.submoduleId,
+      moduleName: module.title,
+      moduleImageUrl: module.imageUrl,
+    });
+    setBookmarkedModuleIds((prev) => {
+      const next = new Set(prev);
+      if (nowBookmarked) next.add(module.submoduleId);
+      else next.delete(module.submoduleId);
+      return next;
+    });
+  }, [user?.id]);
 
   // Listen for realtime progress updates from Contents component
   useEffect(() => {
@@ -287,7 +314,7 @@ const ModulesSection: React.FC = () => {
                 <div
                   key={module.id}
                   onClick={() => handleModuleClick(module.id)}
-                  className="flex-shrink-0 group flex items-center gap-3 snap-start rounded-2xl border backdrop-blur-md cursor-pointer transition-all duration-300 hover:!border-[#7612fa66] p-2
+                  className="flex-shrink-0 group relative flex items-center gap-3 snap-start rounded-2xl border backdrop-blur-md cursor-pointer transition-all duration-300 hover:!border-[#7612fa66] p-2
                              w-full md:w-[calc((50%)-8px)] lg:w-[calc((33.333%)-10.6px)]"
                   style={{
                       backgroundColor: "rgba(255, 255, 255, 0.95)",
@@ -295,6 +322,21 @@ const ModulesSection: React.FC = () => {
                       boxShadow: "0 2px 4px 0 rgba(124, 58, 237, 0.06)",
                   }}
                 >
+                  {/* Bookmark button — top-right corner */}
+                  {user && (
+                    <button
+                      onClick={(e) => handleModuleBookmark(e, module)}
+                      className={`absolute top-1.5 right-1.5 z-10 p-1 rounded-full transition-all duration-200 ${
+                        bookmarkedModuleIds.has(module.submoduleId)
+                          ? "opacity-100"
+                          : "opacity-0 group-hover:opacity-100"
+                      } hover:bg-purple-50`}
+                      title={bookmarkedModuleIds.has(module.submoduleId) ? "Remove bookmark" : "Bookmark this module"}
+                    >
+                      <BookmarkHeart filled={bookmarkedModuleIds.has(module.submoduleId)} size={17} />
+                    </button>
+                  )}
+
                   {module.imageUrl ? (
                     <img
                       src={module.imageUrl}
@@ -306,7 +348,7 @@ const ModulesSection: React.FC = () => {
                   )}
 
                   <div className="flex-1 flex flex-col justify-between h-16 md:h-20 py-0.5">
-                    <h3 className="jakarta-font text-[12px] md:text-[13px] font-bold text-gray-900 leading-tight">
+                    <h3 className="jakarta-font text-[12px] md:text-[13px] font-bold text-gray-900 leading-tight pr-5">
                       {module.title}
                     </h3>
 

@@ -9,6 +9,8 @@ import { useAnnotation } from "../common/AnnotationProvider";
 import { markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions, getLastUserId } from "../../lib/supabase";
 import { cachedFetch } from "../../lib/apiCache";
 import { saveDownload } from "../../lib/downloads";
+import { loadBookmarks, toggleBookmark } from "../../lib/bookmarks";
+import { BookmarkHeart } from "../common/icons/BookmarkHeart";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 
@@ -128,6 +130,36 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetTopicId, setResetTopicId] = useState<number | null>(null);
   const [downloadedSet, setDownloadedSet] = useState<Set<string>>(new Set());
+  const [bookmarkedTopicIds, setBookmarkedTopicIds] = useState<Set<number>>(new Set());
+
+  // Load topic bookmarks when user changes
+  useEffect(() => {
+    if (!user?.id) { setBookmarkedTopicIds(new Set()); return; }
+    const records = loadBookmarks(user.id).filter((b) => b.type === "topic");
+    setBookmarkedTopicIds(new Set(records.map((b) => b.topicId as number)));
+  }, [user?.id]);
+
+  const handleTopicBookmark = useCallback((
+    topicId: number,
+    topicName: string,
+    moduleId: number,
+    moduleName: string
+  ) => {
+    if (!user?.id) return;
+    const nowBookmarked = toggleBookmark(user.id, {
+      type: "topic",
+      moduleId,
+      moduleName,
+      topicId,
+      topicName,
+    });
+    setBookmarkedTopicIds((prev) => {
+      const next = new Set(prev);
+      if (nowBookmarked) next.add(topicId);
+      else next.delete(topicId);
+      return next;
+    });
+  }, [user?.id]);
 
   // Strip HTML tags AND decode entities, preserving paragraph/block-level whitespace
   const stripHtml = (html: string): string => {
@@ -929,8 +961,23 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                           >
                             {topic.title}
                           </span>
-                          {/* Status Icon + Reset button */}
+                          {/* Status Icon + Bookmark + Reset button */}
                           <div className="flex items-center gap-1 flex-shrink-0">
+                            {/* Bookmark button — always visible if bookmarked, hover otherwise */}
+                            {user && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTopicBookmark(topicNumId, topic.title, mod.submoduleId, mod.title);
+                                }}
+                                className={`${
+                                  bookmarkedTopicIds.has(topicNumId) ? "flex" : "hidden group-hover:flex"
+                                } w-4 h-4 items-center justify-center transition-colors`}
+                                title={bookmarkedTopicIds.has(topicNumId) ? "Remove bookmark" : "Bookmark this topic"}
+                              >
+                                <BookmarkHeart filled={bookmarkedTopicIds.has(topicNumId)} size={14} />
+                              </button>
+                            )}
                             {/* Per-topic reset button - shown on hover for completed or in-progress topics */}
                             {user && (topic.status === "completed" || topicProgress > 0) && (
                               <button
@@ -1046,6 +1093,28 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
             <Highlightable pageId={selectedTopic ? `topic-${selectedTopic.topic_id}` : "default"}>
               {selectedTopic ? (
                 <div ref={contentWrapperRef} className="ai-content-wrapper">
+                  {/* Topic name row with bookmark button */}
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide truncate pr-2">
+                      {selectedTopic.name}
+                    </span>
+                    {user && (
+                      <button
+                        onClick={() =>
+                          handleTopicBookmark(
+                            selectedTopic.topic_id,
+                            selectedTopic.name,
+                            selectedTopic.submodule_id,
+                            currentSubmodule?.name || ""
+                          )
+                        }
+                        className="flex-shrink-0 p-1 rounded-full hover:bg-purple-50 transition-colors"
+                        title={bookmarkedTopicIds.has(selectedTopic.topic_id) ? "Remove bookmark" : "Bookmark this topic"}
+                      >
+                        <BookmarkHeart filled={bookmarkedTopicIds.has(selectedTopic.topic_id)} size={18} />
+                      </button>
+                    )}
+                  </div>
                   <section className="mb-6 sm:mb-8">
                     {/* Topic Title from backend */}
                     {selectedTopic.title && (

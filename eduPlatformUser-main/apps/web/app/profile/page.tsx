@@ -6,11 +6,13 @@ import Link from "next/link";
 import { useAnnotation } from "../components/common/AnnotationProvider";
 import { supabase, getAllModulesProgress, getUserSurvey, type TopicProgress, type SurveyRow } from "../lib/supabase";
 import { loadDownloads, removeDownload, type DownloadRecord } from "../lib/downloads";
+import { loadBookmarks, removeBookmark, type BookmarkRecord } from "../lib/bookmarks";
+import { BookmarkHeart } from "../components/common/icons/BookmarkHeart";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 
-type Tab = "account" | "highlights" | "progress" | "projects" | "downloads" | "survey";
+type Tab = "account" | "highlights" | "progress" | "projects" | "downloads" | "survey" | "bookmarks";
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   {
@@ -57,6 +59,11 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
       </svg>
     ),
+  },
+  {
+    id: "bookmarks",
+    label: "My Bookmarks",
+    icon: <BookmarkHeart size={20} />,
   },
 ];
 
@@ -894,6 +901,171 @@ function MyDownloads() {
   );
 }
 
+// ── My Bookmarks ───────────────────────────────────────────────────────────────
+function MyBookmarks({ userId }: { userId: string | undefined }) {
+  const router = useRouter();
+  const [bookmarks, setBookmarks] = useState<BookmarkRecord[]>([]);
+
+  useEffect(() => {
+    if (!userId) { setBookmarks([]); return; }
+    setBookmarks(
+      loadBookmarks(userId).sort(
+        (a, b) => new Date(b.bookmarkedAt).getTime() - new Date(a.bookmarkedAt).getTime()
+      )
+    );
+  }, [userId]);
+
+  const moduleBookmarks = bookmarks.filter((b) => b.type === "module");
+  const topicBookmarks  = bookmarks.filter((b) => b.type === "topic");
+
+  const handleRemove = (bookmarkId: string) => {
+    if (!userId) return;
+    removeBookmark(userId, bookmarkId);
+    setBookmarks((prev) => prev.filter((b) => b.id !== bookmarkId));
+  };
+
+  if (bookmarks.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Bookmarks</h2>
+        </div>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <BookmarkHeart size={64} className="text-gray-300 mb-4 opacity-40" />
+          <p className="text-gray-500 font-medium">No bookmarks yet</p>
+          <p className="text-gray-400 text-sm mt-1">
+            Click the bookmark icon on any module or topic to save it here.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Bookmarks</h2>
+        <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm font-semibold rounded-full">
+          {bookmarks.length} saved
+        </span>
+      </div>
+
+      {/* ── Module Bookmarks ── */}
+      {moduleBookmarks.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            Modules
+            <span className="text-xs font-medium text-purple-600 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full normal-case tracking-normal ml-1">
+              {moduleBookmarks.length}
+            </span>
+          </h3>
+          {moduleBookmarks.map((b) => (
+            <div
+              key={b.id}
+              className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 hover:border-purple-200 transition-colors group"
+            >
+              {/* Thumbnail */}
+              {b.moduleImageUrl ? (
+                <img
+                  src={b.moduleImageUrl}
+                  alt={b.moduleName}
+                  className="w-16 h-11 rounded-lg object-cover flex-shrink-0 border border-gray-200"
+                />
+              ) : (
+                <div className="w-16 h-11 rounded-lg bg-gradient-to-br from-purple-100 to-indigo-100 flex-shrink-0 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                </div>
+              )}
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">{b.moduleName}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{timeAgo(b.bookmarkedAt)}</p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => router.push(`/modules/${b.moduleId}`)}
+                  className="px-3 py-1.5 text-xs font-semibold text-purple-600 bg-purple-50 border border-purple-200 hover:bg-purple-100 rounded-lg transition-colors"
+                >
+                  Open
+                </button>
+                <button
+                  onClick={() => handleRemove(b.id)}
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Remove bookmark"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Topic Bookmarks ── */}
+      {topicBookmarks.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Topics
+            <span className="text-xs font-medium text-purple-600 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full normal-case tracking-normal ml-1">
+              {topicBookmarks.length}
+            </span>
+          </h3>
+          {topicBookmarks.map((b) => (
+            <div
+              key={b.id}
+              className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 hover:border-purple-200 transition-colors"
+            >
+              {/* Icon */}
+              <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center flex-shrink-0">
+                <BookmarkHeart filled size={18} />
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-purple-600 truncate">{b.moduleName}</p>
+                <p className="text-sm font-medium text-gray-800 truncate">{b.topicName}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{timeAgo(b.bookmarkedAt)}</p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => router.push(`/modules/${b.moduleId}`)}
+                  className="px-3 py-1.5 text-xs font-semibold text-purple-600 bg-purple-50 border border-purple-200 hover:bg-purple-100 rounded-lg transition-colors"
+                >
+                  Open
+                </button>
+                <button
+                  onClick={() => handleRemove(b.id)}
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Remove bookmark"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Profile Page Inner ─────────────────────────────────────────────────────────
 function ProfilePageInner() {
   const { user, isLoggedIn, logout } = useAnnotation();
@@ -927,6 +1099,7 @@ function ProfilePageInner() {
       case "projects":   return <MyProjects />;
       case "downloads":  return <MyDownloads />;
       case "survey":     return <MySurvey />;
+      case "bookmarks":  return <MyBookmarks userId={user?.id} />;
       default:           return <AccountDetails />;
     }
   };
