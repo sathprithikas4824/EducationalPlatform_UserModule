@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight } from "../common/icons";
 import { useAnnotation } from "../common/AnnotationProvider";
@@ -11,6 +11,8 @@ import { BookmarkHeart } from "../common/icons/BookmarkHeart";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 const CATEGORY_ID = 185; // AI course category
+const CACHE_PREFIX = "edu_api_";
+const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 interface BackendSubmodule {
   submodule_id: number;
@@ -36,6 +38,45 @@ interface Module {
   title: string;
   completionPercentage: number;
   imageUrl: string | null;
+}
+
+// Pure function (outside component) so it can be called from useLayoutEffect
+function buildModulesFromData(
+  submodules: BackendSubmodule[],
+  topicsPerSubmodule: BackendTopic[][],
+  userProgress: TopicProgress[]
+): Module[] {
+  const completedBySubmodule: Record<number, number> = {};
+  userProgress.forEach((p) => {
+    completedBySubmodule[p.module_id] = (completedBySubmodule[p.module_id] || 0) + 1;
+  });
+
+  return submodules.reduce<Module[]>((acc, sub, index) => {
+    const topics = topicsPerSubmodule[index] || [];
+    if (topics.length === 0) return acc;
+    const completedTopics = completedBySubmodule[sub.submodule_id] || 0;
+    acc.push({
+      id: String(sub.submodule_id),
+      submoduleId: sub.submodule_id,
+      title: sub.name,
+      completionPercentage: Math.round((completedTopics / topics.length) * 100),
+      imageUrl: sub.image_url,
+    });
+    return acc;
+  }, []);
+}
+
+// Synchronous localStorage read with TTL check
+function readLocalCacheSync<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    if (Date.now() - entry.timestamp > CACHE_TTL) return null;
+    return entry.data as T;
+  } catch {
+    return null;
+  }
 }
 
 // Skeleton card component for loading state
@@ -70,59 +111,58 @@ const ModulesSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [wakingUp, setWakingUp] = useState(false);
   const modulesRef = useRef<Module[]>([]);
-  // ID used to load progress when no user is logged in (reads from persistent cookie)
   const [guestUserId, setGuestUserId] = useState<string | null>(null);
   const [bookmarkedModuleIds, setBookmarkedModuleIds] = useState<Set<number>>(new Set());
 
-  // Cache submodule/topic data so we only fetch it once
   const [cachedData, setCachedData] = useState<{
     submodules: BackendSubmodule[];
     topicsPerSubmodule: BackendTopic[][];
   } | null>(null);
 
-  // Build modules list from cached data + progress
-  const buildModules = useCallback((
-    submodules: BackendSubmodule[],
-    topicsPerSubmodule: BackendTopic[][],
-    userProgress: TopicProgress[]
-  ): Module[] => {
-    const completedBySubmodule: Record<number, number> = {};
-    userProgress.forEach((p) => {
-      if (!completedBySubmodule[p.module_id]) {
-        completedBySubmodule[p.module_id] = 0;
-      }
-      completedBySubmodule[p.module_id] += 1;
-    });
+  // ─── INSTANT PAINT from localStorage ────────────────────────────────────────
+  // useLayoutEffect fires synchronously before the browser paints — if we have
+  // cached data, modules appear immediately with zero visible loading skeleton.
+  useLayoutEffect(() => {
+    const submodulesRaw = readLocalCacheSync<BackendSubmodule[] | { data?: BackendSubmodule[] }>(
+      `submodules_cat_${CATEGORY_ID}`
+    );
+    if (!submodulesRaw) return;
 
-    const modulesData: Module[] = [];
-    submodules.forEach((sub, index) => {
-      const topics: BackendTopic[] = topicsPerSubmodule[index] || [];
-      const totalTopics = topics.length;
-      if (totalTopics === 0) return;
+    const submodules: BackendSubmodule[] = Array.isArray(submodulesRaw)
+      ? submodulesRaw
+      : submodulesRaw.data || [];
+    if (submodules.length === 0) return;
 
-      const completedTopics = completedBySubmodule[sub.submodule_id] || 0;
-      const percentage = Math.round((completedTopics / totalTopics) * 100);
+    const topicsPerSubmodule = submodules.map((sub) =>
+      readLocalCacheSync<BackendTopic[]>(`topics_${sub.submodule_id}`) || []
+    );
 
-      modulesData.push({
-        id: String(sub.submodule_id),
-        submoduleId: sub.submodule_id,
-        title: sub.name,
-        completionPercentage: percentage,
-        imageUrl: sub.image_url,
-      });
-    });
-    return modulesData;
+    // Build without progress first (progress needs async Supabase — added below)
+    const built = buildModulesFromData(submodules, topicsPerSubmodule, []);
+    if (built.length === 0) return;
+
+    setCachedData({ submodules, topicsPerSubmodule });
+    modulesRef.current = built;
+    setModules(built);
+    setLoading(false); // hide skeleton immediately
   }, []);
 
-  // Initial fetch: submodules, topics, and progress
+  // ─── BACKGROUND REFRESH: progress + fresh API data ──────────────────────────
   useEffect(() => {
     const fetchModulesAndProgress = async () => {
-      setLoading(true);
-      setWakingUp(false);
-      // Show "waking up backend" hint after 6s with no response
-      const wakingTimer = setTimeout(() => setWakingUp(true), 12000);
+      // If we already have modules from cache, don't show loading spinner —
+      // just refresh silently in the background.
+      const hasInstantCache = modulesRef.current.length > 0;
+      if (!hasInstantCache) {
+        setLoading(true);
+        setWakingUp(false);
+      }
+
+      const wakingTimer = hasInstantCache
+        ? undefined
+        : setTimeout(() => setWakingUp(true), 12000);
+
       try {
-        // Use cached fetch for submodules
         const submodulesData = await cachedFetch<{ data?: BackendSubmodule[] } | BackendSubmodule[]>(
           `${BACKEND_URL}/api/submodules/category/${CATEGORY_ID}`,
           `submodules_cat_${CATEGORY_ID}`
@@ -131,7 +171,6 @@ const ModulesSection: React.FC = () => {
           Array.isArray(submodulesData) ? submodulesData :
           (submodulesData as { data?: BackendSubmodule[] }).data || [];
 
-        // Use cached fetch for each submodule's topics (parallel)
         const topicPromises = submodules.map((sub) =>
           cachedFetch<BackendTopic[]>(
             `${BACKEND_URL}/api/topics/${sub.submodule_id}`,
@@ -145,11 +184,10 @@ const ModulesSection: React.FC = () => {
         const userProgress = progressUserId ? await getAllModulesProgress(progressUserId) : [];
 
         setCachedData({ submodules, topicsPerSubmodule });
-        const built = buildModules(submodules, topicsPerSubmodule, userProgress);
+        const built = buildModulesFromData(submodules, topicsPerSubmodule, userProgress);
         modulesRef.current = built;
         setModules(built);
 
-        // Prefetch submodule detail pages for fast navigation
         prefetchAll(
           submodules.map((sub) => ({
             url: `${BACKEND_URL}/api/submodules`,
@@ -158,32 +196,34 @@ const ModulesSection: React.FC = () => {
         );
       } catch (err) {
         console.error("Error fetching modules:", err);
-        // If fetch failed, try to use whatever is in the cache
-        const staleSubmodules = getCachedSync<BackendSubmodule[] | { data?: BackendSubmodule[] }>(`submodules_cat_${CATEGORY_ID}`);
-        if (staleSubmodules && modulesRef.current.length === 0) {
-          const subs: BackendSubmodule[] = Array.isArray(staleSubmodules)
-            ? staleSubmodules
-            : (staleSubmodules as { data?: BackendSubmodule[] }).data || [];
-          const topicsPerSub = subs.map((sub) =>
-            getCachedSync<BackendTopic[]>(`topics_${sub.submodule_id}`) || []
-          );
-          const fallbackUserId = user?.id ?? getLastUserId();
-          if (!user) setGuestUserId(fallbackUserId);
-          const userProgress = fallbackUserId ? await getAllModulesProgress(fallbackUserId).catch(() => []) : [];
-          setCachedData({ submodules: subs, topicsPerSubmodule: topicsPerSub });
-          const built = buildModules(subs, topicsPerSub, userProgress);
-          modulesRef.current = built;
-          setModules(built);
+        if (modulesRef.current.length === 0) {
+          // Last-resort fallback: stale memory cache
+          const staleSubmodules = getCachedSync<BackendSubmodule[] | { data?: BackendSubmodule[] }>(`submodules_cat_${CATEGORY_ID}`);
+          if (staleSubmodules) {
+            const subs: BackendSubmodule[] = Array.isArray(staleSubmodules)
+              ? staleSubmodules
+              : (staleSubmodules as { data?: BackendSubmodule[] }).data || [];
+            const topicsPerSub = subs.map((sub) =>
+              getCachedSync<BackendTopic[]>(`topics_${sub.submodule_id}`) || []
+            );
+            const fallbackUserId = user?.id ?? getLastUserId();
+            if (!user) setGuestUserId(fallbackUserId);
+            const userProgress = fallbackUserId ? await getAllModulesProgress(fallbackUserId).catch(() => []) : [];
+            setCachedData({ submodules: subs, topicsPerSubmodule: topicsPerSub });
+            const built = buildModulesFromData(subs, topicsPerSub, userProgress);
+            modulesRef.current = built;
+            setModules(built);
+          }
         }
       } finally {
-        clearTimeout(wakingTimer);
+        if (wakingTimer) clearTimeout(wakingTimer);
         setWakingUp(false);
         setLoading(false);
       }
     };
 
     fetchModulesAndProgress();
-  }, [user, buildModules]);
+  }, [user]);
 
   // Load bookmarks when user changes
   useEffect(() => {
@@ -218,7 +258,7 @@ const ModulesSection: React.FC = () => {
 
     const handleProgressUpdate = async () => {
       const userProgress = await getAllModulesProgress(effectiveUserId);
-      const built = buildModules(cachedData.submodules, cachedData.topicsPerSubmodule, userProgress);
+      const built = buildModulesFromData(cachedData.submodules, cachedData.topicsPerSubmodule, userProgress);
       modulesRef.current = built;
       setModules(built);
     };
@@ -227,10 +267,9 @@ const ModulesSection: React.FC = () => {
     return () => {
       window.removeEventListener(PROGRESS_UPDATED_EVENT, handleProgressUpdate);
     };
-  }, [cachedData, user, guestUserId, buildModules]);
+  }, [cachedData, user, guestUserId]);
 
   const handleModuleClick = (moduleId: string) => {
-    // Prefetch topics for the clicked module before navigation
     prefetchAll([
       { url: `${BACKEND_URL}/api/topics/${moduleId}`, cacheKey: `topics_${moduleId}` },
       { url: `${BACKEND_URL}/api/submodules`, cacheKey: "all_submodules" },
@@ -270,7 +309,6 @@ const ModulesSection: React.FC = () => {
         </h2>
 
         {loading ? (
-          // Skeleton loading UI - shows layout immediately
           <div className="flex flex-col items-center gap-4">
             {wakingUp && (
               <p className="text-sm text-gray-400 animate-pulse">
@@ -336,7 +374,6 @@ const ModulesSection: React.FC = () => {
                       boxShadow: "0 2px 4px 0 rgba(124, 58, 237, 0.06)",
                   }}
                 >
-                  {/* Bookmark button — top-right corner */}
                   {user && (
                     <button
                       onClick={(e) => handleModuleBookmark(e, module)}
