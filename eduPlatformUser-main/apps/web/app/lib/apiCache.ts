@@ -4,14 +4,14 @@
  */
 
 const CACHE_PREFIX = "edu_api_";
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — module data is static
 
 // In-memory cache for instant access (survives client-side navigation)
 const memoryCache = new Map<string, { data: unknown; timestamp: number }>();
 
-function getSessionCache(key: string): { data: unknown; timestamp: number } | null {
+function getLocalCache(key: string): { data: unknown; timestamp: number } | null {
   try {
-    const raw = sessionStorage.getItem(CACHE_PREFIX + key);
+    const raw = localStorage.getItem(CACHE_PREFIX + key);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -19,12 +19,12 @@ function getSessionCache(key: string): { data: unknown; timestamp: number } | nu
   }
 }
 
-function setSessionCache(key: string, data: unknown): void {
+function setLocalCache(key: string, data: unknown): void {
   try {
     const entry = { data, timestamp: Date.now() };
-    sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify(entry));
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(entry));
   } catch {
-    // sessionStorage full or unavailable — ignore
+    // localStorage full or unavailable — ignore
   }
 }
 
@@ -36,8 +36,8 @@ function getCached<T>(key: string): { data: T; isStale: boolean } | null {
     return { data: mem.data as T, isStale };
   }
 
-  // Fall back to sessionStorage
-  const session = getSessionCache(key);
+  // Fall back to localStorage
+  const session = getLocalCache(key);
   if (session) {
     // Promote to memory cache
     memoryCache.set(key, session);
@@ -51,7 +51,7 @@ function getCached<T>(key: string): { data: T; isStale: boolean } | null {
 function setCache<T>(key: string, data: T): void {
   const entry = { data, timestamp: Date.now() };
   memoryCache.set(key, entry);
-  setSessionCache(key, data);
+  setLocalCache(key, data);
 }
 
 /**

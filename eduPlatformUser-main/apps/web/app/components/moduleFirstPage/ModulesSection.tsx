@@ -120,7 +120,7 @@ const ModulesSection: React.FC = () => {
       setLoading(true);
       setWakingUp(false);
       // Show "waking up backend" hint after 6s with no response
-      const wakingTimer = setTimeout(() => setWakingUp(true), 6000);
+      const wakingTimer = setTimeout(() => setWakingUp(true), 12000);
       try {
         // Use cached fetch for submodules
         const submodulesData = await cachedFetch<{ data?: BackendSubmodule[] } | BackendSubmodule[]>(
