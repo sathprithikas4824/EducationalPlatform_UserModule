@@ -1,11 +1,25 @@
 import "./globals.css";
 import { PropsWithChildren } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { AnnotationProvider } from "./components/common/AnnotationProvider";
+import PWARegister from "./components/common/PWARegister";
 
 export const metadata: Metadata = {
-  title: "Educational App",
-  description: "Educational application built with Next.js",
+  title: "Educational Platform",
+  description: "Learn programming and more with our educational platform",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "EduPlatform",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#7C3AED",
+  width: "device-width",
+  initialScale: 1,
+  minimumScale: 1,
 };
 
 export default function RootLayout({ children }: PropsWithChildren) {
@@ -19,9 +33,12 @@ export default function RootLayout({ children }: PropsWithChildren) {
         <link rel="preload" href="/fonts/PlusJakartaSans-Medium.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
         <link rel="preload" href="/fonts/PlusJakartaSans-SemiBold.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
         <link rel="preload" href="/fonts/PlusJakartaSans-Bold.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
+        {/* Apple touch icon */}
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
       <body className="jakarta-font">
         <AnnotationProvider>{children}</AnnotationProvider>
+        <PWARegister />
       </body>
     </html>
   );

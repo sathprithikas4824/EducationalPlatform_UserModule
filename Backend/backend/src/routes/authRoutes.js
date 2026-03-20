@@ -178,6 +178,141 @@ router.get(
 );
 
 // -----------------------------
+// List All Users (Admin only)
+// Fetches from profiles table (all Supabase Auth learners)
+// -----------------------------
+router.get(
+  "/users",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Access denied. Admins only." });
+    }
+
+    const { supabase } = await import("../config/supabaseClient.js");
+
+    // Fetch all learner profiles (Supabase Auth users)
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, avatar_url, auth_providers, created_at")
+      .order("created_at", { ascending: false });
+
+    if (profilesError) throw new AppError(profilesError.message, 500);
+
+    // Fetch last_sign_in_at from auth.users via admin API
+    let lastSignInMap = {};
+    try {
+      const { data: authData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+      if (authData?.users) {
+        authData.users.forEach((u) => {
+          lastSignInMap[u.id] = u.last_sign_in_at;
+        });
+      }
+    } catch (_) {
+      // non-critical, continue without it
+    }
+
+    const users = (profiles || []).map((p) => ({
+      user_id: p.id,
+      name: p.full_name || null,
+      email: p.email,
+      avatar_url: p.avatar_url || null,
+      auth_providers: p.auth_providers || [],
+      role: "learner",
+      status: "active",
+      created_at: p.created_at,
+      last_sign_in_at: lastSignInMap[p.id] || null,
+    }));
+
+    res.json({ users });
+  })
+);
+
+// -----------------------------
+// Get Single User Full Details (Admin only)
+// Returns profile + survey + highlights + progress
+// -----------------------------
+router.get(
+  "/users/:id",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Access denied. Admins only." });
+    }
+    const { id } = req.params;
+    const { supabase } = await import("../config/supabaseClient.js");
+
+    const [profileRes, surveyRes, highlightsRes, progressRes, authUserRes, bookmarksRes, downloadsRes] =
+      await Promise.allSettled([
+        supabase.from("profiles").select("*").eq("id", id).single(),
+        supabase.from("user_surveys").select("*").eq("user_id", id).maybeSingle(),
+        supabase.from("highlights").select("id, page_id, text, color, created_at").eq("user_id", id).order("created_at", { ascending: false }),
+        supabase.from("user_topic_progress").select("id, topic_id, module_id, completed, completed_at, created_at").eq("user_id", id).order("created_at", { ascending: false }),
+        supabase.auth.admin.getUserById(id),
+        supabase.from("user_bookmarks").select("id, type, module_id, module_name, module_image_url, topic_id, topic_name, bookmarked_at").eq("user_id", id).order("bookmarked_at", { ascending: false }),
+        supabase.from("user_downloads").select("id, topic_id, topic_name, module_name, file_name, file_type, downloaded_at").eq("user_id", id).order("downloaded_at", { ascending: false }),
+      ]);
+
+    const profile    = profileRes.status    === "fulfilled" ? profileRes.value.data    : null;
+    const survey     = surveyRes.status     === "fulfilled" ? surveyRes.value.data      : null;
+    const highlights = highlightsRes.status === "fulfilled" ? (highlightsRes.value.data ?? []) : [];
+    const progress   = progressRes.status   === "fulfilled" ? (progressRes.value.data  ?? []) : [];
+    const authUser   = authUserRes.status   === "fulfilled" ? authUserRes.value.data?.user : null;
+    const bookmarks  = bookmarksRes.status  === "fulfilled" ? (bookmarksRes.value.data  ?? []) : [];
+    const downloads  = downloadsRes.status  === "fulfilled" ? (downloadsRes.value.data  ?? []) : [];
+
+    if (!profile && !authUser) return res.status(404).json({ error: "User not found" });
+
+    res.json({
+      profile: {
+        user_id: id,
+        name: profile?.full_name || null,
+        email: profile?.email || authUser?.email || null,
+        avatar_url: profile?.avatar_url || null,
+        auth_providers: profile?.auth_providers || [],
+        survey_completed: profile?.survey_completed || false,
+        role: profile?.role || "user",
+        created_at: profile?.created_at || authUser?.created_at || null,
+        updated_at: profile?.updated_at || null,
+        last_sign_in_at: authUser?.last_sign_in_at || null,
+      },
+      survey,
+      highlights,
+      progress,
+      bookmarks,
+      downloads,
+    });
+  })
+);
+
+// -----------------------------
+// Delete User (Admin only)
+// -----------------------------
+router.delete(
+  "/users/:id",
+  verifyToken,
+  asyncHandler(async (req, res) => {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Access denied. Admins only." });
+    }
+    const { id } = req.params;
+    const { supabase } = await import("../config/supabaseClient.js");
+    // Delete all dependent tables first (handles tables without ON DELETE CASCADE)
+    await Promise.allSettled([
+      supabase.from("highlights").delete().eq("user_id", id),
+      supabase.from("user_bookmarks").delete().eq("user_id", id),
+      supabase.from("user_downloads").delete().eq("user_id", id),
+      supabase.from("user_topic_progress").delete().eq("user_id", id),
+      supabase.from("user_surveys").delete().eq("user_id", id),
+    ]);
+    await supabase.from("profiles").delete().eq("id", id);
+    const { error } = await supabase.auth.admin.deleteUser(id);
+    if (error) throw new AppError(error.message, 500);
+    res.json({ message: "User deleted successfully" });
+  })
+);
+
+// -----------------------------
 // Check Auth Status
 // -----------------------------
 router.get(

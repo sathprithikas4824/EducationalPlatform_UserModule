@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#7C3AED"/>
+  <!-- Book shape -->
+  <rect x="140" y="140" width="232" height="270" rx="16" ry="16" fill="#ffffff" opacity="0.15"/>
+  <!-- Book pages -->
+  <rect x="152" y="152" width="208" height="246" rx="12" ry="12" fill="#ffffff"/>
+  <!-- Book spine line -->
+  <rect x="248" y="152" width="4" height="246" fill="#EDE9FE"/>
+  <!-- Text lines (left page) -->
+  <rect x="172" y="196" width="60" height="8" rx="4" fill="#7C3AED" opacity="0.7"/>
+  <rect x="172" y="216" width="70" height="6" rx="3" fill="#7C3AED" opacity="0.4"/>
+  <rect x="172" y="230" width="60" height="6" rx="3" fill="#7C3AED" opacity="0.4"/>
+  <rect x="172" y="244" width="65" height="6" rx="3" fill="#7C3AED" opacity="0.4"/>
+  <rect x="172" y="258" width="55" height="6" rx="3" fill="#7C3AED" opacity="0.4"/>
+  <rect x="172" y="272" width="68" height="6" rx="3" fill="#7C3AED" opacity="0.4"/>
+  <!-- Text lines (right page) -->
+  <rect x="268" y="196" width="60" height="8" rx="4" fill="#7C3AED" opacity="0.7"/>
+  <rect x="268" y="216" width="70" height="6" rx="3" fill="#7C3AED" opacity="0.4"/>
+  <rect x="268" y="230" width="60" height="6" rx="3" fill="#7C3AED" opacity="0.4"/>
+  <rect x="268" y="244" width="65" height="6" rx="3" fill="#7C3AED" opacity="0.4"/>
+  <rect x="268" y="258" width="55" height="6" rx="3" fill="#7C3AED" opacity="0.4"/>
+  <rect x="268" y="272" width="68" height="6" rx="3" fill="#7C3AED" opacity="0.4"/>
+  <!-- Pencil -->
+  <g transform="rotate(-35, 256, 330)">
+    <rect x="220" y="310" width="22" height="72" rx="3" fill="#FCD34D"/>
+    <polygon points="220,382 242,382 231,406" fill="#F59E0B"/>
+    <rect x="220" y="310" width="22" height="12" rx="3" fill="#9CA3AF"/>
+    <rect x="224" y="314" width="14" height="6" rx="2" fill="#6B7280"/>
+  </g>
+</svg>
