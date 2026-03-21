@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "EduPlatform",
     description: "Learn programming and more with our educational platform",
     start_url: "/",
-    display: "browser",
+    display: "standalone",
     orientation: "portrait",
     background_color: "#ffffff",
     theme_color: "#7C3AED",
