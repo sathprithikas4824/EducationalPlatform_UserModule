@@ -881,7 +881,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           className={`
             ${sidebarOpen ? "block" : "hidden"} lg:block
             w-full lg:w-[220px] xl:w-[250px]
-            bg-white py-4 lg:py-6 px-4
+            bg-white dark:bg-[#0d0d1a] py-4 lg:py-6 px-4
             flex-shrink-0
             lg:min-h-screen
           `}
