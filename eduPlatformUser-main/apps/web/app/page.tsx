@@ -8,7 +8,7 @@ import Main from "./components/moduleFirstPage/Main";
 export default function Page() {
   return (
     <div
-      className="relative min-h-screen w-full bg-white"
+      className="relative min-h-screen w-full bg-white dark:bg-[#0d0d1a]"
       style={{ overflow: 'visible' }}
     >
       {/* TOP BAR */}

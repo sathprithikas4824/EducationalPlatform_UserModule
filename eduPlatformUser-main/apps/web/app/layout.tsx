@@ -3,6 +3,7 @@ import { PropsWithChildren } from "react";
 import type { Metadata, Viewport } from "next";
 import { AnnotationProvider } from "./components/common/AnnotationProvider";
 import PWARegister from "./components/common/PWARegister";
+import { ThemeProvider } from "./components/common/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "Educational Platform",
@@ -43,8 +44,10 @@ export default function RootLayout({ children }: PropsWithChildren) {
         {/* iOS standalone splash color */}
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className="jakarta-font">
-        <AnnotationProvider>{children}</AnnotationProvider>
+      <body className="jakarta-font bg-[var(--page-bg)] text-[var(--text-primary)] transition-colors duration-300">
+        <ThemeProvider>
+          <AnnotationProvider>{children}</AnnotationProvider>
+        </ThemeProvider>
         <PWARegister />
       </body>
     </html>

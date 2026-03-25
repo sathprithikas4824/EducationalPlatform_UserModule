@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 // Import icons
 import { SearchDuotoneIcon, PenEditIcon } from "../icons";
 import { useAnnotation } from "../common/AnnotationProvider";
+import ThemeToggle from "../common/ThemeToggle";
 
 const HamburgerIcon = () => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -72,8 +73,8 @@ const MobileMenu = ({ isOpen, onClose, activeTab, setActiveTab }) => {
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998] lg:hidden" onClick={onClose} />
-      <div className="fixed inset-0 bg-white z-[9999] overflow-y-auto lg:hidden shadow-2xl jakarta-font">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+      <div className="fixed inset-0 bg-white dark:bg-[#0d0d1a] z-[9999] overflow-y-auto lg:hidden shadow-2xl jakarta-font">
+        <div className="sticky top-0 bg-white dark:bg-[#0d0d1a] border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2" onClick={onClose}>
             <img src="/logo.svg" alt="Logo" className="w-6 h-6" />
             <span className="text-lg font-bold text-gray-900">Logo</span>
@@ -178,9 +179,9 @@ export default function NavBar() {
   };
 
   const pillStyle = {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderColor: "rgba(140, 140, 170, 0.4)",
-    boxShadow: "0 2px 4px 0 rgba(124, 58, 237, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+    backgroundColor: "var(--pill-bg)",
+    borderColor: "var(--pill-border)",
+    boxShadow: "var(--pill-shadow)",
   };
 
   return (
@@ -247,6 +248,11 @@ export default function NavBar() {
               </button>
             </div>
 
+            {/* Theme Toggle Pill */}
+            <div className="flex items-center gap-0.5 px-2 py-2.5 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={pillStyle}>
+              <ThemeToggle />
+            </div>
+
             {/* Auth Section */}
             <div className="flex items-center gap-0.5 px-2 py-2.5 rounded-2xl border relative overflow-visible backdrop-blur-md" style={pillStyle}>
               <NavAuthSection />
@@ -299,6 +305,10 @@ export default function NavBar() {
                 </button>
               </div>
 
+              <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={pillStyle}>
+                <ThemeToggle />
+              </div>
+
               <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-visible backdrop-blur-md" style={pillStyle}>
                 <NavAuthSection compact />
               </div>
@@ -322,7 +332,7 @@ export default function NavBar() {
               </div>
             </div>
 
-            {/* Right: Edit + Auth */}
+            {/* Right: Edit + Theme + Auth */}
             <div className="flex items-center gap-1.5">
               <div
                 className={`flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md transition-all duration-200 ${highlightModeEnabled ? "ring-2 ring-purple-500 border-purple-400" : ""}`}
@@ -335,6 +345,10 @@ export default function NavBar() {
                 >
                   <PenEditIcon size={20} />
                 </button>
+              </div>
+
+              <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={pillStyle}>
+                <ThemeToggle />
               </div>
 
               <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-visible backdrop-blur-md" style={pillStyle}>

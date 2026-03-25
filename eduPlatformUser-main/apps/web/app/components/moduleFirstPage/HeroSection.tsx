@@ -120,7 +120,7 @@ export default function HeroSection() {
   };
 
   return (
-    <div className="relative bg-white" style={{ overflow: "hidden" }}>
+    <div className="relative bg-white dark:bg-[#0d0d1a] transition-colors duration-300" style={{ overflow: "hidden" }}>
       <style jsx>{`
         .scrollbar-hide::-webkit-scrollbar {
           display: none;
@@ -187,7 +187,7 @@ export default function HeroSection() {
         
         .heading-intro {
           font-weight: 700;
-          color: #111827;
+          color: var(--text-primary);
         }
         
         .heading-ai-wrapper {
@@ -579,7 +579,7 @@ export default function HeroSection() {
               </span>
             </h1>
 
-            <p className="description-text text-gray-600 max-w-4xl mx-auto leading-relaxed font-normal">
+            <p className="description-text text-gray-600 dark:text-gray-400 max-w-4xl mx-auto leading-relaxed font-normal">
               Master machine learning and deep learning with hands-on coding
               projects and step-by-step guides.
             </p>
@@ -597,7 +597,7 @@ export default function HeroSection() {
                 ].map((tag, index) => (
                   <span
                     key={index}
-                    className="tag-item bg-white text-gray-700 rounded-full text-sm font-medium border border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-all duration-200 cursor-pointer"
+                    className="tag-item bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 hover:border-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-all duration-200 cursor-pointer"
                     style={{
                       boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1)",
                     }}

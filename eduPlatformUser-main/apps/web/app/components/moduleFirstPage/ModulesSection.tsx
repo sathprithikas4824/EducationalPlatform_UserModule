@@ -85,8 +85,8 @@ const SkeletonCard: React.FC = () => (
     className="flex-shrink-0 flex items-center gap-3 rounded-2xl border p-2
                w-full md:w-[calc((50%)-8px)] lg:w-[calc((33.333%)-10.6px)] animate-pulse"
     style={{
-      backgroundColor: "rgba(255, 255, 255, 0.95)",
-      borderColor: "rgba(140, 140, 170, 0.2)",
+      backgroundColor: "var(--card-bg)",
+      borderColor: "var(--card-border)",
     }}
   >
     <div className="w-24 h-16 md:w-32 md:h-20 bg-gray-200 rounded-lg flex-shrink-0" />
@@ -302,9 +302,9 @@ const ModulesSection: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-white py-8 px-4">
+    <div className="w-full bg-white dark:bg-[#0d0d1a] transition-colors duration-300 py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        <h2 className="jakarta-font text-3xl md:text-5xl font-bold text-center mb-8 text-gray-900">
+        <h2 className="jakarta-font text-3xl md:text-5xl font-bold text-center mb-8 text-gray-900 dark:text-gray-100">
           Modules <span className="text-purple-600">Available</span>
         </h2>
 
@@ -317,7 +317,8 @@ const ModulesSection: React.FC = () => {
             )}
           <div className="flex items-center justify-center gap-2 md:gap-4 w-full">
             <button
-              className="z-10 flex-shrink-0 bg-white rounded-full p-2 shadow-md border border-gray-200 opacity-50"
+              className="z-10 flex-shrink-0 rounded-full p-2 shadow-md border border-gray-200 dark:border-gray-700 opacity-50"
+              style={{ backgroundColor: "var(--btn-scroll-bg)" }}
               aria-label="Scroll left"
               disabled
             >
@@ -334,7 +335,8 @@ const ModulesSection: React.FC = () => {
             </div>
 
             <button
-              className="z-10 flex-shrink-0 bg-white rounded-full p-2 shadow-md border border-gray-200 opacity-50"
+              className="z-10 flex-shrink-0 rounded-full p-2 shadow-md border border-gray-200 dark:border-gray-700 opacity-50"
+              style={{ backgroundColor: "var(--btn-scroll-bg)" }}
               aria-label="Scroll right"
               disabled
             >
@@ -348,7 +350,8 @@ const ModulesSection: React.FC = () => {
           <div className="flex items-center justify-center gap-2 md:gap-4">
             <button
               onClick={() => scroll('left')}
-              className="z-10 flex-shrink-0 bg-white rounded-full p-2 shadow-md hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
+              className="z-10 flex-shrink-0 rounded-full p-2 shadow-md transition-all border border-gray-200 dark:border-gray-700 active:scale-95"
+              style={{ backgroundColor: "var(--btn-scroll-bg)" }}
               aria-label="Scroll left"
             >
               <ArrowLeft/>
@@ -369,9 +372,9 @@ const ModulesSection: React.FC = () => {
                   className="flex-shrink-0 group relative flex items-center gap-3 snap-start rounded-2xl border backdrop-blur-md cursor-pointer transition-all duration-300 hover:!border-[#7612fa66] p-2
                              w-full md:w-[calc((50%)-8px)] lg:w-[calc((33.333%)-10.6px)]"
                   style={{
-                      backgroundColor: "rgba(255, 255, 255, 0.95)",
-                      borderColor: "rgba(140, 140, 170, 0.4)",
-                      boxShadow: "0 2px 4px 0 rgba(124, 58, 237, 0.06)",
+                      backgroundColor: "var(--card-bg)",
+                      borderColor: "var(--card-border)",
+                      boxShadow: "var(--pill-shadow)",
                   }}
                 >
                   {user && (
@@ -399,7 +402,7 @@ const ModulesSection: React.FC = () => {
                   )}
 
                   <div className="flex-1 flex flex-col justify-between h-16 md:h-20 py-0.5">
-                    <h3 className="jakarta-font text-[12px] md:text-[13px] font-bold text-gray-900 leading-tight pr-5">
+                    <h3 className="jakarta-font text-[12px] md:text-[13px] font-bold text-gray-900 dark:text-gray-100 leading-tight pr-5">
                       {module.title}
                     </h3>
 
@@ -440,7 +443,8 @@ const ModulesSection: React.FC = () => {
 
             <button
               onClick={() => scroll('right')}
-              className="z-10 flex-shrink-0 bg-white rounded-full p-2 shadow-md hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
+              className="z-10 flex-shrink-0 rounded-full p-2 shadow-md transition-all border border-gray-200 dark:border-gray-700 active:scale-95"
+              style={{ backgroundColor: "var(--btn-scroll-bg)" }}
               aria-label="Scroll right"
             >
               <ArrowRight/>
