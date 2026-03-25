@@ -54,19 +54,19 @@ const Overview: React.FC = () => {
 
   if (loading) {
     return (
-      <div className={`w-full min-h-screen bg-white jakarta-font py-8 md:py-12 px-4 md:px-6 ${fuzzyBubblesBoldFont.variable}`}>
+      <div className={`w-full min-h-screen bg-white dark:bg-[#0d0d1a] transition-colors duration-300 jakarta-font py-8 md:py-12 px-4 md:px-6 ${fuzzyBubblesBoldFont.variable}`}>
         <div className="max-w-6xl ml-0 md:pl-16 lg:pl-32 space-y-10 md:space-y-12 animate-pulse">
           <div className="space-y-4">
-            <div className="h-10 bg-gray-200 rounded w-3/4" />
-            <div className="h-5 bg-gray-200 rounded w-full" />
-            <div className="h-5 bg-gray-200 rounded w-5/6" />
-            <div className="h-5 bg-gray-200 rounded w-full" />
-            <div className="h-5 bg-gray-200 rounded w-2/3" />
-            <div className="h-8 bg-gray-200 rounded w-1/2 mt-8" />
-            <div className="h-5 bg-gray-200 rounded w-full" />
-            <div className="h-5 bg-gray-200 rounded w-4/5" />
-            <div className="h-5 bg-gray-200 rounded w-full" />
-            <div className="h-5 bg-gray-200 rounded w-3/4" />
+            <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-5/6" />
+            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+            <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mt-8" />
+            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-4/5" />
+            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
           </div>
         </div>
       </div>
@@ -79,7 +79,7 @@ const Overview: React.FC = () => {
 
   return (
     <div
-      className={`w-full min-h-screen bg-white jakarta-font py-8 md:py-12 px-4 md:px-6 ${fuzzyBubblesBoldFont.variable}`}
+      className={`w-full min-h-screen bg-white dark:bg-[#0d0d1a] transition-colors duration-300 jakarta-font py-8 md:py-12 px-4 md:px-6 ${fuzzyBubblesBoldFont.variable}`}
     >
       <div className="max-w-6xl ml-0 md:pl-16 lg:pl-32 space-y-10 md:space-y-12">
         {moduleData ? (
@@ -115,6 +115,10 @@ const Overview: React.FC = () => {
         .ai-content-wrapper {
           font-family: "Plus Jakarta Sans", sans-serif;
           color: #374151;
+        }
+
+        .dark .ai-content-wrapper {
+          color: #d1d5db;
         }
 
         .ai-content-wrapper .circled-text {
@@ -201,6 +205,11 @@ const Overview: React.FC = () => {
           padding: 0 2px;
         }
 
+        .dark .ai-content-wrapper mark {
+          background-color: #854d0e;
+          color: #fef3c7;
+        }
+
         .ai-content-wrapper ul {
           list-style-type: disc;
           margin-left: 1.5rem;
@@ -250,6 +259,11 @@ const Overview: React.FC = () => {
           border-radius: 4px;
           font-family: "Fira Code", "Consolas", "Monaco", monospace;
           font-size: 0.9rem;
+        }
+
+        .dark .ai-content-wrapper code {
+          background-color: #1f2937;
+          color: #e5e7eb;
         }
 
         .ai-content-wrapper pre {

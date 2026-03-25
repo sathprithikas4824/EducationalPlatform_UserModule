@@ -89,15 +89,15 @@ const SkeletonCard: React.FC = () => (
       borderColor: "var(--card-border)",
     }}
   >
-    <div className="w-24 h-16 md:w-32 md:h-20 bg-gray-200 rounded-lg flex-shrink-0" />
+    <div className="w-24 h-16 md:w-32 md:h-20 bg-gray-200 dark:bg-gray-700 rounded-lg flex-shrink-0" />
     <div className="flex-1 flex flex-col justify-between h-16 md:h-20 py-0.5">
       <div className="space-y-1.5">
-        <div className="h-3 bg-gray-200 rounded w-4/5" />
-        <div className="h-3 bg-gray-200 rounded w-3/5" />
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-4/5" />
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/5" />
       </div>
       <div className="flex items-center justify-between mt-auto">
-        <div className="h-2.5 bg-gray-200 rounded w-16" />
-        <div className="h-6 bg-gray-200 rounded w-12" />
+        <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded w-16" />
+        <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-12" />
       </div>
     </div>
   </div>
