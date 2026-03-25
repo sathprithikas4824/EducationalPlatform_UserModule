@@ -1272,6 +1272,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           color: #374151;
         }
 
+        .dark .ai-content-wrapper {
+          color: #d1d5db;
+        }
+
         .ai-content-wrapper .circled-text {
           position: relative;
           display: inline-block;
@@ -1300,6 +1304,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           color: #111827;
         }
 
+        .dark .ai-content-wrapper h1,
+        .dark .ai-content-wrapper h2 {
+          color: #f9fafb;
+        }
+
         .ai-content-wrapper h1 {
           font-size: 1.5rem;
         }
@@ -1326,6 +1335,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           background-color: #fef08a;
           color: inherit;
           padding: 0 2px;
+        }
+
+        .dark .ai-content-wrapper mark {
+          background-color: #854d0e;
+          color: #fef3c7;
         }
 
         .ai-content-wrapper ul {
@@ -1372,6 +1386,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           border-radius: 4px;
           font-family: "Fira Code", "Consolas", "Monaco", monospace;
           font-size: 0.85rem;
+        }
+
+        .dark .ai-content-wrapper code {
+          background-color: #1e293b;
+          color: #e2e8f0;
         }
 
         .ai-content-wrapper pre {
