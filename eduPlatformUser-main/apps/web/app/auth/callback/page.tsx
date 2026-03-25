@@ -265,7 +265,7 @@ export default function AuthCallbackPage() {
         </div>
 
         <div
-          className="bg-white rounded-2xl p-8"
+          className="bg-white dark:bg-gray-900 rounded-2xl p-8"
           style={{
             boxShadow: "0 4px 24px 0 rgba(124, 58, 237, 0.08), 0 1px 4px 0 rgba(0,0,0,0.06)",
             border: "1px solid rgba(140, 140, 170, 0.2)",
@@ -282,12 +282,12 @@ export default function AuthCallbackPage() {
 
           {isRecovery ? (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Set new password</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Set new password</h1>
               <p className="text-gray-500 text-sm mb-6">Enter a new password for your account.</p>
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Set a password?</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Set a password?</h1>
               <p className="text-gray-500 text-sm mb-6">
                 You signed in with <span className="font-semibold text-gray-700">{providerName}</span>.
                 Optionally add a password so you can also log in with your email.
@@ -320,7 +320,7 @@ export default function AuthCallbackPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Min. 6 characters"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none transition-shadow"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 dark:bg-gray-800 placeholder-gray-400 focus:outline-none transition-shadow"
                 onFocus={(e) => { e.target.style.boxShadow = "0 0 0 3px rgba(122, 18, 250, 0.15)"; e.target.style.borderColor = "#7a12fa"; }}
                 onBlur={(e) => { e.target.style.boxShadow = ""; e.target.style.borderColor = ""; }}
               />
@@ -332,7 +332,7 @@ export default function AuthCallbackPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none transition-shadow"
+                className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 dark:bg-gray-800 placeholder-gray-400 focus:outline-none transition-shadow"
                 onFocus={(e) => { e.target.style.boxShadow = "0 0 0 3px rgba(122, 18, 250, 0.15)"; e.target.style.borderColor = "#7a12fa"; }}
                 onBlur={(e) => { e.target.style.boxShadow = ""; e.target.style.borderColor = ""; }}
               />

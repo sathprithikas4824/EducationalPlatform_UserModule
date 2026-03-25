@@ -276,7 +276,7 @@ function AccountDetails() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
                 placeholder="your@email.com"
               />
             </div>
@@ -387,7 +387,7 @@ function MyHighlights({ topicMap, dataLoaded }: { topicMap: TopicMap; dataLoaded
               <div key={first.pageId} className="rounded-xl border border-gray-200 overflow-hidden">
 
                 {/* ── Topic header (shown once per group) ── */}
-                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 flex-wrap">
+                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 dark:border-gray-700 flex-wrap">
                   <span className="text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-2.5 py-0.5 rounded-full truncate max-w-[160px]">
                     {isLoading ? "Loading…" : moduleName}
                   </span>
@@ -667,7 +667,7 @@ function MySurvey() {
       <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Survey</h2>
 
       {/* Profession card */}
-      <div className="bg-white rounded-2xl p-6" style={{ border: "1px solid rgba(140,140,170,0.18)", boxShadow: "0 2px 12px 0 rgba(124,58,237,0.06)" }}>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-6" style={{ border: "1px solid rgba(140,140,170,0.18)", boxShadow: "0 2px 12px 0 rgba(124,58,237,0.06)" }}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #7a12fa22, #b614ef22)" }}>
             <svg className="w-5 h-5" style={{ color: "#7a12fa" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -682,7 +682,7 @@ function MySurvey() {
         {professionDetail.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-gray-100">
             {professionDetail.map((item) => (
-              <div key={item.label} className="bg-gray-50 rounded-xl px-4 py-3">
+              <div key={item.label} className="bg-gray-50 dark:bg-gray-900 rounded-xl px-4 py-3">
                 <p className="text-xs text-gray-400 font-medium mb-0.5">{item.label}</p>
                 <p className="text-sm font-semibold text-gray-800">{item.value}</p>
               </div>
@@ -693,7 +693,7 @@ function MySurvey() {
 
       {/* Topics card */}
       {(a.topics_interested || []).length > 0 && (
-        <div className="bg-white rounded-2xl p-6" style={{ border: "1px solid rgba(140,140,170,0.18)", boxShadow: "0 2px 12px 0 rgba(124,58,237,0.06)" }}>
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-6" style={{ border: "1px solid rgba(140,140,170,0.18)", boxShadow: "0 2px 12px 0 rgba(124,58,237,0.06)" }}>
           <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">Topics Interested In</p>
           <div className="flex flex-wrap gap-2">
             {(a.topics_interested || []).map((t) => (
@@ -710,17 +710,17 @@ function MySurvey() {
       )}
 
       {/* Learning preferences card */}
-      <div className="bg-white rounded-2xl p-6" style={{ border: "1px solid rgba(140,140,170,0.18)", boxShadow: "0 2px 12px 0 rgba(124,58,237,0.06)" }}>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-6" style={{ border: "1px solid rgba(140,140,170,0.18)", boxShadow: "0 2px 12px 0 rgba(124,58,237,0.06)" }}>
         <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">Learning Preferences</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {a.weekly_hours && (
-            <div className="bg-gray-50 rounded-xl px-4 py-3">
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl px-4 py-3">
               <p className="text-xs text-gray-400 font-medium mb-0.5">Time per week</p>
               <p className="text-sm font-semibold text-gray-800">{a.weekly_hours}</p>
             </div>
           )}
           {a.primary_goal && (
-            <div className="bg-gray-50 rounded-xl px-4 py-3">
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl px-4 py-3">
               <p className="text-xs text-gray-400 font-medium mb-0.5">Primary Goal</p>
               <p className="text-sm font-semibold text-gray-800">{a.primary_goal}</p>
             </div>
@@ -1112,7 +1112,7 @@ function ProfilePageInner() {
     <div className="min-h-screen bg-gray-50">
 
       {/* ── Top bar ── */}
-      <header className="w-full bg-white border-b border-gray-200 sticky top-0 z-40">
+      <header className="w-full bg-white dark:bg-[#0d0d1a] border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           {/* Back link */}
           <Link href="/" className="flex items-center gap-1.5 text-gray-700 hover:text-gray-900 transition-colors">
@@ -1185,8 +1185,8 @@ function ProfilePageInner() {
 
           {/* ── Desktop sidebar ── */}
           <aside className="hidden md:block w-64 flex-shrink-0">
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-              <div className="px-5 py-5 border-b border-gray-100 bg-gradient-to-br from-purple-50 to-indigo-50">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-5 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-br from-purple-50 to-indigo-50">
                 <div className="flex items-center gap-3">
                   <div
                     className="w-11 h-11 rounded-full flex items-center justify-center text-white text-base font-bold flex-shrink-0"
@@ -1233,7 +1233,7 @@ function ProfilePageInner() {
 
           {/* ── Main content ── */}
           <main className="flex-1 min-w-0">
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 min-h-[500px]">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 min-h-[500px]">
               {renderContent()}
             </div>
           </main>

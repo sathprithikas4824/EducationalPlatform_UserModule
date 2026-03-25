@@ -70,15 +70,15 @@ interface ContentsProps {
 
 // Skeleton components for loading state
 const SidebarSkeleton: React.FC = () => (
-  <div className="bg-[#d4d4d4] rounded-2xl lg:rounded-3xl p-3 space-y-2 max-w-[300px] mx-auto lg:max-w-none animate-pulse">
-    <div className="bg-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl lg:rounded-2xl">
-      <div className="h-3 bg-gray-200 rounded w-3/4" />
+  <div className="bg-[#d4d4d4] dark:bg-gray-800 rounded-2xl lg:rounded-3xl p-3 space-y-2 max-w-[300px] mx-auto lg:max-w-none animate-pulse">
+    <div className="bg-white dark:bg-gray-900 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl lg:rounded-2xl">
+      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
     </div>
     {[1, 2, 3, 4, 5].map((i) => (
-      <div key={i} className="bg-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl lg:rounded-2xl">
+      <div key={i} className="bg-white dark:bg-gray-900 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl lg:rounded-2xl">
         <div className="flex items-center justify-between">
           <div className="h-3 bg-gray-200 rounded" style={{ width: `${50 + Math.random() * 30}%` }} />
-          <div className="w-4 h-4 bg-gray-200 rounded-full flex-shrink-0" />
+          <div className="w-4 h-4 bg-gray-200 dark:bg-gray-700 rounded-full flex-shrink-0" />
         </div>
       </div>
     ))}
@@ -87,27 +87,27 @@ const SidebarSkeleton: React.FC = () => (
 
 const ContentSkeleton: React.FC = () => (
   <div className="animate-pulse space-y-4">
-    <div className="h-8 bg-gray-200 rounded w-3/4" />
-    <div className="h-4 bg-gray-200 rounded w-full" />
-    <div className="h-4 bg-gray-200 rounded w-5/6" />
-    <div className="h-4 bg-gray-200 rounded w-full" />
-    <div className="h-4 bg-gray-200 rounded w-2/3" />
-    <div className="h-6 bg-gray-200 rounded w-1/2 mt-6" />
-    <div className="h-4 bg-gray-200 rounded w-full" />
-    <div className="h-4 bg-gray-200 rounded w-4/5" />
-    <div className="h-4 bg-gray-200 rounded w-full" />
+    <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6" />
+    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+    <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mt-6" />
+    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-4/5" />
+    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full" />
   </div>
 );
 
 const HeroSkeleton: React.FC = () => (
-  <div className="w-full bg-white py-6 sm:py-8 md:py-12 px-4 sm:px-6 md:px-10">
+  <div className="w-full bg-white dark:bg-[#0d0d1a] py-6 sm:py-8 md:py-12 px-4 sm:px-6 md:px-10">
     <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-6 md:gap-12 items-center animate-pulse">
-      <div className="w-full max-w-[280px] h-[140px] sm:h-[160px] md:h-[180px] bg-gray-200 rounded-2xl md:rounded-3xl flex-shrink-0" />
+      <div className="w-full max-w-[280px] h-[140px] sm:h-[160px] md:h-[180px] bg-gray-200 dark:bg-gray-700 rounded-2xl md:rounded-3xl flex-shrink-0" />
       <div className="flex-1 w-full space-y-3">
-        <div className="h-4 bg-gray-200 rounded w-20" />
-        <div className="h-10 bg-gray-200 rounded w-3/4" />
-        <div className="h-4 bg-gray-200 rounded w-full" />
-        <div className="h-4 bg-gray-200 rounded w-2/3" />
+        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20" />
+        <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full" />
+        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
       </div>
     </div>
   </div>
@@ -774,25 +774,25 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   if (loading) {
     return (
       <div
-        className={`w-full min-h-screen bg-white jakarta-font ${fuzzyBubblesBoldFont.variable}`}
+        className={`w-full min-h-screen bg-white dark:bg-[#0d0d1a] jakarta-font ${fuzzyBubblesBoldFont.variable}`}
       >
         {/* Hero Skeleton */}
         <HeroSkeleton />
 
         {/* Mobile Toggle Placeholder */}
-        <div className="lg:hidden sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3">
-          <div className="h-5 bg-gray-200 rounded w-28 animate-pulse" />
+        <div className="lg:hidden sticky top-0 z-20 bg-white dark:bg-[#0d0d1a] border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+          <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-28 animate-pulse" />
         </div>
 
         {/* Main Content Skeleton */}
         <div className="flex flex-col lg:flex-row">
           {/* Sidebar Skeleton */}
-          <div className="hidden lg:block w-full lg:w-[220px] xl:w-[250px] bg-white py-4 lg:py-6 px-4 flex-shrink-0 lg:min-h-screen">
+          <div className="hidden lg:block w-full lg:w-[220px] xl:w-[250px] bg-white dark:bg-[#0d0d1a] py-4 lg:py-6 px-4 flex-shrink-0 lg:min-h-screen">
             <SidebarSkeleton />
           </div>
 
           {/* Content Skeleton */}
-          <div className="flex-1 py-6 sm:py-8 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 bg-white">
+          <div className="flex-1 py-6 sm:py-8 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 bg-white dark:bg-[#0d0d1a] dark:bg-[#0d0d1a]">
             <div className="max-w-2xl mx-auto lg:mx-0">
               <ContentSkeleton />
             </div>
@@ -805,7 +805,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   // Error state
   if (error) {
     return (
-      <div className="w-full min-h-screen bg-white flex items-center justify-center">
+      <div className="w-full min-h-screen bg-white dark:bg-[#0d0d1a] flex items-center justify-center">
         <div className="text-center px-4">
           <p className="text-xl text-red-600 mb-2">Error: {error}</p>
           <p className="text-sm text-gray-500 mb-4">The server may be starting up. Please try again.</p>
@@ -828,10 +828,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
   return (
     <div
-      className={`w-full min-h-screen bg-white jakarta-font ${fuzzyBubblesBoldFont.variable}`}
+      className={`w-full min-h-screen bg-white dark:bg-[#0d0d1a] jakarta-font ${fuzzyBubblesBoldFont.variable}`}
     >
       {/* Hero Section - Responsive */}
-      <div className="w-full bg-white py-6 sm:py-8 md:py-12 px-4 sm:px-6 md:px-10">
+      <div className="w-full bg-white dark:bg-[#0d0d1a] py-6 sm:py-8 md:py-12 px-4 sm:px-6 md:px-10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-6 md:gap-12 items-center">
           {/* Gray Placeholder Image - Responsive */}
           <div className="w-full max-w-[280px] h-[140px] sm:h-[160px] md:h-[180px] bg-[#9a9aa3] rounded-2xl md:rounded-3xl flex-shrink-0"></div>
@@ -839,7 +839,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           {/* Hero Text Content */}
           <div className="flex-1 text-center md:text-left">
             <p className="text-purple-600 text-sm sm:text-base font-medium mb-2">Education</p>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-900 mb-3 sm:mb-5">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-gray-100 mb-3 sm:mb-5">
               {currentSubmodule?.name}
             </h1>
             {currentSubmodule?.description ? (
@@ -857,7 +857,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       </div>
 
       {/* Mobile Sidebar Toggle Button */}
-      <div className="lg:hidden sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3">
+      <div className="lg:hidden sticky top-0 z-20 bg-white dark:bg-[#0d0d1a] border-b border-gray-200 dark:border-gray-700 px-4 py-3">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="flex items-center gap-2 text-gray-700 font-medium text-sm"
@@ -886,7 +886,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
             lg:min-h-screen
           `}
         >
-          <div className="bg-[#d4d4d4] rounded-2xl lg:rounded-3xl p-3 space-y-2 max-w-[300px] mx-auto lg:max-w-none">
+          <div className="bg-[#d4d4d4] dark:bg-gray-800 rounded-2xl lg:rounded-3xl p-3 space-y-2 max-w-[300px] mx-auto lg:max-w-none">
             {sidebarModules.map((mod) => (
               <div key={mod.id}>
                 {/* Module Header */}
@@ -895,10 +895,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                   className={`w-full flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl lg:rounded-2xl text-left transition-all duration-200 shadow-sm ${
                     mod.submoduleId === submoduleId
                       ? "bg-purple-50 border border-purple-200"
-                      : "bg-white"
+                      : "bg-white dark:bg-gray-900"
                   }`}
                 >
-                  <span className="text-[11px] sm:text-xs font-semibold leading-tight text-gray-800">
+                  <span className="text-[11px] sm:text-xs font-semibold leading-tight text-gray-800 dark:text-gray-200 dark:text-gray-200">
                     {mod.title}
                   </span>
                   <span className="w-3.5 h-3.5 text-gray-400 flex-shrink-0">
@@ -908,7 +908,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
                 {/* Topics */}
                 {mod.expanded && mod.topics && mod.topics.length > 0 && (
-                  <div className="mt-2 bg-white rounded-xl lg:rounded-2xl shadow-sm overflow-hidden">
+                  <div className="mt-2 bg-white dark:bg-gray-900 rounded-xl lg:rounded-2xl shadow-sm overflow-hidden">
                     {mod.topics.map((topic, index) => {
                       const topicNumId = parseInt(topic.id.replace("topic-", ""));
                       const topicProgress = topicProgressMap[topicNumId] || 0;
@@ -920,7 +920,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                           <div
                             key={topic.id}
                             className={`px-3 sm:px-4 py-2 ${
-                              index !== mod.topics.length - 1 ? "border-b border-gray-100" : ""
+                              index !== mod.topics.length - 1 ? "border-b border-gray-100 dark:border-gray-700 dark:border-gray-700" : ""
                             }`}
                           >
                             <p className="text-[10px] text-gray-600 text-center mb-1.5 font-medium">
@@ -929,7 +929,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                             <div className="flex gap-1.5">
                               <button
                                 onClick={(e) => { e.stopPropagation(); setResetTopicId(null); }}
-                                className="flex-1 px-2 py-1 text-[10px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                                className="flex-1 px-2 py-1 text-[10px] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
                               >
                                 Cancel
                               </button>
@@ -948,8 +948,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                         <div
                           key={topic.id}
                           onClick={() => handleTopicClick(topic.id, mod.submoduleId)}
-                          className={`group flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${
-                            index !== mod.topics.length - 1 ? "border-b border-gray-100" : ""
+                          className={`group flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                            index !== mod.topics.length - 1 ? "border-b border-gray-100 dark:border-gray-700 dark:border-gray-700" : ""
                           }`}
                         >
                           <span
@@ -1041,7 +1041,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
                 {/* Empty state for modules with no topics */}
                 {mod.expanded && mod.topicsLoaded && mod.topics.length === 0 && (
-                  <div className="mt-2 bg-white rounded-xl lg:rounded-2xl shadow-sm p-3">
+                  <div className="mt-2 bg-white dark:bg-gray-900 rounded-xl lg:rounded-2xl shadow-sm p-3">
                     <p className="text-[10px] text-gray-400 text-center italic">No topics yet</p>
                   </div>
                 )}
@@ -1054,7 +1054,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                 {!showResetConfirm ? (
                   <button
                     onClick={() => setShowResetConfirm(true)}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] sm:text-xs font-medium text-gray-500 hover:text-red-600 bg-white rounded-xl lg:rounded-2xl shadow-sm hover:bg-red-50 transition-all duration-200"
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 bg-white dark:bg-gray-900 rounded-xl lg:rounded-2xl shadow-sm hover:bg-red-50 transition-all duration-200"
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M4 7l1.5 9.5a1 1 0 001 .5h7a1 1 0 001-.5L16 7" strokeLinecap="round" strokeLinejoin="round" />
@@ -1064,14 +1064,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                     Reset Progress
                   </button>
                 ) : (
-                  <div className="bg-white rounded-xl lg:rounded-2xl shadow-sm p-3 space-y-2">
+                  <div className="bg-white dark:bg-gray-900 rounded-xl lg:rounded-2xl shadow-sm p-3 space-y-2">
                     <p className="text-[11px] text-gray-600 text-center font-medium">
                       Reset all progress for this module?
                     </p>
                     <div className="flex gap-2">
                       <button
                         onClick={() => setShowResetConfirm(false)}
-                        className="flex-1 px-2 py-1.5 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                        className="flex-1 px-2 py-1.5 text-[11px] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
                       >
                         Cancel
                       </button>
@@ -1090,7 +1090,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         </div>
 
         {/* Main Content Area - Responsive */}
-        <div className="flex-1 py-6 sm:py-8 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 bg-white">
+        <div className="flex-1 py-6 sm:py-8 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 bg-white dark:bg-[#0d0d1a] dark:bg-[#0d0d1a]">
           <div className="max-w-2xl mx-auto lg:mx-0">
             <Highlightable pageId={selectedTopic ? `topic-${selectedTopic.topic_id}` : "default"}>
               {selectedTopic ? (

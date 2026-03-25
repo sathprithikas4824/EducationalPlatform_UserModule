@@ -25,7 +25,7 @@ const PROFESSIONS = [
 ];
 
 const inputClass =
-  "w-full px-4 py-3 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none transition-shadow";
+  "w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 dark:bg-gray-800 placeholder-gray-400 focus:outline-none transition-shadow";
 const focusHandlers = {
   onFocus: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     e.target.style.boxShadow = "0 0 0 3px rgba(122, 18, 250, 0.15)";
@@ -155,7 +155,7 @@ export default function SurveyPage() {
         </div>
 
         <div
-          className="bg-white rounded-2xl p-8"
+          className="bg-white dark:bg-gray-900 rounded-2xl p-8"
           style={{
             boxShadow: "0 4px 24px 0 rgba(124, 58, 237, 0.08), 0 1px 4px 0 rgba(0,0,0,0.06)",
             border: "1px solid rgba(140, 140, 170, 0.2)",
@@ -164,7 +164,7 @@ export default function SurveyPage() {
           {/* Step 1: Profession */}
           {step === 1 && (
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Tell us about yourself</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Tell us about yourself</h1>
               <p className="text-gray-500 text-sm mb-6">
                 Help us personalise your learning experience
               </p>
@@ -210,7 +210,7 @@ export default function SurveyPage() {
           {/* Step 2: Conditional questions */}
           {step === 2 && (
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">A bit more detail</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">A bit more detail</h1>
               <p className="text-gray-500 text-sm mb-6">
                 These help us recommend the right content for you
               </p>
@@ -477,7 +477,7 @@ export default function SurveyPage() {
           {/* Step 3: Topics */}
           {step === 3 && (
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Topics you&apos;re interested in</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Topics you&apos;re interested in</h1>
               <p className="text-gray-500 text-sm mb-6">Select all that apply</p>
               <div className="flex flex-wrap gap-2">
                 {TOPICS.map((topic) => {
@@ -511,7 +511,7 @@ export default function SurveyPage() {
           {/* Step 4: Learning preferences */}
           {step === 4 && (
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Your learning preferences</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Your learning preferences</h1>
               <p className="text-gray-500 text-sm mb-6">Almost done!</p>
 
               <div className="space-y-5">

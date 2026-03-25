@@ -8,7 +8,7 @@ interface MainProps {
 
 export default function Main({ submoduleId }: MainProps) {
     return (
-        <div>
+        <div className="min-h-screen bg-white dark:bg-[#0d0d1a] transition-colors duration-300">
             <TopBar/>
             <NavBar/>
             <Contents submoduleId={submoduleId} />

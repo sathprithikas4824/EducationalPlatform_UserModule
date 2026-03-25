@@ -214,7 +214,7 @@ export default function AdminSurveysPage() {
           ].map((s) => (
             <div
               key={s.value}
-              className="bg-white rounded-xl p-4 text-center"
+              className="bg-white dark:bg-gray-900 rounded-xl p-4 text-center"
               style={{ border: "1px solid rgba(140,140,170,0.2)", boxShadow: "0 2px 8px 0 rgba(124,58,237,0.06)" }}
             >
               <p className="text-2xl font-bold text-gray-900">
@@ -253,7 +253,7 @@ export default function AdminSurveysPage() {
 
         {/* Table */}
         <div
-          className="bg-white rounded-2xl overflow-hidden"
+          className="bg-white dark:bg-gray-900 rounded-2xl overflow-hidden"
           style={{ border: "1px solid rgba(140,140,170,0.2)", boxShadow: "0 4px 24px 0 rgba(124,58,237,0.08)" }}
         >
           {filtered.length === 0 ? (
