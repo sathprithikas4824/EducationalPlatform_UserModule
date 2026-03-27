@@ -1,13 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Main from "../moduleFirstPage/Main";
 import OfflineLandingPage from "./OfflineLandingPage";
 
 // ── Real connectivity check ────────────────────────────────────────────────────
-// navigator.onLine alone is unreliable on mobile — returns true on captive
-// portals and metered connections with no data.
-// _swbypass param tells the service worker to skip cache and hit real network.
 async function checkRealConnectivity(): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
@@ -29,10 +26,7 @@ async function checkRealConnectivity(): Promise<boolean> {
 function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
   return (
     <>
-      {/* Backdrop */}
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998]" />
-
-      {/* Dialog */}
       <div
         className="fixed z-[9999] bg-white dark:bg-[#16162a] rounded-2xl shadow-2xl p-6 text-center"
         style={{
@@ -43,12 +37,10 @@ function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
           border: "1px solid rgba(122, 18, 250, 0.2)",
         }}
       >
-        {/* Icon */}
         <div
           className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
           style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
         >
-          {/* Wifi on icon */}
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12.55a11 11 0 0 1 14.08 0" />
             <path d="M1.42 9a16 16 0 0 1 21.16 0" />
@@ -64,17 +56,14 @@ function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
           Internet connection restored. Ready to load the full content?
         </p>
 
-        <div className="flex gap-3">
-          <button
-            onClick={onContinue}
-            className="flex-1 py-2.5 px-4 text-sm font-bold text-white rounded-xl transition-all active:scale-95 hover:opacity-90"
-            style={{ background: "linear-gradient(90deg, #7a12fa, #b614ef)" }}
-          >
-            Go to content
-          </button>
-        </div>
+        <button
+          onClick={onContinue}
+          className="w-full py-2.5 px-4 text-sm font-bold text-white rounded-xl transition-all active:scale-95 hover:opacity-90"
+          style={{ background: "linear-gradient(90deg, #7a12fa, #b614ef)" }}
+        >
+          Go to content
+        </button>
 
-        {/* Connection indicator */}
         <div className="flex items-center justify-center gap-1.5 mt-4">
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
           <span className="text-xs text-green-600 dark:text-green-400 font-medium">Connected</span>
@@ -86,71 +75,52 @@ function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
 
 // ── Main wrapper ───────────────────────────────────────────────────────────────
 export default function OfflineWrapper() {
-  // null  = not yet determined (SSR / first paint)
-  // false = offline
-  // true  = online
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
-
-  // true when we transitioned offline → online and user hasn't confirmed yet
-  const [showReconnectedPopup, setShowReconnectedPopup] = useState(false);
-
-  // whether the user confirmed and we should render Main
+  // true once the user has been offline at least once in this session
+  const [wasOffline, setWasOffline] = useState(false);
+  // true once the user explicitly clicks "Go to content" on the popup
   const [confirmed, setConfirmed] = useState(false);
 
-  // track previous online state to detect the offline→online transition
-  const prevOnlineRef = useRef<boolean | null>(null);
-
   useEffect(() => {
-    // Initial check — no popup on first load (user was never offline in this session)
-    checkRealConnectivity().then((online) => {
-      prevOnlineRef.current = online;
-      setIsOnline(online);
-    });
+    // Initial check — just set online state, no popup on first load
+    checkRealConnectivity().then(setIsOnline);
 
     const handleOnline = () => {
-      checkRealConnectivity().then((online) => {
-        if (online && prevOnlineRef.current === false) {
-          // Transitioned offline → online: show popup instead of immediately switching
-          setShowReconnectedPopup(true);
-        }
-        prevOnlineRef.current = online;
-        setIsOnline(online);
-      });
+      checkRealConnectivity().then(setIsOnline);
+      // wasOffline stays true — popup will appear via render logic below
     };
 
     const handleOffline = () => {
-      prevOnlineRef.current = false;
       setIsOnline(false);
-      setShowReconnectedPopup(false);
-      setConfirmed(false); // reset so popup shows again next reconnect
+      setWasOffline(true);   // remember: user lost connection this session
+      setConfirmed(false);   // reset so popup shows again on next reconnect
     };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
 
-  const handleContinue = () => {
-    setShowReconnectedPopup(false);
-    setConfirmed(true);
-  };
-
-  // SSR guard
+  // SSR guard — render nothing until first connectivity check resolves
   if (isOnline === null) return null;
 
-  // Was online from the start — render Main directly (no popup needed)
-  if (isOnline && confirmed) return <Main />;
-  if (isOnline && prevOnlineRef.current !== false) return <Main />;
+  // Currently offline → show offline landing page
+  if (!isOnline) return <OfflineLandingPage />;
 
-  // Offline — show offline landing page, with popup on top if just reconnected
-  return (
-    <>
-      <OfflineLandingPage />
-      {showReconnectedPopup && <BackOnlinePopup onContinue={handleContinue} />}
-    </>
-  );
+  // Online but was offline this session and user hasn't confirmed yet
+  // → keep showing offline page with the popup on top
+  if (wasOffline && !confirmed) {
+    return (
+      <>
+        <OfflineLandingPage />
+        <BackOnlinePopup onContinue={() => setConfirmed(true)} />
+      </>
+    );
+  }
+
+  // Online and either never went offline, or user confirmed → show normal content
+  return <Main />;
 }
