@@ -8,7 +8,7 @@ import { getLastUserId } from "../../lib/supabase";
 import { useAnnotation } from "./AnnotationProvider";
 import ThemeToggle from "./ThemeToggle";
 
-// ── Wifi Off Icon ──────────────────────────────────────────────────────────────
+// ── Icons ──────────────────────────────────────────────────────────────────────
 const WifiOffIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="1" y1="1" x2="23" y2="23" />
@@ -36,6 +36,21 @@ const BookIcon = () => (
   </svg>
 );
 
+// ── SW cache check ─────────────────────────────────────────────────────────────
+// Before navigating to /modules/[id] offline, verify the page is in the SW
+// cache. If it was never visited online, the SW has nothing — navigating would
+// show a broken/empty page on every browser/device.
+async function isModuleCached(submoduleId: number): Promise<boolean> {
+  if (!("caches" in window)) return false;
+  try {
+    const cache = await caches.open("edu-pages-v1");
+    const match = await cache.match(`/modules/${submoduleId}`);
+    return !!match;
+  } catch {
+    return false;
+  }
+}
+
 // ── Group downloads by submodule ───────────────────────────────────────────────
 interface ModuleGroup {
   submoduleId: number | null;
@@ -48,11 +63,7 @@ function groupByModule(downloads: DownloadRecord[]): ModuleGroup[] {
   for (const d of downloads) {
     const key = d.submoduleId != null ? String(d.submoduleId) : d.moduleName;
     if (!map.has(key)) {
-      map.set(key, {
-        submoduleId: d.submoduleId ?? null,
-        moduleName: d.moduleName,
-        topics: [],
-      });
+      map.set(key, { submoduleId: d.submoduleId ?? null, moduleName: d.moduleName, topics: [] });
     }
     map.get(key)!.topics.push(d);
   }
@@ -65,16 +76,23 @@ export default function OfflineLandingPage() {
   const { user } = useAnnotation();
   const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  // Map of submoduleId → whether its page is in SW cache
+  const [cacheStatus, setCacheStatus] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const userId = user?.id ?? getLastUserId();
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
-    loadDownloads(userId)
-      .then(setDownloads)
-      .finally(() => setLoading(false));
+    if (!userId) { setLoading(false); return; }
+
+    loadDownloads(userId).then(async (records) => {
+      setDownloads(records);
+
+      // Check SW cache for every unique submoduleId
+      const uniqueIds = [...new Set(records.map((r) => r.submoduleId).filter((id): id is number => id != null))];
+      const entries = await Promise.all(
+        uniqueIds.map(async (id) => [id, await isModuleCached(id)] as [number, boolean])
+      );
+      setCacheStatus(Object.fromEntries(entries));
+    }).finally(() => setLoading(false));
   }, [user?.id]);
 
   const groups = groupByModule(downloads);
@@ -90,55 +108,36 @@ export default function OfflineLandingPage() {
       <header className="w-full sticky top-0 z-50 bg-transparent py-3 jakarta-font">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-2">
-            {/* Logo */}
-            <div
-              className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md"
-              style={pillStyle}
-            >
-              <Link href="/" className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200">
+            <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={pillStyle}>
+              <Link href="/" className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200">
                 <img src="/logo.svg" alt="Logo" className="w-5 h-5 object-contain" />
                 <span className="text-gray-900 dark:text-gray-100">Logo</span>
               </Link>
             </div>
 
-            {/* Offline Badge */}
+            {/* Offline badge */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
-              <span className="text-red-500 dark:text-red-400">
-                <WifiOffIcon />
-              </span>
-              <span className="text-xs font-semibold text-red-600 dark:text-red-400 hidden sm:block">
-                You're offline
-              </span>
+              <span className="text-red-500 dark:text-red-400"><WifiOffIcon /></span>
+              <span className="text-xs font-semibold text-red-600 dark:text-red-400 hidden sm:block">You're offline</span>
             </div>
 
-            {/* Right controls */}
             <div className="flex items-center gap-2">
-              <div
-                className="flex items-center px-2 py-2 rounded-2xl border backdrop-blur-md"
-                style={pillStyle}
-              >
+              <div className="flex items-center px-2 py-2 rounded-2xl border backdrop-blur-md" style={pillStyle}>
                 <ThemeToggle />
               </div>
               {user ? (
                 <button
                   onClick={() => router.push("/profile")}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-2xl border backdrop-blur-md transition-all"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-2xl border backdrop-blur-md"
                   style={pillStyle}
                 >
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                    style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
-                  >
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}>
                     {user.name?.charAt(0).toUpperCase() || "U"}
                   </div>
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300 max-w-[80px] truncate hidden sm:block">{user.name}</span>
                 </button>
               ) : (
-                <Link
-                  href="/login"
-                  className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 border rounded-2xl backdrop-blur-md transition-all"
-                  style={pillStyle}
-                >
+                <Link href="/login" className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 border rounded-2xl backdrop-blur-md" style={pillStyle}>
                   Login
                 </Link>
               )}
@@ -149,7 +148,6 @@ export default function OfflineLandingPage() {
 
       {/* ── Offline Hero ── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-6 text-center">
-        {/* Offline status pill */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 mb-6">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
           <span className="text-sm font-semibold text-red-600 dark:text-red-400">Offline Mode</span>
@@ -164,7 +162,6 @@ export default function OfflineLandingPage() {
           downloaded while online. Connect to the internet to access all modules.
         </p>
 
-        {/* Info cards */}
         <div className="flex flex-wrap justify-center gap-3 mb-10">
           {[
             { icon: "📥", label: "Downloaded content available" },
@@ -174,10 +171,7 @@ export default function OfflineLandingPage() {
             <div
               key={item.label}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium text-gray-700 dark:text-gray-300"
-              style={{
-                backgroundColor: "var(--card-bg)",
-                borderColor: "var(--card-border)",
-              }}
+              style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }}
             >
               <span>{item.icon}</span>
               <span>{item.label}</span>
@@ -185,7 +179,6 @@ export default function OfflineLandingPage() {
           ))}
         </div>
 
-        {/* Try again */}
         <button
           onClick={() => window.location.reload()}
           className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
@@ -213,14 +206,9 @@ export default function OfflineLandingPage() {
         </div>
 
         {loading ? (
-          /* Skeleton */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="rounded-2xl border p-4 animate-pulse"
-                style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }}
-              >
+              <div key={i} className="rounded-2xl border p-4 animate-pulse" style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)" }}>
                 <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/5 mb-3" />
                 <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-4/5 mb-2" />
                 <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/5" />
@@ -228,7 +216,6 @@ export default function OfflineLandingPage() {
             ))}
           </div>
         ) : downloads.length === 0 ? (
-          /* Empty state */
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-5 text-gray-400 dark:text-gray-600">
               <BookIcon />
@@ -242,10 +229,13 @@ export default function OfflineLandingPage() {
             </p>
           </div>
         ) : (
-          /* Module group cards */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {groups.map((group) => (
-              <ModuleGroupCard key={group.submoduleId ?? group.moduleName} group={group} />
+              <ModuleGroupCard
+                key={group.submoduleId ?? group.moduleName}
+                group={group}
+                isCached={group.submoduleId != null ? (cacheStatus[group.submoduleId] ?? false) : false}
+              />
             ))}
           </div>
         )}
@@ -255,35 +245,62 @@ export default function OfflineLandingPage() {
 }
 
 // ── Module Group Card ──────────────────────────────────────────────────────────
-function ModuleGroupCard({ group }: { group: ModuleGroup }) {
+function ModuleGroupCard({ group, isCached }: { group: ModuleGroup; isCached: boolean }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
+  const [showCacheWarning, setShowCacheWarning] = useState(false);
 
   const canNavigate = group.submoduleId != null;
 
   const handleCardClick = () => {
-    if (canNavigate) {
-      router.push(`/modules/${group.submoduleId}`);
-    } else {
-      setExpanded((v) => !v);
-    }
+    if (!canNavigate) { setExpanded((v) => !v); return; }
+    if (!isCached) { setShowCacheWarning(true); return; }
+    router.push(`/modules/${group.submoduleId}`);
+  };
+
+  const handleOpenModule = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isCached) { setShowCacheWarning(true); return; }
+    router.push(`/modules/${group.submoduleId}`);
   };
 
   return (
     <div
       onClick={handleCardClick}
-      className="group rounded-2xl border cursor-pointer transition-all duration-300 hover:border-purple-400 dark:hover:border-purple-500 overflow-hidden"
+      className={`group rounded-2xl border transition-all duration-300 overflow-hidden ${
+        canNavigate && isCached
+          ? "cursor-pointer hover:border-purple-400 dark:hover:border-purple-500"
+          : canNavigate && !isCached
+          ? "cursor-pointer hover:border-amber-400 dark:hover:border-amber-500"
+          : "cursor-pointer"
+      }`}
       style={{
         backgroundColor: "var(--card-bg)",
         borderColor: "var(--card-border)",
         boxShadow: "var(--pill-shadow)",
       }}
     >
-      {/* Card Header */}
+      {/* Not-cached warning banner */}
+      {showCacheWarning && (
+        <div
+          className="px-4 py-2.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex items-start gap-2"
+          onClick={(e) => { e.stopPropagation(); setShowCacheWarning(false); }}
+        >
+          <span className="text-amber-500 mt-0.5 flex-shrink-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            </svg>
+          </span>
+          <p className="text-xs text-amber-700 dark:text-amber-300 leading-snug">
+            Page not cached. Visit this module online first to enable offline reading.
+            <span className="ml-1 underline cursor-pointer font-semibold" onClick={(e) => { e.stopPropagation(); setShowCacheWarning(false); }}>Dismiss</span>
+          </p>
+        </div>
+      )}
+
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0">
-            {/* Module color dot */}
             <div
               className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center text-white"
               style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
@@ -300,40 +317,38 @@ function ModuleGroupCard({ group }: { group: ModuleGroup }) {
             </div>
           </div>
 
-          {/* Navigate arrow or expand toggle */}
-          <div className="flex-shrink-0 mt-0.5">
-            {canNavigate ? (
-              <svg
-                className="w-4 h-4 text-gray-400 group-hover:text-purple-500 transition-colors"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
+          {/* Cache status badge + arrow */}
+          <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+            {canNavigate && (
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                  isCached
+                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                    : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                }`}
               >
+                {isCached ? "Cached" : "Not cached"}
+              </span>
+            )}
+            {canNavigate ? (
+              <svg className={`w-4 h-4 transition-colors ${isCached ? "text-gray-400 group-hover:text-purple-500" : "text-amber-400"}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             ) : (
-              <svg
-                className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
+              <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             )}
           </div>
         </div>
 
-        {/* Topic list preview (first 2 always visible) */}
+        {/* Topic list */}
         <div className="space-y-1.5">
           {group.topics.slice(0, expanded ? group.topics.length : 2).map((topic) => (
-            <TopicRow key={topic.id} topic={topic} submoduleId={group.submoduleId} />
+            <TopicRow key={topic.id} topic={topic} submoduleId={group.submoduleId} isCached={isCached} />
           ))}
         </div>
 
-        {/* Collapsed: show "N more" */}
         {!expanded && group.topics.length > 2 && (
           <button
             onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
@@ -355,11 +370,16 @@ function ModuleGroupCard({ group }: { group: ModuleGroup }) {
         </span>
         {canNavigate && (
           <button
-            onClick={() => router.push(`/modules/${group.submoduleId}`)}
-            className="text-[10px] font-bold px-2.5 py-1 rounded-lg text-white transition-all active:scale-95"
-            style={{ background: "linear-gradient(90deg, #7a12fa, #b614ef)" }}
+            onClick={handleOpenModule}
+            className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 ${
+              isCached
+                ? "text-white"
+                : "text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30"
+            }`}
+            style={isCached ? { background: "linear-gradient(90deg, #7a12fa, #b614ef)" } : {}}
+            title={isCached ? "Open module" : "Visit online first to cache this module"}
           >
-            Open module
+            {isCached ? "Open module" : "Not available offline"}
           </button>
         )}
       </div>
@@ -368,12 +388,12 @@ function ModuleGroupCard({ group }: { group: ModuleGroup }) {
 }
 
 // ── Topic Row ──────────────────────────────────────────────────────────────────
-function TopicRow({ topic, submoduleId }: { topic: DownloadRecord; submoduleId: number | null }) {
+function TopicRow({ topic, submoduleId, isCached }: { topic: DownloadRecord; submoduleId: number | null; isCached: boolean }) {
   const router = useRouter();
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (submoduleId != null) {
+    if (submoduleId != null && isCached) {
       router.push(`/modules/${submoduleId}`);
     }
   };
@@ -381,15 +401,15 @@ function TopicRow({ topic, submoduleId }: { topic: DownloadRecord; submoduleId: 
   return (
     <div
       onClick={handleClick}
-      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors cursor-pointer"
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors ${
+        isCached
+          ? "hover:bg-purple-50 dark:hover:bg-purple-900/20 cursor-pointer"
+          : "cursor-default opacity-60"
+      }`}
     >
-      <div className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0" />
-      <span className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1">
-        {topic.topicName}
-      </span>
-      <span className="text-[10px] text-gray-400 uppercase tracking-wide flex-shrink-0">
-        {topic.fileType}
-      </span>
+      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isCached ? "bg-purple-400" : "bg-amber-400"}`} />
+      <span className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1">{topic.topicName}</span>
+      <span className="text-[10px] text-gray-400 uppercase tracking-wide flex-shrink-0">{topic.fileType}</span>
     </div>
   );
 }

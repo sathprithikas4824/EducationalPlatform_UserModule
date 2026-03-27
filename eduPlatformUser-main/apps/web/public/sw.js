@@ -37,6 +37,12 @@ self.addEventListener("fetch", (event) => {
   // Only handle GET requests from our origin
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
 
+  // _swbypass: used for real connectivity checks — go straight to network, no cache
+  if (url.searchParams.has("_swbypass")) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   // Skip Next.js internal routes and Supabase API calls
   if (
     url.pathname.startsWith("/_next/webpack-hmr") ||
