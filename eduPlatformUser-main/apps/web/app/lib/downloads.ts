@@ -9,6 +9,7 @@ export interface DownloadRecord {
   topicId: number;
   topicName: string;
   moduleName: string;
+  submoduleId?: number;
   fileName: string;
   fileType: string;
   content: string;

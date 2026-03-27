@@ -1,9 +1,4 @@
-import TopBar from "./components/layout/TopBar";
-import MainNavbar from "./components/layout/MainNavBar";
-import HeroSection from "./components/layout/HeroSection";
-import ExploreTopics from "./components/layout/ExploreTopics";
-import Content from "./components/moduleFirstPage/Main";
-import Main from "./components/moduleFirstPage/Main";
+import OfflineWrapper from "./components/common/OfflineWrapper";
 
 export default function Page() {
   return (
@@ -11,21 +6,7 @@ export default function Page() {
       className="relative min-h-screen w-full bg-white dark:bg-[#0d0d1a]"
       style={{ overflow: 'visible' }}
     >
-      {/* TOP BAR */}
-      {/* <div className="relative z-20">
-        <TopBar />
-      </div> */}
-
-      {/* MAIN NAVBAR*/}
-      {/* <MainNavbar /> */}
-
-      {/* HERO SECTION */}
-      {/* <HeroSection /> */}
-
-      {/* EXPLORE SECTION */}
-      {/* <ExploreTopics/> */}
-
-      <Main/>
+      <OfflineWrapper />
     </div>
   );
 }

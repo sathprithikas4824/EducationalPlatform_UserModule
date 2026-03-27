@@ -357,6 +357,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           topicId: selectedTopic.topic_id,
           topicName,
           moduleName,
+          submoduleId: currentSubmodule?.submodule_id ?? submoduleId,
           fileName,
           fileType: "txt",
           content,
