@@ -90,7 +90,16 @@ export async function saveDownload(
       .select()
       .single();
 
-    if (!error && data) return rowToRecord(data as Record<string, unknown>);
+    if (!error && data) {
+      const saved = rowToRecord(data as Record<string, unknown>);
+      // Mirror to localStorage so the record is available offline
+      const existing = localLoad(userId);
+      const filtered = existing.filter(
+        (d) => !(d.topicId === record.topicId && d.fileName === record.fileName)
+      );
+      localSave(userId, [...filtered, saved]);
+      return saved;
+    }
     console.warn("Supabase saveDownload failed, using localStorage:", error?.message);
   }
 
@@ -116,7 +125,12 @@ export async function loadDownloads(userId: string): Promise<DownloadRecord[]> {
         .eq("user_id", userId)
         .order("downloaded_at", { ascending: false });
 
-      if (!error) return (data || []).map((r) => rowToRecord(r as Record<string, unknown>));
+      if (!error) {
+        const records = (data || []).map((r) => rowToRecord(r as Record<string, unknown>));
+        // Cache to localStorage so records are available offline
+        localSave(userId, records);
+        return records;
+      }
       console.warn("Supabase loadDownloads failed, using localStorage:", error.message);
     }
   }
