@@ -72,12 +72,14 @@ function buildReaderTopics(records: DownloadRecord[]): ReaderTopic[] {
       byTopicId.set(r.topicId, r);
     }
   }
-  return Array.from(byTopicId.values()).map((r) => ({
-    topicId: r.topicId,
-    topicName: r.topicName,
-    fileType: r.fileType,
-    content: r.content,
-  }));
+  return Array.from(byTopicId.values())
+    .sort((a, b) => a.topicId - b.topicId)
+    .map((r) => ({
+      topicId: r.topicId,
+      topicName: r.topicName,
+      fileType: r.fileType,
+      content: r.content,
+    }));
 }
 
 // ── Offline Reader ─────────────────────────────────────────────────────────────

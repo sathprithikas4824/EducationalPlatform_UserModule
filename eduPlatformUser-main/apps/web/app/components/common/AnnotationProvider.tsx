@@ -11,6 +11,7 @@ import {
   backupProgressToCookies,
   type Highlight as SupabaseHighlight,
 } from "../../lib/supabase";
+import { loadDownloads } from "../../lib/downloads";
 import GoogleLoginPopup from "./GoogleLoginPopup";
 
 // Types
@@ -284,6 +285,8 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         loadHighlightsForUser(u.id);
         // Sync all Supabase progress to cookie so it's visible after logout
         backupProgressToCookies(u.id);
+        // Prefetch downloads to localStorage so they're available offline on this device
+        loadDownloads(u.id).catch(() => {});
       } else {
         // No Supabase session — check whether a demo (cookie) user is logged in.
         // We must NOT delete the demo user cookie here, as it belongs to a
