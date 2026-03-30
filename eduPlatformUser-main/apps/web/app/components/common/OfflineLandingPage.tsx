@@ -2,11 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { loadDownloads, type DownloadRecord } from "../../lib/downloads";
 import { getLastUserId } from "../../lib/supabase";
 import { useAnnotation } from "./AnnotationProvider";
 import ThemeToggle from "./ThemeToggle";
+import { useRouter } from "next/navigation";
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 const WifiOffIcon = () => (
@@ -36,21 +36,6 @@ const BookIcon = () => (
   </svg>
 );
 
-// ── SW cache check ─────────────────────────────────────────────────────────────
-// Before navigating to /modules/[id] offline, verify the page is in the SW
-// cache. If it was never visited online, the SW has nothing — navigating would
-// show a broken/empty page on every browser/device.
-async function isModuleCached(submoduleId: number): Promise<boolean> {
-  if (!("caches" in window)) return false;
-  try {
-    const cache = await caches.open("edu-pages-v1");
-    const match = await cache.match(`/modules/${submoduleId}`);
-    return !!match;
-  } catch {
-    return false;
-  }
-}
-
 // ── Group downloads by submodule ───────────────────────────────────────────────
 interface ModuleGroup {
   submoduleId: number | null;
@@ -70,30 +55,245 @@ function groupByModule(downloads: DownloadRecord[]): ModuleGroup[] {
   return Array.from(map.values());
 }
 
+// ── Build reader topics: deduplicate by topicId, prefer html records ───────────
+interface ReaderTopic {
+  topicId: number;
+  topicName: string;
+  fileType: string;
+  content: string;
+}
+
+function buildReaderTopics(records: DownloadRecord[]): ReaderTopic[] {
+  // Prefer html records per topicId, then any record
+  const byTopicId = new Map<number, DownloadRecord>();
+  for (const r of records) {
+    const existing = byTopicId.get(r.topicId);
+    if (!existing || r.fileType === "html") {
+      byTopicId.set(r.topicId, r);
+    }
+  }
+  return Array.from(byTopicId.values()).map((r) => ({
+    topicId: r.topicId,
+    topicName: r.topicName,
+    fileType: r.fileType,
+    content: r.content,
+  }));
+}
+
+// ── Offline Reader ─────────────────────────────────────────────────────────────
+function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => void }) {
+  const topics = buildReaderTopics(group.topics);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const selected = topics[selectedIndex];
+
+  const pillStyle = {
+    backgroundColor: "var(--pill-bg)",
+    borderColor: "var(--pill-border)",
+    boxShadow: "var(--pill-shadow)",
+  };
+
+  // Parse HTML content from a record
+  const parseContent = (topic: ReaderTopic): { title: string | null; description: string | null } => {
+    if (topic.fileType === "html") {
+      try {
+        const parsed = JSON.parse(topic.content) as { title?: string; description?: string };
+        return { title: parsed.title || null, description: parsed.description || null };
+      } catch {
+        return { title: null, description: topic.content };
+      }
+    }
+    // Plain text record — show as-is
+    return { title: null, description: null };
+  };
+
+  const { title, description } = selected ? parseContent(selected) : { title: null, description: null };
+  const isPlainText = selected?.fileType !== "html";
+
+  return (
+    <div className="min-h-screen bg-white dark:bg-[#0d0d1a] flex flex-col transition-colors duration-300">
+      {/* ── Top Bar ── */}
+      <header className="sticky top-0 z-50 bg-white dark:bg-[#0d0d1a] border-b border-gray-200 dark:border-gray-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+          {/* Back button */}
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors flex-shrink-0"
+          >
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m7-7l-7 7 7 7" />
+            </svg>
+            <span className="hidden sm:inline">Downloads</span>
+          </button>
+
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+
+          {/* Module name */}
+          <h1 className="jakarta-font text-sm sm:text-base font-bold text-gray-900 dark:text-gray-100 truncate flex-1">
+            {group.moduleName}
+          </h1>
+
+          {/* Offline badge */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 flex-shrink-0">
+            <span className="text-red-500 dark:text-red-400"><WifiOffIcon /></span>
+            <span className="text-xs font-semibold text-red-600 dark:text-red-400 hidden sm:block">Offline</span>
+          </div>
+
+          <div className="flex items-center px-2 py-1.5 rounded-xl border backdrop-blur-md flex-shrink-0" style={pillStyle}>
+            <ThemeToggle />
+          </div>
+        </div>
+      </header>
+
+      {/* ── Mobile topic toggle ── */}
+      <div className="lg:hidden sticky top-[57px] z-40 bg-white dark:bg-[#0d0d1a] border-b border-gray-200 dark:border-gray-700 px-4 py-2.5">
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          <svg className={`w-5 h-5 transition-transform duration-200 ${sidebarOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+          {sidebarOpen ? "Hide Topics" : "Topics"} ({topics.length})
+        </button>
+      </div>
+
+      {/* ── Body: sidebar + content ── */}
+      <div className="flex flex-1 max-w-7xl mx-auto w-full">
+        {/* Sidebar */}
+        <aside className={`
+          ${sidebarOpen ? "block" : "hidden"} lg:block
+          w-full lg:w-[240px] xl:w-[260px] flex-shrink-0
+          bg-white dark:bg-[#0d0d1a] px-4 py-6
+          lg:border-r border-gray-200 dark:border-gray-800
+        `}>
+          <div className="bg-[#d4d4d4] dark:bg-gray-800 rounded-2xl p-3 space-y-1.5">
+            <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 pb-1">
+              Topics
+            </p>
+            {topics.map((topic, i) => (
+              <button
+                key={topic.topicId}
+                onClick={() => { setSelectedIndex(i); setSidebarOpen(false); }}
+                className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 ${
+                  i === selectedIndex
+                    ? "bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700"
+                    : "bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${i === selectedIndex ? "bg-purple-500" : "bg-gray-300 dark:bg-gray-600"}`} />
+                  <span className="leading-snug">{topic.topicName}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="flex-1 px-4 sm:px-6 lg:px-10 py-6 lg:py-8 overflow-x-hidden">
+          {selected ? (
+            <div className="max-w-3xl">
+              {/* Topic name breadcrumb */}
+              <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-3">
+                {group.moduleName}
+              </p>
+
+              {isPlainText ? (
+                // Plain text fallback (old txt-type records)
+                <div>
+                  <h2 className="jakarta-font text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+                    {selected.topicName}
+                  </h2>
+                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Downloaded Notes</p>
+                    <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
+                      {selected.content}
+                    </pre>
+                  </div>
+                </div>
+              ) : (
+                // Proper HTML content
+                <div>
+                  {title && (
+                    <div
+                      className="ai-content-wrapper mb-4"
+                      dangerouslySetInnerHTML={{ __html: title }}
+                    />
+                  )}
+                  {!title && (
+                    <h2 className="jakarta-font text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+                      {selected.topicName}
+                    </h2>
+                  )}
+                  {description ? (
+                    <div
+                      className="ai-content-wrapper"
+                      dangerouslySetInnerHTML={{ __html: description }}
+                    />
+                  ) : (
+                    <p className="text-gray-400 italic text-sm">No content available for this topic.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Navigation buttons */}
+              <div className="flex items-center justify-between mt-10 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setSelectedIndex((p) => Math.max(0, p - 1))}
+                  disabled={selectedIndex === 0}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border transition-all disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m7-7l-7 7 7 7" />
+                  </svg>
+                  Previous
+                </button>
+                <span className="text-xs text-gray-400">{selectedIndex + 1} / {topics.length}</span>
+                <button
+                  onClick={() => setSelectedIndex((p) => Math.min(topics.length - 1, p + 1))}
+                  disabled={selectedIndex === topics.length - 1}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border transition-all disabled:opacity-40 disabled:cursor-not-allowed text-white border-transparent"
+                  style={{ background: selectedIndex === topics.length - 1 ? "#e5e7eb" : "linear-gradient(90deg, #7a12fa, #b614ef)" }}
+                >
+                  Next
+                  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-7-7 7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <p className="text-gray-500 dark:text-gray-400">No topics available.</p>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function OfflineLandingPage() {
   const router = useRouter();
   const { user } = useAnnotation();
   const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  // Map of submoduleId → whether its page is in SW cache
-  const [cacheStatus, setCacheStatus] = useState<Record<number, boolean>>({});
+  const [openedGroup, setOpenedGroup] = useState<ModuleGroup | null>(null);
 
   useEffect(() => {
     const userId = user?.id ?? getLastUserId();
     if (!userId) { setLoading(false); return; }
-
-    loadDownloads(userId).then(async (records) => {
+    loadDownloads(userId).then((records) => {
       setDownloads(records);
-
-      // Check SW cache for every unique submoduleId
-      const uniqueIds = [...new Set(records.map((r) => r.submoduleId).filter((id): id is number => id != null))];
-      const entries = await Promise.all(
-        uniqueIds.map(async (id) => [id, await isModuleCached(id)] as [number, boolean])
-      );
-      setCacheStatus(Object.fromEntries(entries));
     }).finally(() => setLoading(false));
   }, [user?.id]);
+
+  // Show reader when a module is opened
+  if (openedGroup) {
+    return <OfflineReader group={openedGroup} onBack={() => setOpenedGroup(null)} />;
+  }
 
   const groups = groupByModule(downloads);
   const pillStyle = {
@@ -225,7 +425,7 @@ export default function OfflineLandingPage() {
             </h3>
             <p className="text-gray-500 dark:text-gray-400 text-sm max-w-xs leading-relaxed">
               You haven't downloaded anything yet. Go online, open a module, and
-              use the download button on any topic to save it for offline reading.
+              use the &ldquo;Download Module&rdquo; button to save it for offline reading.
             </p>
           </div>
         ) : (
@@ -234,7 +434,7 @@ export default function OfflineLandingPage() {
               <ModuleGroupCard
                 key={group.submoduleId ?? group.moduleName}
                 group={group}
-                isCached={group.submoduleId != null ? (cacheStatus[group.submoduleId] ?? false) : false}
+                onOpen={() => setOpenedGroup(group)}
               />
             ))}
           </div>
@@ -245,59 +445,23 @@ export default function OfflineLandingPage() {
 }
 
 // ── Module Group Card ──────────────────────────────────────────────────────────
-function ModuleGroupCard({ group, isCached }: { group: ModuleGroup; isCached: boolean }) {
-  const router = useRouter();
+function ModuleGroupCard({ group, onOpen }: { group: ModuleGroup; onOpen: () => void }) {
   const [expanded, setExpanded] = useState(false);
-  const [showCacheWarning, setShowCacheWarning] = useState(false);
 
-  const canNavigate = group.submoduleId != null;
-
-  const handleCardClick = () => {
-    if (!canNavigate) { setExpanded((v) => !v); return; }
-    if (!isCached) { setShowCacheWarning(true); return; }
-    router.push(`/modules/${group.submoduleId}`);
-  };
-
-  const handleOpenModule = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isCached) { setShowCacheWarning(true); return; }
-    router.push(`/modules/${group.submoduleId}`);
-  };
+  // Check if module has html records (readable offline)
+  const hasHtmlRecords = group.topics.some((t) => t.fileType === "html");
+  const uniqueTopics = buildReaderTopics(group.topics);
 
   return (
     <div
-      onClick={handleCardClick}
-      className={`group rounded-2xl border transition-all duration-300 overflow-hidden ${
-        canNavigate && isCached
-          ? "cursor-pointer hover:border-purple-400 dark:hover:border-purple-500"
-          : canNavigate && !isCached
-          ? "cursor-pointer hover:border-amber-400 dark:hover:border-amber-500"
-          : "cursor-pointer"
-      }`}
+      onClick={onOpen}
+      className="group rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer hover:border-purple-400 dark:hover:border-purple-500"
       style={{
         backgroundColor: "var(--card-bg)",
         borderColor: "var(--card-border)",
         boxShadow: "var(--pill-shadow)",
       }}
     >
-      {/* Not-cached warning banner */}
-      {showCacheWarning && (
-        <div
-          className="px-4 py-2.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex items-start gap-2"
-          onClick={(e) => { e.stopPropagation(); setShowCacheWarning(false); }}
-        >
-          <span className="text-amber-500 mt-0.5 flex-shrink-0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            </svg>
-          </span>
-          <p className="text-xs text-amber-700 dark:text-amber-300 leading-snug">
-            Page not cached. Visit this module online first to enable offline reading.
-            <span className="ml-1 underline cursor-pointer font-semibold" onClick={(e) => { e.stopPropagation(); setShowCacheWarning(false); }}>Dismiss</span>
-          </p>
-        </div>
-      )}
-
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0">
@@ -312,49 +476,42 @@ function ModuleGroupCard({ group, isCached }: { group: ModuleGroup; isCached: bo
                 {group.moduleName}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {group.topics.length} topic{group.topics.length !== 1 ? "s" : ""} downloaded
+                {uniqueTopics.length} topic{uniqueTopics.length !== 1 ? "s" : ""}
               </p>
             </div>
           </div>
 
-          {/* Cache status badge + arrow */}
           <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
-            {canNavigate && (
-              <span
-                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                  isCached
-                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                    : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
-                }`}
-              >
-                {isCached ? "Cached" : "Not cached"}
-              </span>
-            )}
-            {canNavigate ? (
-              <svg className={`w-4 h-4 transition-colors ${isCached ? "text-gray-400 group-hover:text-purple-500" : "text-amber-400"}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            ) : (
-              <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            )}
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+              hasHtmlRecords
+                ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+            }`}>
+              {hasHtmlRecords ? "Readable" : "Text only"}
+            </span>
+            <svg className="w-4 h-4 text-gray-400 group-hover:text-purple-500 transition-colors" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
           </div>
         </div>
 
-        {/* Topic list */}
-        <div className="space-y-1.5">
-          {group.topics.slice(0, expanded ? group.topics.length : 2).map((topic) => (
-            <TopicRow key={topic.id} topic={topic} submoduleId={group.submoduleId} isCached={isCached} />
+        {/* Topic list preview */}
+        <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+          {uniqueTopics.slice(0, expanded ? uniqueTopics.length : 2).map((topic) => (
+            <div key={topic.topicId} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg">
+              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-purple-400" />
+              <span className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1">{topic.topicName}</span>
+              <span className="text-[10px] text-gray-400 uppercase tracking-wide flex-shrink-0">{topic.fileType}</span>
+            </div>
           ))}
         </div>
 
-        {!expanded && group.topics.length > 2 && (
+        {!expanded && uniqueTopics.length > 2 && (
           <button
             onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
             className="mt-2 text-xs text-purple-600 dark:text-purple-400 font-semibold hover:underline"
           >
-            +{group.topics.length - 2} more topic{group.topics.length - 2 !== 1 ? "s" : ""}
+            +{uniqueTopics.length - 2} more topic{uniqueTopics.length - 2 !== 1 ? "s" : ""}
           </button>
         )}
       </div>
@@ -368,48 +525,14 @@ function ModuleGroupCard({ group, isCached }: { group: ModuleGroup; isCached: bo
         <span className="text-[10px] text-gray-400 dark:text-gray-500">
           Last saved: {new Date(group.topics[0].downloadedAt).toLocaleDateString()}
         </span>
-        {canNavigate && (
-          <button
-            onClick={handleOpenModule}
-            className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 ${
-              isCached
-                ? "text-white"
-                : "text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30"
-            }`}
-            style={isCached ? { background: "linear-gradient(90deg, #7a12fa, #b614ef)" } : {}}
-            title={isCached ? "Open module" : "Visit online first to cache this module"}
-          >
-            {isCached ? "Open module" : "Not available offline"}
-          </button>
-        )}
+        <button
+          onClick={onOpen}
+          className="text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 text-white"
+          style={{ background: "linear-gradient(90deg, #7a12fa, #b614ef)" }}
+        >
+          Open module
+        </button>
       </div>
-    </div>
-  );
-}
-
-// ── Topic Row ──────────────────────────────────────────────────────────────────
-function TopicRow({ topic, submoduleId, isCached }: { topic: DownloadRecord; submoduleId: number | null; isCached: boolean }) {
-  const router = useRouter();
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (submoduleId != null && isCached) {
-      router.push(`/modules/${submoduleId}`);
-    }
-  };
-
-  return (
-    <div
-      onClick={handleClick}
-      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors ${
-        isCached
-          ? "hover:bg-purple-50 dark:hover:bg-purple-900/20 cursor-pointer"
-          : "cursor-default opacity-60"
-      }`}
-    >
-      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isCached ? "bg-purple-400" : "bg-amber-400"}`} />
-      <span className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1">{topic.topicName}</span>
-      <span className="text-[10px] text-gray-400 uppercase tracking-wide flex-shrink-0">{topic.fileType}</span>
     </div>
   );
 }

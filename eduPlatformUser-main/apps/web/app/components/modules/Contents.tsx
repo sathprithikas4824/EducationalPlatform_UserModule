@@ -376,37 +376,19 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     setModuleDownloadProgress({ current: 0, total: topics.length });
 
     const moduleName = currentSubmodule?.name || "Module";
-    const date = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
-    const line = "=".repeat(64);
-    const thin = "-".repeat(64);
 
     for (let i = 0; i < topics.length; i++) {
       const topic = topics[i];
       setModuleDownloadProgress({ current: i + 1, total: topics.length });
 
       const topicName = topic.name;
-      const titleText = topic.title ? stripHtml(topic.title) : topicName;
-      const descText = topic.description ? stripHtml(topic.description) : "";
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
-      const fileName = `${safeName}_Notes.txt`;
-      const content = [
-        line,
-        "  TOPIC NOTES",
-        line,
-        "",
-        `  Module : ${moduleName}`,
-        `  Topic  : ${topicName}`,
-        `  Date   : ${date}`,
-        "",
-        line,
-        "",
-        ...(titleText && titleText !== topicName ? [titleText, "", thin, ""] : []),
-        descText,
-        "",
-        line,
-        "  End of Topic Notes",
-        line,
-      ].join("\n");
+      const fileName = `${safeName}_offline.json`;
+      // Store original HTML so the offline reader can render it properly
+      const content = JSON.stringify({
+        title: topic.title || null,
+        description: topic.description || null,
+      });
 
       await saveDownload(user.id, {
         userId: user.id,
@@ -415,7 +397,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         moduleName,
         submoduleId: currentSubmodule?.submodule_id ?? submoduleId,
         fileName,
-        fileType: "txt",
+        fileType: "html",
         content,
       });
     }
