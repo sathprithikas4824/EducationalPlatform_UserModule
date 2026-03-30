@@ -131,6 +131,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [resetTopicId, setResetTopicId] = useState<number | null>(null);
   const [downloadedSet, setDownloadedSet] = useState<Set<string>>(new Set());
   const [bookmarkedTopicIds, setBookmarkedTopicIds] = useState<Set<number>>(new Set());
+  const [moduleDownloadState, setModuleDownloadState] = useState<"idle" | "downloading" | "done">("idle");
+  const [moduleDownloadProgress, setModuleDownloadProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
 
   // Load topic bookmarks when user changes
   useEffect(() => {
@@ -366,6 +368,60 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     },
     [selectedTopic, currentSubmodule, user]
   );
+
+  // Download all topics in the current module for offline reading
+  const handleModuleDownload = useCallback(async () => {
+    if (!user || !topics.length) return;
+    setModuleDownloadState("downloading");
+    setModuleDownloadProgress({ current: 0, total: topics.length });
+
+    const moduleName = currentSubmodule?.name || "Module";
+    const date = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+    const line = "=".repeat(64);
+    const thin = "-".repeat(64);
+
+    for (let i = 0; i < topics.length; i++) {
+      const topic = topics[i];
+      setModuleDownloadProgress({ current: i + 1, total: topics.length });
+
+      const topicName = topic.name;
+      const titleText = topic.title ? stripHtml(topic.title) : topicName;
+      const descText = topic.description ? stripHtml(topic.description) : "";
+      const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+      const fileName = `${safeName}_Notes.txt`;
+      const content = [
+        line,
+        "  TOPIC NOTES",
+        line,
+        "",
+        `  Module : ${moduleName}`,
+        `  Topic  : ${topicName}`,
+        `  Date   : ${date}`,
+        "",
+        line,
+        "",
+        ...(titleText && titleText !== topicName ? [titleText, "", thin, ""] : []),
+        descText,
+        "",
+        line,
+        "  End of Topic Notes",
+        line,
+      ].join("\n");
+
+      await saveDownload(user.id, {
+        userId: user.id,
+        topicId: topic.topic_id,
+        topicName,
+        moduleName,
+        submoduleId: currentSubmodule?.submodule_id ?? submoduleId,
+        fileName,
+        fileType: "txt",
+        content,
+      });
+    }
+
+    setModuleDownloadState("done");
+  }, [user, topics, currentSubmodule, submoduleId, stripHtml]);
 
   // Mark the currently selected topic as completed in Supabase
   // Only runs for logged-in users — guests cannot track progress
@@ -852,6 +908,44 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
               <p className="text-purple-600 text-sm sm:text-base leading-relaxed">
                 Explore the topics below to start learning.
               </p>
+            )}
+
+            {/* Download Module Button */}
+            {user && topics.length > 0 && (
+              <button
+                onClick={handleModuleDownload}
+                disabled={moduleDownloadState === "downloading"}
+                className={`mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 ${
+                  moduleDownloadState === "done"
+                    ? "bg-green-50 text-green-600 border border-green-200"
+                    : moduleDownloadState === "downloading"
+                    ? "bg-purple-50 text-purple-400 border border-purple-200 cursor-not-allowed"
+                    : "bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100"
+                }`}
+              >
+                {moduleDownloadState === "done" ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Module Downloaded ({topics.length} topics)
+                  </>
+                ) : moduleDownloadState === "downloading" ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Saving {moduleDownloadProgress.current}/{moduleDownloadProgress.total} topics...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download Module ({topics.length} topics)
+                  </>
+                )}
+              </button>
             )}
           </div>
         </div>
