@@ -82,6 +82,42 @@ function buildReaderTopics(records: DownloadRecord[]): ReaderTopic[] {
     }));
 }
 
+// ── Parse old txt-format records into title + styled HTML body ─────────────────
+function parseTxtContent(content: string): { title: string; body: string } {
+  const SEP  = "=".repeat(64);
+  const THIN = "-".repeat(64);
+
+  // Split by === separators, take the 3rd non-empty section (actual topic content)
+  const sections = content.split(SEP).map((s) => s.trim()).filter((s) => s.length > 0);
+  // sections: ["TOPIC NOTES", "Module:...", "<title?>\n<thin?>\n<desc>", "End of Topic Notes"]
+  const rawContent = sections.length >= 3 ? sections[2] : sections[sections.length - 1] ?? content;
+
+  // Split by the thin (---) separator to separate optional title from description
+  const parts = rawContent.split(THIN).map((s) => s.trim()).filter((s) => s.length > 0);
+
+  let titleText = "";
+  let descText  = "";
+  if (parts.length >= 2) {
+    titleText = parts[0].replace(/\n/g, " ").trim();
+    descText  = parts.slice(1).join("\n\n").trim();
+  } else {
+    descText = (parts[0] ?? rawContent).trim();
+  }
+
+  // Convert plain text paragraphs → <p> tags (no HTML injection risk — this was stripped text)
+  const safe = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const body = descText
+    .split(/\n{2,}/)
+    .map((para) => para.replace(/\n/g, " ").trim())
+    .filter((para) => para.length > 0)
+    .map((para) => `<p>${safe(para)}</p>`)
+    .join("\n");
+
+  return { title: titleText, body: body || `<p>${safe(descText)}</p>` };
+}
+
 // ── Offline Reader ─────────────────────────────────────────────────────────────
 function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => void }) {
   const topics = buildReaderTopics(group.topics);
@@ -202,18 +238,21 @@ function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => vo
               </p>
 
               {isPlainText ? (
-                // Plain text fallback (old txt-type records)
-                <div>
-                  <h2 className="jakarta-font text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                    {selected.topicName}
-                  </h2>
-                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Downloaded Notes</p>
-                    <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">
-                      {selected.content}
-                    </pre>
-                  </div>
-                </div>
+                // Old txt-type records — parse and render as styled content (same look as html)
+                (() => {
+                  const { title: parsedTitle, body } = parseTxtContent(selected.content);
+                  return (
+                    <div>
+                      <h2 className="jakarta-font text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+                        {parsedTitle || selected.topicName}
+                      </h2>
+                      <div
+                        className="ai-content-wrapper"
+                        dangerouslySetInnerHTML={{ __html: body }}
+                      />
+                    </div>
+                  );
+                })()
               ) : (
                 // Proper HTML content
                 <div>
