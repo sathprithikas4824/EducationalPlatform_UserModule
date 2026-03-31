@@ -332,11 +332,23 @@ export default function OfflineLandingPage() {
     }).finally(() => setLoading(false));
   }, [user?.id]);
 
-  // Listen for connectivity restored
+  // Poll for real connectivity every 3 s — more reliable than the 'online' event on Android
   useEffect(() => {
-    const handleOnline = () => setTimeout(() => setBackOnline(true), 500);
+    let shown = false;
+    function check() {
+      if (shown) return;
+      fetch("/favicon.ico?_swbypass=1&t=" + Date.now(), { method: "HEAD", cache: "no-store" })
+        .then((r) => { if (r.ok && !shown) { shown = true; setBackOnline(true); } })
+        .catch(() => {});
+    }
+    const timer = setInterval(check, 3000);
+    // Fast path: native event
+    const handleOnline = () => setTimeout(check, 300);
     window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("online", handleOnline);
+    };
   }, []);
 
   // Show reader when a module is opened

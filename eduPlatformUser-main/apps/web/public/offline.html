@@ -321,9 +321,12 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#fff;color:
 
   render();
 
-  // ── Online detection: show reconnect popup ───────────────────────────────────
+  // ── Connectivity polling: show popup as soon as network is restored ──────────
+  var popupShown = false;
+
   function showReconnectPopup() {
-    if (document.getElementById('reconnect-overlay')) return; // already showing
+    if (popupShown) return;
+    popupShown = true;
     var overlay = document.createElement('div');
     overlay.id = 'reconnect-overlay';
     overlay.className = 'reconnect-overlay';
@@ -340,17 +343,28 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#fff;color:
         '<h3>You\'re back online!</h3>' +
         '<p>Your internet connection has been restored. Connect now to access all modules and sync your progress.</p>' +
         '<div class="popup-actions">' +
-          '<button class="connect-btn" onclick="document.getElementById(\'reconnect-overlay\').remove();location.href=\'/\'">Connect &amp; go online</button>' +
+          '<button class="connect-btn" onclick="location.href=\'/\'">Connect &amp; go online</button>' +
           '<button class="stay-btn" onclick="document.getElementById(\'reconnect-overlay\').remove()">Stay in offline mode</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
   }
 
-  window.addEventListener('online', function () {
-    // Small delay — browser fires 'online' slightly before connectivity is truly usable
-    setTimeout(showReconnectPopup, 500);
-  });
+  function checkOnline() {
+    // Use _swbypass so the SW doesn't intercept — hits real network
+    fetch('/favicon.ico?_swbypass=1&t=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
+      .then(function (r) { if (r.ok) showReconnectPopup(); })
+      .catch(function () {}); // still offline — ignore
+  }
+
+  // Poll every 3 seconds
+  var pollTimer = setInterval(function () {
+    if (popupShown) { clearInterval(pollTimer); return; }
+    checkOnline();
+  }, 3000);
+
+  // Also listen to the native event as a fast path
+  window.addEventListener('online', function () { setTimeout(checkOnline, 300); });
 })();
 </script>
 </body>
