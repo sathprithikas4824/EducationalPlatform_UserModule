@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Offline – Educational Platform</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#fff;color:#111827;min-height:100vh}
+.hdr{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid #f3f4f6;padding:12px 16px}
+.hdr-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.logo-pill{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:12px;border:1px solid #e5e7eb;font-weight:700;font-size:14px;color:#111827}
+.off-badge{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1px solid #fecaca;background:#fef2f2;font-size:12px;font-weight:700;color:#dc2626}
+.reconnect-btn{font-size:12px;font-weight:600;padding:6px 14px;border-radius:10px;border:1px solid #e5e7eb;background:none;cursor:pointer;color:#374151}
+.hero{max-width:900px;margin:0 auto;padding:32px 16px 16px;text-align:center}
+.off-mode-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:20px;border:1px solid #fecaca;background:#fef2f2;margin-bottom:20px}
+.off-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block}
+.hero h1{font-size:clamp(1.75rem,5vw,3rem);font-weight:800;margin-bottom:12px}
+.hero h1 span{color:#ef4444}
+.hero p{font-size:16px;color:#6b7280;max-width:480px;margin:0 auto 24px;line-height:1.6}
+.try-btn{display:inline-flex;align-items:center;gap:8px;padding:10px 24px;border-radius:12px;border:none;background:linear-gradient(90deg,#7a12fa,#b614ef);color:#fff;font-size:14px;font-weight:700;cursor:pointer}
+.section{max-width:900px;margin:0 auto;padding:16px 16px 60px}
+.section-hdr{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+.section-hdr h2{font-size:24px;font-weight:800;color:#111827}
+.section-hdr h2 span{color:#7c3aed}
+.count-pill{padding:2px 10px;border-radius:20px;background:#ede9fe;font-size:12px;font-weight:700;color:#6d28d9}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.card{border-radius:16px;border:1px solid #e5e7eb;padding:16px;cursor:pointer;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06);transition:border-color .15s}
+.card:hover{border-color:#a78bfa}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px}
+.card-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7a12fa,#b614ef);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.card-title{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#111827}
+.card-sub{font-size:12px;color:#6b7280;margin-top:2px}
+.readable-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:20px;background:#dcfce7;color:#15803d}
+.text-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:20px;background:#fef3c7;color:#92400e}
+.topic-row{display:flex;align-items:center;gap:8px;padding:4px 8px}
+.topic-dot{width:6px;height:6px;border-radius:50%;background:#a78bfa;flex-shrink:0}
+.topic-name{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;color:#374151}
+.topic-type{font-size:10px;color:#9ca3af;text-transform:uppercase}
+.more-link{font-size:12px;color:#7c3aed;font-weight:600;margin:6px 0 0 8px}
+.card-footer{margin-top:12px;padding-top:10px;border-top:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center}
+.card-date{font-size:11px;color:#9ca3af}
+.open-btn{font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:none;background:linear-gradient(90deg,#7a12fa,#b614ef);color:#fff;cursor:pointer}
+.empty{text-align:center;padding:60px 16px}
+.empty-icon{font-size:48px;margin-bottom:16px}
+.empty h3{font-size:20px;font-weight:700;margin-bottom:8px;color:#111827}
+.empty p{color:#6b7280;font-size:14px;max-width:300px;margin:0 auto;line-height:1.6}
+/* Reader */
+.reader-hdr{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid #e5e7eb;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.back-btn{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:10px;border:1px solid #e5e7eb;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#374151;white-space:nowrap}
+.reader-title{flex:1;font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#111827}
+.mob-toggle{padding:10px 16px;border-bottom:1px solid #f3f4f6}
+.mob-toggle button{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#374151;background:none;border:none;cursor:pointer}
+.reader-body{display:flex;flex:1;min-height:0}
+.sidebar{width:240px;padding:20px 12px;border-right:1px solid #f3f4f6;background:#f9fafb;flex-shrink:0}
+.sidebar-inner{background:#d4d4d4;border-radius:16px;padding:10px}
+.sidebar-label{font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;padding:0 4px;display:block}
+.topic-btn{width:100%;text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;font-size:12px;font-weight:500;margin-bottom:4px;display:flex;align-items:center;gap:8px;transition:all .1s}
+.topic-btn.active{border:1px solid #c4b5fd;background:#ede9fe;color:#6d28d9}
+.topic-btn.inactive{border:1px solid transparent;background:#fff;color:#374151}
+.t-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.main-content{flex:1;padding:24px 20px;overflow-y:auto;max-width:740px}
+.breadcrumb{font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
+.content-h{font-size:22px;font-weight:800;color:#111827;margin-bottom:16px}
+.ai p{font-size:.95rem;line-height:1.6;margin-bottom:.75rem;color:#374151}
+.ai h1,.ai h2{font-weight:800;color:#111827;margin-bottom:.5rem}
+.ai h1{font-size:1.5rem}
+.ai h2{font-size:1.25rem;margin-top:1.5rem}
+.ai h3{font-size:1rem;font-weight:700;margin-top:1rem;margin-bottom:.25rem;color:#111827}
+.ai ul{list-style:disc;margin-left:1.5rem;margin-bottom:.75rem}
+.ai ol{list-style:decimal;margin-left:1.5rem;margin-bottom:.75rem}
+.ai li{font-size:.95rem;line-height:1.6;margin-bottom:.25rem}
+.ai code{background:#f3f4f6;color:#1f2937;padding:.1em .3em;border-radius:3px;font-size:.875em}
+.ai pre{background:#1f2937;color:#e5e7eb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.875rem;margin-bottom:1rem}
+.nav-row{display:flex;align-items:center;justify-content:space-between;margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb}
+.prev-btn{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:1px solid #e5e7eb;background:none;cursor:pointer;font-size:13px;font-weight:600;color:#374151}
+.next-btn{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:none;background:linear-gradient(90deg,#7a12fa,#b614ef);cursor:pointer;font-size:13px;font-weight:600;color:#fff}
+.nav-count{font-size:12px;color:#9ca3af}
+.mob-sidebar-panel{background:#f9fafb;border-bottom:1px solid #f3f4f6;padding:12px}
+@media(min-width:769px){.mob-toggle,.mob-sidebar-panel{display:none!important}}
+@media(max-width:768px){.sidebar{display:none}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  function getLastUserId() {
+    try {
+      var parts = document.cookie.split(';');
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i].trim();
+        if (p.indexOf('edu_last_user_id=') === 0)
+          return decodeURIComponent(p.slice('edu_last_user_id='.length));
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function loadDownloads() {
+    var userId = getLastUserId();
+    if (userId) {
+      try {
+        var raw = localStorage.getItem('edu_downloads_' + userId);
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+    }
+    var all = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('edu_downloads_') === 0) {
+          var r = localStorage.getItem(k);
+          if (r) all = all.concat(JSON.parse(r));
+        }
+      }
+    } catch (e) {}
+    return all;
+  }
+
+  function groupByModule(list) {
+    var map = {}, order = [];
+    list.forEach(function (d) {
+      var key = d.submoduleId != null ? String(d.submoduleId) : d.moduleName;
+      if (!map[key]) { map[key] = { submoduleId: d.submoduleId || null, moduleName: d.moduleName, topics: [] }; order.push(key); }
+      map[key].topics.push(d);
+    });
+    return order.map(function (k) { return map[k]; });
+  }
+
+  function buildTopics(records) {
+    var byId = {};
+    records.forEach(function (r) {
+      if (!byId[r.topicId] || r.fileType === 'html') byId[r.topicId] = r;
+    });
+    return Object.keys(byId).map(function (k) { return byId[k]; })
+      .sort(function (a, b) { return a.topicId - b.topicId; });
+  }
+
+  function esc(s) {
+    return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+  }
+
+  function parseTxt(content) {
+    var sections = content.split(/={10,}/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
+    var raw = sections.length >= 3 ? sections[2] : (sections[sections.length - 1] || content);
+    var parts = raw.split(/-{10,}/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
+    var title = '', desc = '';
+    if (parts.length >= 2) { title = parts[0].replace(/\n/g, ' ').trim(); desc = parts.slice(1).join('\n\n').trim(); }
+    else { desc = (parts[0] || raw).trim(); }
+    var body = desc.split(/\n{2,}/).map(function (p) { return p.replace(/\n/g, ' ').trim(); })
+      .filter(function (p) { return p.length > 0; })
+      .map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('');
+    return { title: title, body: body || '<p>' + esc(desc) + '</p>' };
+  }
+
+  function getContent(topic) {
+    if (topic.fileType === 'html') {
+      try {
+        var parsed = JSON.parse(topic.content);
+        return { title: parsed.title || null, html: parsed.description || null, plain: false };
+      } catch (e) { return { title: null, html: topic.content, plain: false }; }
+    }
+    var r = parseTxt(topic.content);
+    return { title: r.title, html: r.body, plain: true };
+  }
+
+  // ── State ────────────────────────────────────────────────────────────────────
+  var downloads = loadDownloads();
+  var groups = groupByModule(downloads);
+  var currentGroup = null;
+  var currentTopicIdx = 0;
+  var mobSidebarOpen = false;
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+  function render() {
+    var app = document.getElementById('app');
+    if (!app) return;
+    if (currentGroup) renderReader(app);
+    else renderList(app);
+  }
+
+  var WIFI_OFF_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>';
+  var DL_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+
+  function renderList(app) {
+    var h = '';
+    h += '<header class="hdr"><div class="hdr-inner">';
+    h += '<div class="logo-pill">&#128218; Educational Platform</div>';
+    h += '<div class="off-badge" style="color:#dc2626">' + WIFI_OFF_SVG + ' You\'re offline</div>';
+    h += '<button class="reconnect-btn" onclick="location.reload()">Reconnect</button>';
+    h += '</div></header>';
+
+    h += '<div class="hero">';
+    h += '<div class="off-mode-pill"><span class="off-dot"></span><span style="font-size:13px;font-weight:700;color:#dc2626">Offline Mode</span></div>';
+    h += '<h1>You\'re <span>offline</span> right now</h1>';
+    h += '<p>No internet connection detected. Read any content you downloaded while online.</p>';
+    h += '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-bottom:24px">';
+    ['📥 Downloaded content available','📖 Read topics offline','🔄 Sync when back online'].forEach(function(item){
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:12px;border:1px solid #e5e7eb;font-size:13px;font-weight:500;color:#374151">' + item + '</div>';
+    });
+    h += '</div>';
+    h += '<button class="try-btn" onclick="location.reload()">&#8635; Try reconnecting</button>';
+    h += '</div>';
+
+    h += '<div class="section">';
+    h += '<div class="section-hdr"><h2>Downloaded <span>Content</span></h2>';
+    if (downloads.length > 0) h += '<span class="count-pill">' + downloads.length + ' file' + (downloads.length !== 1 ? 's' : '') + '</span>';
+    h += '</div>';
+
+    if (groups.length === 0) {
+      h += '<div class="empty"><div class="empty-icon">&#128218;</div>';
+      h += '<h3>No downloaded content</h3>';
+      h += '<p>Go online, open a module, and use the Download Module button to save topics for offline reading.</p></div>';
+    } else {
+      h += '<div class="grid">';
+      groups.forEach(function (g, gi) {
+        var topics = buildTopics(g.topics);
+        var hasHtml = g.topics.some(function (t) { return t.fileType === 'html'; });
+        h += '<div class="card" onclick="openGroup(' + gi + ')">';
+        h += '<div class="card-top"><div style="display:flex;align-items:center;gap:10px;min-width:0">';
+        h += '<div class="card-icon">' + DL_ICON + '</div>';
+        h += '<div style="min-width:0"><div class="card-title">' + esc(g.moduleName) + '</div>';
+        h += '<div class="card-sub">' + topics.length + ' topic' + (topics.length !== 1 ? 's' : '') + '</div></div></div>';
+        h += '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">';
+        h += '<span class="' + (hasHtml ? 'readable-badge' : 'text-badge') + '">' + (hasHtml ? 'Readable' : 'Text') + '</span>';
+        h += '<span style="font-size:18px;color:#9ca3af">&rsaquo;</span></div></div>';
+        topics.slice(0, 2).forEach(function (t) {
+          h += '<div class="topic-row"><span class="topic-dot"></span><span class="topic-name">' + esc(t.topicName) + '</span><span class="topic-type">' + esc(t.fileType) + '</span></div>';
+        });
+        if (topics.length > 2) h += '<div class="more-link">+' + (topics.length - 2) + ' more</div>';
+        h += '<div class="card-footer"><span class="card-date">Saved ' + new Date(g.topics[0].downloadedAt).toLocaleDateString() + '</span>';
+        h += '<button class="open-btn" onclick="event.stopPropagation();openGroup(' + gi + ')">Open module</button></div>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+    app.innerHTML = h;
+  }
+
+  function renderReader(app) {
+    var g = currentGroup;
+    var topics = buildTopics(g.topics);
+    var topic = topics[currentTopicIdx];
+    var c = topic ? getContent(topic) : { title: null, html: null, plain: false };
+
+    var h = '<div style="min-height:100vh;display:flex;flex-direction:column">';
+    h += '<header class="reader-hdr">';
+    h += '<button class="back-btn" onclick="goBack()">&#8592; Downloads</button>';
+    h += '<span class="reader-title">' + esc(g.moduleName) + '</span>';
+    h += '<div class="off-badge" style="flex-shrink:0;color:#dc2626">' + WIFI_OFF_SVG + ' Offline</div>';
+    h += '</header>';
+
+    // Mobile topic toggle
+    h += '<div class="mob-toggle"><button onclick="toggleMobSidebar()">&#9776; Topics (' + topics.length + ')</button></div>';
+    h += '<div class="mob-sidebar-panel" id="mob-sidebar" style="display:' + (mobSidebarOpen ? 'block' : 'none') + '">';
+    h += '<div class="sidebar-inner"><span class="sidebar-label">Topics</span>';
+    topics.forEach(function (t, i) {
+      h += '<button class="topic-btn ' + (i === currentTopicIdx ? 'active' : 'inactive') + '" onclick="selectTopic(' + i + ')">';
+      h += '<span class="t-dot" style="background:' + (i === currentTopicIdx ? '#8b5cf6' : '#d1d5db') + '"></span>' + esc(t.topicName) + '</button>';
+    });
+    h += '</div></div>';
+
+    h += '<div class="reader-body">';
+    // Desktop sidebar
+    h += '<aside class="sidebar"><div class="sidebar-inner"><span class="sidebar-label">Topics</span>';
+    topics.forEach(function (t, i) {
+      h += '<button class="topic-btn ' + (i === currentTopicIdx ? 'active' : 'inactive') + '" onclick="selectTopic(' + i + ')">';
+      h += '<span class="t-dot" style="background:' + (i === currentTopicIdx ? '#8b5cf6' : '#d1d5db') + '"></span>' + esc(t.topicName) + '</button>';
+    });
+    h += '</div></aside>';
+
+    h += '<main class="main-content">';
+    if (topic) {
+      h += '<p class="breadcrumb">' + esc(g.moduleName) + '</p>';
+      if (!c.plain && c.title) {
+        h += '<div class="ai" style="margin-bottom:16px">' + c.title + '</div>';
+      } else {
+        h += '<h2 class="content-h">' + esc(c.title || topic.topicName) + '</h2>';
+      }
+      if (c.html) {
+        h += '<div class="ai">' + c.html + '</div>';
+      } else {
+        h += '<p style="color:#9ca3af;font-style:italic;font-size:14px">No content available.</p>';
+      }
+      h += '<div class="nav-row">';
+      h += '<button class="prev-btn" onclick="prevTopic()" ' + (currentTopicIdx === 0 ? 'disabled style="opacity:.4;cursor:not-allowed"' : '') + '>&#8592; Previous</button>';
+      h += '<span class="nav-count">' + (currentTopicIdx + 1) + ' / ' + topics.length + '</span>';
+      h += '<button class="next-btn" onclick="nextTopic()" ' + (currentTopicIdx === topics.length - 1 ? 'disabled style="opacity:.4;cursor:not-allowed;background:#e5e7eb"' : '') + '>Next &#8594;</button>';
+      h += '</div>';
+    } else {
+      h += '<p style="color:#9ca3af">No topics found.</p>';
+    }
+    h += '</main></div></div>';
+    app.innerHTML = h;
+    window.scrollTo(0, 0);
+  }
+
+  // ── Actions ──────────────────────────────────────────────────────────────────
+  window.openGroup = function (idx) { currentGroup = groups[idx]; currentTopicIdx = 0; mobSidebarOpen = false; render(); };
+  window.goBack = function () { currentGroup = null; render(); };
+  window.selectTopic = function (idx) { currentTopicIdx = idx; mobSidebarOpen = false; render(); };
+  window.prevTopic = function () { if (currentTopicIdx > 0) { currentTopicIdx--; render(); } };
+  window.nextTopic = function () { var t = buildTopics(currentGroup.topics); if (currentTopicIdx < t.length - 1) { currentTopicIdx++; render(); } };
+  window.toggleMobSidebar = function () { mobSidebarOpen = !mobSidebarOpen; render(); };
+
+  render();
+})();
+</script>
+</body>
+</html>
