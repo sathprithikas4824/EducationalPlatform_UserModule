@@ -353,31 +353,33 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#fff;color:
 
   function checkOnline() {
     if (popupShown) return;
-    // Any response (even 404) means we have a real network connection.
-    // _swbypass=1 tells the SW to skip cache and hit the real network.
-    fetch('/manifest.webmanifest?_swbypass=1&t=' + Date.now(), { method: 'GET', cache: 'no-store' })
+    // Fetch a cross-origin URL — the SW skips all cross-origin requests
+    // so this hits the real network with zero SW interference.
+    // mode:no-cors gives an opaque response (status 0) but the promise
+    // still RESOLVES when online and REJECTS when offline.
+    fetch('https://www.google.com/generate_204?t=' + Date.now(), {
+      mode: 'no-cors',
+      cache: 'no-store'
+    })
       .then(function () { showReconnectPopup(); })
       .catch(function () {});
   }
 
-  // Poll every 1 second for fast detection
-  var pollTimer = setInterval(checkOnline, 1000);
+  // Poll every 1.5 seconds
+  var pollTimer = setInterval(checkOnline, 1500);
 
-  // Native online event — retry immediately and a few times after in case
-  // the network isn't fully ready the instant the event fires
+  // Native online event — fire check immediately + retries
   window.addEventListener('online', function () {
     checkOnline();
     setTimeout(checkOnline, 500);
     setTimeout(checkOnline, 1500);
   });
 
-  // On Android, visibilitychange fires when you return to the browser tab
-  // after turning on WiFi — more reliable than the online event
+  // visibilitychange: fires on Android when returning to browser tab
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') checkOnline();
   });
 
-  // Also on window focus (desktop)
   window.addEventListener('focus', checkOnline);
 })();
 </script>

@@ -337,8 +337,12 @@ export default function OfflineLandingPage() {
     let shown = false;
     function check() {
       if (shown) return;
-      // Any response (even 404) = real network exists. _swbypass skips SW cache.
-      fetch("/manifest.webmanifest?_swbypass=1&t=" + Date.now(), { method: "GET", cache: "no-store" })
+      // Cross-origin fetch — SW skips all cross-origin requests, so this
+      // hits the real network directly. Resolves when online, rejects when offline.
+      fetch("https://www.google.com/generate_204?t=" + Date.now(), {
+        mode: "no-cors",
+        cache: "no-store",
+      })
         .then(() => { if (!shown) { shown = true; setBackOnline(true); } })
         .catch(() => {});
     }
