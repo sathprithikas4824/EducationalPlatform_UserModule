@@ -322,6 +322,7 @@ export default function OfflineLandingPage() {
   const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [openedGroup, setOpenedGroup] = useState<ModuleGroup | null>(null);
+  const [backOnline, setBackOnline] = useState(false);
 
   useEffect(() => {
     const userId = user?.id ?? getLastUserId();
@@ -331,9 +332,21 @@ export default function OfflineLandingPage() {
     }).finally(() => setLoading(false));
   }, [user?.id]);
 
+  // Listen for connectivity restored
+  useEffect(() => {
+    const handleOnline = () => setTimeout(() => setBackOnline(true), 500);
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, []);
+
   // Show reader when a module is opened
   if (openedGroup) {
-    return <OfflineReader group={openedGroup} onBack={() => setOpenedGroup(null)} />;
+    return (
+      <>
+        <OfflineReader group={openedGroup} onBack={() => setOpenedGroup(null)} />
+        {backOnline && <ReconnectPopup onConnect={() => router.push("/")} onDismiss={() => setBackOnline(false)} />}
+      </>
+    );
   }
 
   const groups = groupByModule(downloads);
@@ -344,6 +357,8 @@ export default function OfflineLandingPage() {
   };
 
   return (
+    <>
+    {backOnline && <ReconnectPopup onConnect={() => router.push("/")} onDismiss={() => setBackOnline(false)} />}
     <div className="min-h-screen bg-white dark:bg-[#0d0d1a] transition-colors duration-300">
       {/* ── Minimal Navbar ── */}
       <header className="w-full sticky top-0 z-50 bg-transparent py-3 jakarta-font">
@@ -481,6 +496,59 @@ export default function OfflineLandingPage() {
           </div>
         )}
       </div>
+    </div>
+    </>
+  );
+}
+
+// ── Reconnect Popup ────────────────────────────────────────────────────────────
+function ReconnectPopup({ onConnect, onDismiss }: { onConnect: () => void; onDismiss: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.45)" }}
+      onClick={onDismiss}
+    >
+      <div
+        className="bg-white dark:bg-[#1a1a2e] rounded-2xl p-7 max-w-sm w-full shadow-2xl text-center"
+        style={{ animation: "slideUp .25s ease" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Icon */}
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+          style={{ background: "linear-gradient(135deg,#d1fae5,#a7f3d0)" }}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+            <line x1="12" y1="20" x2="12.01" y2="20"/>
+          </svg>
+        </div>
+
+        <h3 className="jakarta-font text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+          You&apos;re back online!
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 leading-relaxed">
+          Your internet connection has been restored. Connect now to access all modules and sync your progress.
+        </p>
+
+        <div className="flex flex-col gap-2.5">
+          <button
+            onClick={onConnect}
+            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90 active:scale-95"
+            style={{ background: "linear-gradient(90deg,#7a12fa,#b614ef)" }}
+          >
+            Connect &amp; go online
+          </button>
+          <button
+            onClick={onDismiss}
+            className="w-full py-3 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            Stay in offline mode
+          </button>
+        </div>
+      </div>
+      <style>{`@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
     </div>
   );
 }

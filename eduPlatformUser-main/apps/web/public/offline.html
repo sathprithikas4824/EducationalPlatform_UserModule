@@ -79,6 +79,19 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#fff;color:
 .mob-sidebar-panel{background:#f9fafb;border-bottom:1px solid #f3f4f6;padding:12px}
 @media(min-width:769px){.mob-toggle,.mob-sidebar-panel{display:none!important}}
 @media(max-width:768px){.sidebar{display:none}}
+/* Reconnect popup */
+.reconnect-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn .2s ease}
+.reconnect-popup{background:#fff;border-radius:20px;padding:28px 24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.2);text-align:center;animation:slideUp .25s ease}
+.reconnect-popup-icon{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#d1fae5,#a7f3d0);display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.reconnect-popup h3{font-size:20px;font-weight:800;color:#111827;margin-bottom:8px}
+.reconnect-popup p{font-size:14px;color:#6b7280;margin-bottom:20px;line-height:1.5}
+.popup-actions{display:flex;flex-direction:column;gap:10px}
+.connect-btn{padding:12px 24px;border-radius:12px;border:none;background:linear-gradient(90deg,#7a12fa,#b614ef);color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s}
+.connect-btn:hover{opacity:.9}
+.stay-btn{padding:11px 24px;border-radius:12px;border:1px solid #e5e7eb;background:none;color:#374151;font-size:14px;font-weight:600;cursor:pointer}
+.stay-btn:hover{background:#f9fafb}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 </style>
 </head>
 <body>
@@ -307,6 +320,37 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#fff;color:
   window.toggleMobSidebar = function () { mobSidebarOpen = !mobSidebarOpen; render(); };
 
   render();
+
+  // ── Online detection: show reconnect popup ───────────────────────────────────
+  function showReconnectPopup() {
+    if (document.getElementById('reconnect-overlay')) return; // already showing
+    var overlay = document.createElement('div');
+    overlay.id = 'reconnect-overlay';
+    overlay.className = 'reconnect-overlay';
+    overlay.innerHTML =
+      '<div class="reconnect-popup">' +
+        '<div class="reconnect-popup-icon">' +
+          '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M5 12.55a11 11 0 0 1 14.08 0"/>' +
+            '<path d="M1.42 9a16 16 0 0 1 21.16 0"/>' +
+            '<path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>' +
+            '<line x1="12" y1="20" x2="12.01" y2="20"/>' +
+          '</svg>' +
+        '</div>' +
+        '<h3>You\'re back online!</h3>' +
+        '<p>Your internet connection has been restored. Connect now to access all modules and sync your progress.</p>' +
+        '<div class="popup-actions">' +
+          '<button class="connect-btn" onclick="document.getElementById(\'reconnect-overlay\').remove();location.href=\'/\'">Connect &amp; go online</button>' +
+          '<button class="stay-btn" onclick="document.getElementById(\'reconnect-overlay\').remove()">Stay in offline mode</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+  }
+
+  window.addEventListener('online', function () {
+    // Small delay — browser fires 'online' slightly before connectivity is truly usable
+    setTimeout(showReconnectPopup, 500);
+  });
 })();
 </script>
 </body>
