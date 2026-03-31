@@ -131,7 +131,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [resetTopicId, setResetTopicId] = useState<number | null>(null);
   const [downloadedSet, setDownloadedSet] = useState<Set<string>>(new Set());
   const [bookmarkedTopicIds, setBookmarkedTopicIds] = useState<Set<number>>(new Set());
-  const [moduleDownloadState, setModuleDownloadState] = useState<"idle" | "downloading" | "done">("idle");
+  const [moduleDownloadState, setModuleDownloadState] = useState<"idle" | "downloading" | "done" | "needs-login">("idle");
   const [moduleDownloadProgress, setModuleDownloadProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
 
   // Load topic bookmarks when user changes
@@ -371,7 +371,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
   // Download all topics in the current module for offline reading
   const handleModuleDownload = useCallback(async () => {
-    if (!user || !topics.length) return;
+    if (!topics.length) return;
+    const userId = user?.id ?? getLastUserId();
+    if (!userId) {
+      setModuleDownloadState("needs-login");
+      setTimeout(() => setModuleDownloadState("idle"), 3000);
+      return;
+    }
     setModuleDownloadState("downloading");
     setModuleDownloadProgress({ current: 0, total: topics.length });
 
@@ -390,8 +396,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         description: topic.description || null,
       });
 
-      await saveDownload(user.id, {
-        userId: user.id,
+      await saveDownload(userId, {
+        userId,
         topicId: topic.topic_id,
         topicName,
         moduleName,
@@ -892,8 +898,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
               </p>
             )}
 
-            {/* Download Module Button */}
-            {user && topics.length > 0 && (
+            {/* Download Module Button — shown on all devices once topics are loaded */}
+            {topics.length > 0 && (
               <button
                 onClick={handleModuleDownload}
                 disabled={moduleDownloadState === "downloading"}
@@ -902,6 +908,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                     ? "bg-green-50 text-green-600 border border-green-200"
                     : moduleDownloadState === "downloading"
                     ? "bg-purple-50 text-purple-400 border border-purple-200 cursor-not-allowed"
+                    : moduleDownloadState === "needs-login"
+                    ? "bg-amber-50 text-amber-600 border border-amber-200"
                     : "bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100"
                 }`}
               >
@@ -918,6 +926,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                     Saving {moduleDownloadProgress.current}/{moduleDownloadProgress.total} topics...
+                  </>
+                ) : moduleDownloadState === "needs-login" ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m9-9V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2h3" />
+                    </svg>
+                    Please log in to download
                   </>
                 ) : (
                   <>
