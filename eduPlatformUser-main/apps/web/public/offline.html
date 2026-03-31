@@ -321,12 +321,13 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#fff;color:
 
   render();
 
-  // ── Connectivity polling: show popup as soon as network is restored ──────────
+  // ── Connectivity detection: show popup the moment network is restored ────────
   var popupShown = false;
 
   function showReconnectPopup() {
     if (popupShown) return;
     popupShown = true;
+    clearInterval(pollTimer);
     var overlay = document.createElement('div');
     overlay.id = 'reconnect-overlay';
     overlay.className = 'reconnect-overlay';
@@ -351,20 +352,31 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#fff;color:
   }
 
   function checkOnline() {
-    // Use _swbypass so the SW doesn't intercept — hits real network
+    if (popupShown) return;
     fetch('/favicon.ico?_swbypass=1&t=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
       .then(function (r) { if (r.ok) showReconnectPopup(); })
-      .catch(function () {}); // still offline — ignore
+      .catch(function () {});
   }
 
-  // Poll every 3 seconds
-  var pollTimer = setInterval(function () {
-    if (popupShown) { clearInterval(pollTimer); return; }
-    checkOnline();
-  }, 3000);
+  // Poll every 1 second for fast detection
+  var pollTimer = setInterval(checkOnline, 1000);
 
-  // Also listen to the native event as a fast path
-  window.addEventListener('online', function () { setTimeout(checkOnline, 300); });
+  // Native online event — retry immediately and a few times after in case
+  // the network isn't fully ready the instant the event fires
+  window.addEventListener('online', function () {
+    checkOnline();
+    setTimeout(checkOnline, 500);
+    setTimeout(checkOnline, 1500);
+  });
+
+  // On Android, visibilitychange fires when you return to the browser tab
+  // after turning on WiFi — more reliable than the online event
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') checkOnline();
+  });
+
+  // Also on window focus (desktop)
+  window.addEventListener('focus', checkOnline);
 })();
 </script>
 </body>

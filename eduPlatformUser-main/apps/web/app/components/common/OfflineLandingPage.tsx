@@ -332,22 +332,32 @@ export default function OfflineLandingPage() {
     }).finally(() => setLoading(false));
   }, [user?.id]);
 
-  // Poll for real connectivity every 3 s — more reliable than the 'online' event on Android
+  // Detect connectivity restoration immediately on all devices
   useEffect(() => {
     let shown = false;
     function check() {
       if (shown) return;
       fetch("/favicon.ico?_swbypass=1&t=" + Date.now(), { method: "HEAD", cache: "no-store" })
-        .then((r) => { if (r.ok && !shown) { shown = true; setBackOnline(true); } })
+        .then((r) => {
+          if (r.ok && !shown) { shown = true; setBackOnline(true); }
+        })
         .catch(() => {});
     }
-    const timer = setInterval(check, 3000);
-    // Fast path: native event
-    const handleOnline = () => setTimeout(check, 300);
+    // Poll every 1 second
+    const timer = setInterval(check, 1000);
+    // Native online event — fire immediately + retry in case network isn't ready yet
+    const handleOnline = () => { check(); setTimeout(check, 500); setTimeout(check, 1500); };
     window.addEventListener("online", handleOnline);
+    // visibilitychange fires on Android when returning to tab after enabling WiFi
+    const handleVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", handleVisible);
+    // focus fires on desktop
+    window.addEventListener("focus", check);
     return () => {
       clearInterval(timer);
       window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisible);
+      window.removeEventListener("focus", check);
     };
   }, []);
 
