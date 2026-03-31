@@ -86,11 +86,7 @@ class OfflineErrorBoundary extends Component<{ children: ReactNode }, EBState> {
 
 // ── Main wrapper ───────────────────────────────────────────────────────────────
 export default function OfflineWrapper() {
-  // Use navigator.onLine for an immediate synchronous check so we never render
-  // the online content while offline — avoids crashes from failed network fetches.
-  const [isOnline, setIsOnline] = useState<boolean | null>(
-    typeof navigator !== "undefined" ? navigator.onLine : null
-  );
+  const [isOnline, setIsOnline] = useState<boolean | null>(null);
   // true once the user has been offline at least once in this session
   const [wasOffline, setWasOffline] = useState(false);
   // true once the user explicitly clicks "Go to content" on the popup
