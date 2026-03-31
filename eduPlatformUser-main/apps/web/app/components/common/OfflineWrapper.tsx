@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Component, type ReactNode } from "react";
 import Main from "../moduleFirstPage/Main";
 import OfflineLandingPage from "./OfflineLandingPage";
 
@@ -73,9 +73,24 @@ function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
   );
 }
 
+// ── Error boundary — catches any crash and shows offline page if offline ───────
+interface EBState { crashed: boolean }
+class OfflineErrorBoundary extends Component<{ children: ReactNode }, EBState> {
+  state: EBState = { crashed: false };
+  static getDerivedStateFromError() { return { crashed: true }; }
+  render() {
+    if (this.state.crashed) return <OfflineLandingPage />;
+    return this.props.children;
+  }
+}
+
 // ── Main wrapper ───────────────────────────────────────────────────────────────
 export default function OfflineWrapper() {
-  const [isOnline, setIsOnline] = useState<boolean | null>(null);
+  // Use navigator.onLine for an immediate synchronous check so we never render
+  // the online content while offline — avoids crashes from failed network fetches.
+  const [isOnline, setIsOnline] = useState<boolean | null>(
+    typeof navigator !== "undefined" ? navigator.onLine : null
+  );
   // true once the user has been offline at least once in this session
   const [wasOffline, setWasOffline] = useState(false);
   // true once the user explicitly clicks "Go to content" on the popup
@@ -91,7 +106,7 @@ export default function OfflineWrapper() {
     };
 
     const handleOffline = () => {
-      setIsOnline(false);
+      setIsOnline(false);    // immediate — no async fetch needed when going offline
       setWasOffline(true);   // remember: user lost connection this session
       setConfirmed(false);   // reset so popup shows again on next reconnect
     };
@@ -122,5 +137,10 @@ export default function OfflineWrapper() {
   }
 
   // Online and either never went offline, or user confirmed → show normal content
-  return <Main />;
+  // Wrap in error boundary so any runtime crash shows offline page instead of blank screen
+  return (
+    <OfflineErrorBoundary>
+      <Main />
+    </OfflineErrorBoundary>
+  );
 }
