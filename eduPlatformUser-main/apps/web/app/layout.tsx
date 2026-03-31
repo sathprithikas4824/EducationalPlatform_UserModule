@@ -45,20 +45,6 @@ export default function RootLayout({ children }: PropsWithChildren) {
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="jakarta-font bg-[var(--page-bg)] text-[var(--text-primary)] transition-colors duration-300">
-        {/* Inline offline guard — runs before any chunk loading.
-            If a JS error fires while the device is offline, redirect to /offline
-            instead of showing the blank "Application error" screen. */}
-        <script dangerouslySetInnerHTML={{ __html: `
-          (function() {
-            function redirectIfOffline() {
-              if (!navigator.onLine && window.location.pathname !== '/offline') {
-                window.location.replace('/offline');
-              }
-            }
-            window.addEventListener('error', redirectIfOffline);
-            window.addEventListener('unhandledrejection', redirectIfOffline);
-          })();
-        `}} />
         <ThemeProvider>
           <AnnotationProvider>{children}</AnnotationProvider>
         </ThemeProvider>

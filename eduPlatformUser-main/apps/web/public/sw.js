@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `edu-static-${CACHE_VERSION}`;
 const PAGE_CACHE = `edu-pages-${CACHE_VERSION}`;
 const ALL_CACHES = [STATIC_CACHE, PAGE_CACHE];
@@ -84,26 +84,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Pages: network-first, fallback to /offline, last resort inline HTML
-  const OFFLINE_HTML = `<!DOCTYPE html><html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Offline – Educational Platform</title>
-<style>
-  body{margin:0;font-family:sans-serif;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;min-height:100vh;
-    background:#fff;color:#111;text-align:center;padding:2rem}
-  h1{font-size:1.75rem;font-weight:700;margin:.5rem 0}
-  p{color:#6b7280;max-width:340px;line-height:1.6;margin:.5rem 0 1.5rem}
-  button{background:#7c3aed;color:#fff;border:none;padding:.75rem 2rem;
-    border-radius:.5rem;font-size:1rem;font-weight:600;cursor:pointer}
-</style></head><body>
-<div style="font-size:3rem">📚</div>
-<h1>You're offline</h1>
-<p>No internet connection. Please reconnect and try again.<br>
-   If you downloaded modules, open the app when online to access them offline.</p>
-<button onclick="location.reload()">Try again</button>
-</body></html>`;
-
+  // Pages: network-first.
+  // On failure we NEVER serve stale cached HTML — it references JS chunk URLs
+  // from the previous Vercel deploy that no longer exist, causing "Application
+  // error". Instead always redirect to /offline which is self-contained and
+  // has zero external chunk dependencies.
   event.respondWith(
     fetch(request)
       .then((response) => {
@@ -112,10 +97,12 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(() =>
-        caches.match("/offline")
-          .then((cached) => cached || new Response(OFFLINE_HTML, {
-            headers: { "Content-Type": "text/html; charset=utf-8" },
-          }))
+        // Always serve the /offline page when network fails — never stale HTML
+        caches.match("/offline").then((cached) => {
+          if (cached) return cached;
+          // Last resort: redirect to /offline so the browser fetches it fresh
+          return Response.redirect("/offline", 302);
+        })
       )
   );
 });
