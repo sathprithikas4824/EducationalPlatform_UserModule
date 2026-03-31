@@ -353,8 +353,10 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#fff;color:
 
   function checkOnline() {
     if (popupShown) return;
-    fetch('/favicon.ico?_swbypass=1&t=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
-      .then(function (r) { if (r.ok) showReconnectPopup(); })
+    // Any response (even 404) means we have a real network connection.
+    // _swbypass=1 tells the SW to skip cache and hit the real network.
+    fetch('/manifest.webmanifest?_swbypass=1&t=' + Date.now(), { method: 'GET', cache: 'no-store' })
+      .then(function () { showReconnectPopup(); })
       .catch(function () {});
   }
 

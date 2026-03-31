@@ -337,10 +337,9 @@ export default function OfflineLandingPage() {
     let shown = false;
     function check() {
       if (shown) return;
-      fetch("/favicon.ico?_swbypass=1&t=" + Date.now(), { method: "HEAD", cache: "no-store" })
-        .then((r) => {
-          if (r.ok && !shown) { shown = true; setBackOnline(true); }
-        })
+      // Any response (even 404) = real network exists. _swbypass skips SW cache.
+      fetch("/manifest.webmanifest?_swbypass=1&t=" + Date.now(), { method: "GET", cache: "no-store" })
+        .then(() => { if (!shown) { shown = true; setBackOnline(true); } })
         .catch(() => {});
     }
     // Poll every 1 second
