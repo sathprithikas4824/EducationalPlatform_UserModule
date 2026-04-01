@@ -409,6 +409,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
+    // Persist "done" flag so the button stays "Module Downloaded" after refresh
+    try {
+      const subId = currentSubmodule?.submodule_id ?? submoduleId;
+      localStorage.setItem(`edu_module_done_${userId}_${subId}`, "true");
+    } catch {}
   }, [user, topics, currentSubmodule, submoduleId, stripHtml]);
 
   // Mark the currently selected topic as completed in Supabase
@@ -526,21 +531,16 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     setModuleDownloadState("idle");
   }, [submoduleId]);
 
-  // Restore "done" state from localStorage after topics load — persists across refreshes
+  // Restore "done" state from localStorage flag — persists across refreshes
   useEffect(() => {
-    if (!topics.length) return;
     const userId = user?.id ?? getLastUserId();
-    if (!userId) return;
+    if (!userId || !submoduleId) return;
     try {
-      const raw = localStorage.getItem(`edu_downloads_${userId}`);
-      const records: Array<{ submoduleId?: number; topicId: number }> = raw ? JSON.parse(raw) : [];
-      const downloadedTopicIds = new Set(
-        records.filter((r) => r.submoduleId === submoduleId).map((r) => r.topicId)
-      );
-      const allDownloaded = topics.length > 0 && topics.every((t) => downloadedTopicIds.has(t.topic_id));
-      if (allDownloaded) setModuleDownloadState("done");
+      if (localStorage.getItem(`edu_module_done_${userId}_${submoduleId}`) === "true") {
+        setModuleDownloadState("done");
+      }
     } catch {}
-  }, [topics, submoduleId, user?.id]);
+  }, [submoduleId, user?.id]);
 
   // Track reading progress via scroll position — guests see 0%, no tracking
   useEffect(() => {
