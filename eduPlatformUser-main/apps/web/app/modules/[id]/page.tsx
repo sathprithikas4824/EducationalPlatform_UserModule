@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { Component, type ReactNode } from "react";
 import Main from "../../components/modules/Main";
 import OfflineLandingPage from "../../components/common/OfflineLandingPage";
+import OnlineGate from "../../components/common/OnlineGate";
 
 // Error boundary — if the module page crashes offline, show the offline reader
 interface EBState { crashed: boolean }
@@ -21,8 +22,10 @@ export default function ModulePage() {
   const submoduleId = Number(params.id);
 
   return (
-    <ModuleErrorBoundary>
-      <Main submoduleId={submoduleId} />
-    </ModuleErrorBoundary>
+    <OnlineGate>
+      <ModuleErrorBoundary>
+        <Main submoduleId={submoduleId} />
+      </ModuleErrorBoundary>
+    </OnlineGate>
   );
 }
