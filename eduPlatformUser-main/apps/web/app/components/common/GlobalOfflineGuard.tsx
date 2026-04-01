@@ -1,25 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import OfflineLandingPage from "./OfflineLandingPage";
-
-// ── Real connectivity check (bypasses service worker) ────────────────────────
-async function checkRealConnectivity(): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-  try {
-    await fetch(`/logo.svg?_swbypass=1&_t=${Date.now()}`, {
-      method: "HEAD",
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    return true;
-  } catch {
-    clearTimeout(timer);
-    return false;
-  }
-}
+import { useOfflineDetection } from "./useOfflineDetection";
 
 // ── Back-online popup ─────────────────────────────────────────────────────────
 function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
@@ -70,56 +52,24 @@ function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
 }
 
 // ── GlobalOfflineGuard ────────────────────────────────────────────────────────
-// Placed in the root layout so it covers every page.
-// When offline: renders a fixed full-screen overlay showing OfflineLandingPage.
-// When back online: shows BackOnlinePopup before removing the overlay.
+// Placed in root layout — covers every page on desktop, Android, and iOS.
+// Uses polling + visibilitychange + focus so iOS Safari is reliably detected.
 export default function GlobalOfflineGuard() {
-  const [isOnline, setIsOnline] = useState<boolean | null>(null);
-  const [wasOffline, setWasOffline] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  const { isOnline, wasOffline, confirmed, setConfirmed } = useOfflineDetection();
 
-  useEffect(() => {
-    // Initial check — silent, no popup on first load
-    checkRealConnectivity().then(setIsOnline);
-
-    const handleOnline = () => {
-      checkRealConnectivity().then(setIsOnline);
-    };
-
-    const handleOffline = () => {
-      setIsOnline(false);
-      setWasOffline(true);
-      setConfirmed(false);
-    };
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
-
-  // Not yet determined — render nothing (avoids flash)
-  if (isOnline === null || isOnline === true && !wasOffline) return null;
-
-  // Online and user confirmed — remove overlay
+  // Still doing the initial check — render nothing to avoid flash
+  if (isOnline === null) return null;
+  // Online, never went offline — nothing to show
+  if (isOnline && !wasOffline) return null;
+  // Online, user already confirmed — remove overlay
   if (isOnline && confirmed) return null;
 
-  // Currently offline — full-screen fixed overlay
-  if (!isOnline) {
-    return (
-      <div className="fixed inset-0 z-[9990] overflow-y-auto bg-white dark:bg-[#0d0d1a]">
-        <OfflineLandingPage />
-      </div>
-    );
-  }
-
-  // Back online but not yet confirmed — show offline page with popup on top
   return (
     <div className="fixed inset-0 z-[9990] overflow-y-auto bg-white dark:bg-[#0d0d1a]">
       <OfflineLandingPage />
-      <BackOnlinePopup onContinue={() => setConfirmed(true)} />
+      {isOnline && wasOffline && !confirmed && (
+        <BackOnlinePopup onContinue={() => setConfirmed(true)} />
+      )}
     </div>
   );
 }
