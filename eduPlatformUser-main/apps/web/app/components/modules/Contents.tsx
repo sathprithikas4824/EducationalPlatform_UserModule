@@ -521,6 +521,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     setDownloadedSet(new Set());
   }, [selectedTopic?.topic_id]);
 
+  // Reset module download state when submodule changes
+  useEffect(() => {
+    setModuleDownloadState("idle");
+  }, [submoduleId]);
+
   // Track reading progress via scroll position — guests see 0%, no tracking
   useEffect(() => {
     const contentEl = contentWrapperRef.current;
