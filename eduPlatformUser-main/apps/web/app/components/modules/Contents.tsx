@@ -6,7 +6,7 @@ import localFont from "next/font/local";
 import { ArrowRight, ArrowDown } from "../common/icons";
 import { Highlightable } from "../common/Highlightable";
 import { useAnnotation } from "../common/AnnotationProvider";
-import { markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions, getLastUserId } from "../../lib/supabase";
+import { supabase, markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions, getLastUserId } from "../../lib/supabase";
 import { cachedFetch } from "../../lib/apiCache";
 import { saveDownload } from "../../lib/downloads";
 import { loadBookmarks, toggleBookmark } from "../../lib/bookmarks";
@@ -531,16 +531,39 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     setModuleDownloadState("idle");
   }, [submoduleId]);
 
-  // Restore "done" state from localStorage flag — persists across refreshes
+  // Restore "done" state — localStorage flag first (fast/offline), then Supabase for cross-device sync
   useEffect(() => {
+    if (!topics.length) return;
     const userId = user?.id ?? getLastUserId();
     if (!userId || !submoduleId) return;
+
+    const flagKey = `edu_module_done_${userId}_${submoduleId}`;
+
+    // Fast path: already flagged on this device
     try {
-      if (localStorage.getItem(`edu_module_done_${userId}_${submoduleId}`) === "true") {
+      if (localStorage.getItem(flagKey) === "true") {
         setModuleDownloadState("done");
+        return;
       }
     } catch {}
-  }, [submoduleId, user?.id]);
+
+    // Cross-device sync: check Supabase if the user downloaded this module on another device
+    if (!user?.id || !supabase) return;
+    const topicIds = topics.map((t) => t.topic_id);
+    supabase
+      .from("user_downloads")
+      .select("topic_id")
+      .eq("user_id", userId)
+      .in("topic_id", topicIds)
+      .then(({ data, error }) => {
+        if (error || !data) return;
+        const downloadedIds = new Set(data.map((r: { topic_id: number }) => r.topic_id));
+        if (topicIds.every((id) => downloadedIds.has(id))) {
+          setModuleDownloadState("done");
+          try { localStorage.setItem(flagKey, "true"); } catch {}
+        }
+      });
+  }, [topics, submoduleId, user?.id]);
 
   // Track reading progress via scroll position — guests see 0%, no tracking
   useEffect(() => {
