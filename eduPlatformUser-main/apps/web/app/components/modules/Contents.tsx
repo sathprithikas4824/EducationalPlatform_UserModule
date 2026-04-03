@@ -6,7 +6,7 @@ import localFont from "next/font/local";
 import { ArrowRight, ArrowDown } from "../common/icons";
 import { Highlightable } from "../common/Highlightable";
 import { useAnnotation } from "../common/AnnotationProvider";
-import { supabase, markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions, getLastUserId } from "../../lib/supabase";
+import { supabase, markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions, getLastUserId, getDeviceId } from "../../lib/supabase";
 import { cachedFetch } from "../../lib/apiCache";
 import { saveDownload } from "../../lib/downloads";
 import { loadBookmarks, toggleBookmark } from "../../lib/bookmarks";
@@ -409,10 +409,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
-    // Persist "done" flag so the button stays "Module Downloaded" after refresh
+    // Persist "done" flag keyed by user + device so it survives logout on this device
     try {
       const subId = currentSubmodule?.submodule_id ?? submoduleId;
-      localStorage.setItem(`edu_module_done_${userId}_${subId}`, "true");
+      const deviceId = getDeviceId();
+      localStorage.setItem(`edu_module_done_${userId}_${deviceId}_${subId}`, "true");
     } catch {}
   }, [user, topics, currentSubmodule, submoduleId, stripHtml]);
 
@@ -531,15 +532,16 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     setModuleDownloadState("idle");
   }, [submoduleId]);
 
-  // Restore "done" state — localStorage flag first (fast/offline), then Supabase for cross-device sync
+  // Restore "done" state — device flag first (fast/offline), then Supabase for cross-device sync
   useEffect(() => {
     if (!topics.length) return;
     const userId = user?.id ?? getLastUserId();
     if (!userId || !submoduleId) return;
 
-    const flagKey = `edu_module_done_${userId}_${submoduleId}`;
+    const deviceId = getDeviceId();
+    const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
 
-    // Fast path: already flagged on this device
+    // Fast path: this device already downloaded the module for this user (survives logout)
     try {
       if (localStorage.getItem(flagKey) === "true") {
         setModuleDownloadState("done");
@@ -547,7 +549,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       }
     } catch {}
 
-    // Cross-device sync: check Supabase if the user downloaded this module on another device
+    // Cross-device sync: check Supabase if the user downloaded on another device (only when logged in)
     if (!user?.id || !supabase) return;
     const topicIds = topics.map((t) => t.topic_id);
     supabase
@@ -560,6 +562,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         const downloadedIds = new Set(data.map((r: { topic_id: number }) => r.topic_id));
         if (topicIds.every((id) => downloadedIds.has(id))) {
           setModuleDownloadState("done");
+          // Cache the flag for this device so it persists through logout
           try { localStorage.setItem(flagKey, "true"); } catch {}
         }
       });

@@ -687,6 +687,25 @@ export function getLastUserId(): string | null {
 }
 
 // =============================================
+// DEVICE ID (persists through logout, unique per browser/device)
+// =============================================
+
+const DEVICE_ID_KEY = "edu_device_id";
+
+export function getDeviceId(): string {
+  if (typeof window === "undefined") return "ssr";
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing) return existing;
+    const id = "dev_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem(DEVICE_ID_KEY, id);
+    return id;
+  } catch {
+    return "unknown";
+  }
+}
+
+// =============================================
 // SCROLL POSITION FUNCTIONS (localStorage-based UI state)
 // =============================================
 
