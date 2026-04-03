@@ -410,11 +410,17 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
     setModuleDownloadState("done");
     // Persist "done" flag keyed by user + device so it survives logout on this device
-    try {
-      const subId = currentSubmodule?.submodule_id ?? submoduleId;
-      const deviceId = getDeviceId();
-      localStorage.setItem(`edu_module_done_${userId}_${deviceId}_${subId}`, "true");
-    } catch {}
+    const subId = currentSubmodule?.submodule_id ?? submoduleId;
+    const deviceId = getDeviceId();
+    const flagKey = `edu_module_done_${userId}_${deviceId}_${subId}`;
+    try { localStorage.setItem(flagKey, "true"); } catch {}
+    // Also save to Supabase so cross-device queries stay accurate
+    if (supabase && user?.id) {
+      supabase.from("user_module_downloads").upsert(
+        { user_id: userId, device_id: deviceId, submodule_id: subId },
+        { onConflict: "user_id,device_id,submodule_id" }
+      );
+    }
   }, [user, topics, currentSubmodule, submoduleId, stripHtml]);
 
   // Mark the currently selected topic as completed in Supabase
@@ -549,22 +555,19 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       }
     } catch {}
 
-    // Cross-device sync: check Supabase if the user downloaded on another device (only when logged in)
+    // Cross-device sync: check user_module_downloads in Supabase (only when logged in)
     if (!user?.id || !supabase) return;
-    const topicIds = topics.map((t) => t.topic_id);
     supabase
-      .from("user_downloads")
-      .select("topic_id")
+      .from("user_module_downloads")
+      .select("id")
       .eq("user_id", userId)
-      .in("topic_id", topicIds)
+      .eq("submodule_id", submoduleId)
+      .limit(1)
       .then(({ data, error }) => {
-        if (error || !data) return;
-        const downloadedIds = new Set(data.map((r: { topic_id: number }) => r.topic_id));
-        if (topicIds.every((id) => downloadedIds.has(id))) {
-          setModuleDownloadState("done");
-          // Cache the flag for this device so it persists through logout
-          try { localStorage.setItem(flagKey, "true"); } catch {}
-        }
+        if (error || !data?.length) return;
+        setModuleDownloadState("done");
+        // Cache on this device so future visits (incl. after logout) are instant
+        try { localStorage.setItem(flagKey, "true"); } catch {}
       });
   }, [topics, submoduleId, user?.id]);
 
