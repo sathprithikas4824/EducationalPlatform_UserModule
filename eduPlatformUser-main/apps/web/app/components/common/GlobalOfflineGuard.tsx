@@ -1,9 +1,9 @@
 "use client";
 
 import OfflineLandingPage from "./OfflineLandingPage";
-import { useOfflineDetection } from "./useOfflineDetection";
+import { useOfflineContext } from "./OfflineContext";
 
-// ── Back-online popup ─────────────────────────────────────────────────────────
+// ── Single back-online popup — rendered once in the root layout ───────────────
 function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
   return (
     <>
@@ -51,17 +51,12 @@ function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
   );
 }
 
-// ── GlobalOfflineGuard ────────────────────────────────────────────────────────
-// Placed in root layout — covers every page on desktop, Android, and iOS.
-// Uses polling + visibilitychange + focus so iOS Safari is reliably detected.
+// ── GlobalOfflineGuard — consumes shared OfflineContext ───────────────────────
 export default function GlobalOfflineGuard() {
-  const { isOnline, wasOffline, confirmed, setConfirmed } = useOfflineDetection();
+  const { isOnline, wasOffline, confirmed, setConfirmed } = useOfflineContext();
 
-  // Still doing the initial check — render nothing to avoid flash
   if (isOnline === null) return null;
-  // Online, never went offline — nothing to show
   if (isOnline && !wasOffline) return null;
-  // Online, user already confirmed — remove overlay
   if (isOnline && confirmed) return null;
 
   return (

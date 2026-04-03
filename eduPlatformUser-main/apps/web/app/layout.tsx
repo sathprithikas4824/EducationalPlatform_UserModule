@@ -5,6 +5,7 @@ import { AnnotationProvider } from "./components/common/AnnotationProvider";
 import PWARegister from "./components/common/PWARegister";
 import { ThemeProvider } from "./components/common/ThemeProvider";
 import GlobalOfflineGuard from "./components/common/GlobalOfflineGuard";
+import { OfflineProvider } from "./components/common/OfflineContext";
 
 export const metadata: Metadata = {
   title: "Educational Platform",
@@ -48,8 +49,10 @@ export default function RootLayout({ children }: PropsWithChildren) {
       <body className="jakarta-font bg-[var(--page-bg)] text-[var(--text-primary)] transition-colors duration-300">
         <ThemeProvider>
           <AnnotationProvider>
-            {children}
-            <GlobalOfflineGuard />
+            <OfflineProvider>
+              {children}
+              <GlobalOfflineGuard />
+            </OfflineProvider>
           </AnnotationProvider>
         </ThemeProvider>
         <PWARegister />

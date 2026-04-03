@@ -2,17 +2,16 @@
 
 import { type ReactNode } from "react";
 import OfflineLandingPage from "./OfflineLandingPage";
-import { useOfflineDetection } from "./useOfflineDetection";
+import { useOfflineContext } from "./OfflineContext";
 
-// ── OnlineGate — blocks children when offline ─────────────────────────────────
-// The back-online popup is handled globally by GlobalOfflineGuard in the layout.
+// ── OnlineGate — blocks children using shared OfflineContext ──────────────────
+// Popup is handled once by GlobalOfflineGuard in the root layout.
 export default function OnlineGate({ children }: { children: ReactNode }) {
-  const { isOnline, wasOffline, confirmed } = useOfflineDetection();
+  const { isOnline, wasOffline, confirmed } = useOfflineContext();
 
-  // SSR guard — render nothing until first connectivity check resolves
   if (isOnline === null) return null;
 
-  // Still offline, or back online but user hasn't confirmed yet — block content
+  // Still offline, or back online but user hasn't confirmed yet
   if (!isOnline || (wasOffline && !confirmed)) return <OfflineLandingPage />;
 
   return <>{children}</>;
