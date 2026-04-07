@@ -24,22 +24,29 @@ async function checkRealConnectivity(): Promise<boolean> {
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 // Rules:
-//   GO OFFLINE  → only from native "offline" event or navigator.onLine === false
+//   INITIAL STATE → always null (SSR) then true (online) — never trust navigator.onLine on load
+//   GO OFFLINE  → only from native "offline" event (reliable)
 //   COME ONLINE → native "online" event verified with a real fetch
-//   NEVER mark offline from a failed fetch (eliminates all false-offline on load/refresh)
+//   NEVER mark offline from a failed fetch or navigator.onLine on mount/refresh
 //   Poll every 3 s only while already offline — catches iOS Safari reconnection
 export function useOfflineDetection() {
-  const [isOnline, setIsOnline] = useState<boolean | null>(
-    typeof navigator !== "undefined" ? navigator.onLine : null
-  );
+  // Always start null (SSR/hydration safe). useEffect sets it to true immediately.
+  // We do NOT read navigator.onLine here — it is unreliable on first load / refresh
+  // and causes false-offline flashes.
+  const [isOnline, setIsOnline] = useState<boolean | null>(null);
   const [wasOffline, setWasOffline] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
   // Refs so event handlers always see current values without re-registering
-  const isOnlineRef = useRef(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const isOnlineRef = useRef(true); // assume online until a real offline event fires
   const checkingRef = useRef(false);
 
   useEffect(() => {
+    // Default to online on mount — only the native "offline" event should override this.
+    // navigator.onLine is intentionally NOT used here as it can be false on refresh.
+    isOnlineRef.current = true;
+    setIsOnline(true);
+
     // Verify internet is truly back (handles captive portals)
     const verifyOnline = async () => {
       if (checkingRef.current) return;
@@ -50,7 +57,7 @@ export function useOfflineDetection() {
         isOnlineRef.current = true;
         setIsOnline(true);
       }
-      // Do NOT go offline here — only native events / navigator.onLine do that
+      // Do NOT go offline here — only native events do that
     };
 
     const goOffline = () => {
@@ -65,8 +72,8 @@ export function useOfflineDetection() {
     const handleOnline  = () => verifyOnline();
     const handleVisibility = () => {
       if (document.visibilityState !== "visible") return;
-      if (!navigator.onLine) goOffline();
-      else if (!isOnlineRef.current) verifyOnline(); // was offline, check if back
+      // Only verify if we were already marked offline — don't trigger offline from here
+      if (!isOnlineRef.current) verifyOnline();
     };
 
     window.addEventListener("offline", handleOffline);
@@ -74,8 +81,8 @@ export function useOfflineDetection() {
     document.addEventListener("visibilitychange", handleVisibility);
 
     // Poll every 3 s — ONLY acts when we are already offline (for iOS Safari reconnect)
+    // Do NOT call goOffline() from the poll — only native events should trigger offline
     const interval = setInterval(() => {
-      if (!navigator.onLine) { goOffline(); return; }
       if (!isOnlineRef.current) verifyOnline();
     }, 3000);
 
