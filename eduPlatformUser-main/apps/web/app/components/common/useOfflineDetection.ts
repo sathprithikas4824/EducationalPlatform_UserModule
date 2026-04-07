@@ -2,14 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// ── Real connectivity check (bypasses service worker) ────────────────────────
-// Uses a short 3-second timeout so mobile users get a fast response.
-export async function checkRealConnectivity(): Promise<boolean> {
-  // Quick pre-check: if the browser already knows we're offline, trust it
+// ── Real connectivity check — only used to confirm coming BACK online ─────────
+// (e.g. captive portal: navigator.onLine is true but no real internet)
+async function checkRealConnectivity(): Promise<boolean> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return false;
-
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 3000);
+  const timer = setTimeout(() => controller.abort(), 5000);
   try {
     await fetch(`/logo.svg?_swbypass=1&_t=${Date.now()}`, {
       method: "GET",
@@ -24,78 +22,68 @@ export async function checkRealConnectivity(): Promise<boolean> {
   }
 }
 
-// ── Hook: monitors connectivity on all platforms including iOS / Android ──────
-// Strategy:
-//   1. native online/offline events  — instant on desktop + Android Chrome
-//   2. visibilitychange              — wakes check when iOS returns from bg
-//   3. focus                         — catches desktop tab switches
-//   4. 3-second poll                 — catches iOS drops that fire no event
-//
-// Returns { isOnline, wasOffline, setWasOffline, confirmed, setConfirmed }
+// ── Hook ──────────────────────────────────────────────────────────────────────
+// Rules:
+//   GO OFFLINE  → only from native "offline" event or navigator.onLine === false
+//   COME ONLINE → native "online" event verified with a real fetch
+//   NEVER mark offline from a failed fetch (eliminates all false-offline on load/refresh)
+//   Poll every 3 s only while already offline — catches iOS Safari reconnection
 export function useOfflineDetection() {
-  // Initialise immediately from navigator.onLine — zero blank-screen delay on open.
-  // The real fetch-based check runs in background and corrects this if wrong.
   const [isOnline, setIsOnline] = useState<boolean | null>(
     typeof navigator !== "undefined" ? navigator.onLine : null
   );
   const [wasOffline, setWasOffline] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+
+  // Refs so event handlers always see current values without re-registering
+  const isOnlineRef = useRef(typeof navigator !== "undefined" ? navigator.onLine : true);
   const checkingRef = useRef(false);
-  // Require 2 consecutive fetch failures before declaring offline, so a single
-  // transient hiccup never wrongly shows the offline page while actually online.
-  const failCountRef = useRef(0);
 
   useEffect(() => {
-    const check = async () => {
+    // Verify internet is truly back (handles captive portals)
+    const verifyOnline = async () => {
       if (checkingRef.current) return;
       checkingRef.current = true;
-      const online = await checkRealConnectivity();
+      const ok = await checkRealConnectivity();
       checkingRef.current = false;
-
-      if (online) {
-        failCountRef.current = 0;
+      if (ok) {
+        isOnlineRef.current = true;
         setIsOnline(true);
-      } else {
-        failCountRef.current += 1;
-        // Only go offline after 2 consecutive failures, OR if browser also says offline
-        if (failCountRef.current >= 2 || !navigator.onLine) {
-          setIsOnline(false);
-          setWasOffline(true);
-          setConfirmed(false);
-        }
       }
+      // Do NOT go offline here — only native events / navigator.onLine do that
     };
 
-    // Immediate native offline signal — no fetch needed, fastest possible
-    const handleOfflineEvent = () => {
+    const goOffline = () => {
+      if (isOnlineRef.current === false) return; // already offline, skip
+      isOnlineRef.current = false;
       setIsOnline(false);
       setWasOffline(true);
       setConfirmed(false);
     };
 
-    // Online event / visibility / focus — verify with real fetch
-    const handleOnlineEvent = () => check();
+    const handleOffline = () => goOffline();
+    const handleOnline  = () => verifyOnline();
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") check();
+      if (document.visibilityState !== "visible") return;
+      if (!navigator.onLine) goOffline();
+      else if (!isOnlineRef.current) verifyOnline(); // was offline, check if back
     };
 
-    // Initial check
-    check();
-
-    // Poll every 3 s — essential for iOS Safari which often skips events
-    const interval = setInterval(check, 3000);
-
-    window.addEventListener("offline", handleOfflineEvent);
-    window.addEventListener("online", handleOnlineEvent);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online",  handleOnline);
     document.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("focus", handleOnlineEvent);
+
+    // Poll every 3 s — ONLY acts when we are already offline (for iOS Safari reconnect)
+    const interval = setInterval(() => {
+      if (!navigator.onLine) { goOffline(); return; }
+      if (!isOnlineRef.current) verifyOnline();
+    }, 3000);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener("offline", handleOfflineEvent);
-      window.removeEventListener("online", handleOnlineEvent);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online",  handleOnline);
       document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("focus", handleOnlineEvent);
     };
   }, []);
 
