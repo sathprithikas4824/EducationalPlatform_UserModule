@@ -408,18 +408,33 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       });
     }
 
-    setModuleDownloadState("done");
     // Cache locally so this device shows "Downloaded" instantly on next visit (no Supabase query)
     const deviceId = getDeviceId();
     const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
     try { localStorage.setItem(flagKey, "true"); } catch {}
+
     // Save to Supabase — one row per (user, module), so ALL devices see "Downloaded" immediately
     if (supabase && user?.id) {
-      supabase.from("user_module_downloads").upsert(
-        { user_id: userId, submodule_id: submoduleId },
-        { onConflict: "user_id,submodule_id" }
-      );
+      const sid = currentSubmodule?.submodule_id ?? submoduleId;
+      const { error: upsertError } = await supabase
+        .from("user_module_downloads")
+        .upsert(
+          { user_id: userId, submodule_id: sid },
+          { onConflict: "user_id,submodule_id" }
+        );
+      if (upsertError) {
+        console.error("[downloads] Failed to sync module download to Supabase:", upsertError.message);
+        // Retry once
+        await supabase
+          .from("user_module_downloads")
+          .upsert(
+            { user_id: userId, submodule_id: sid },
+            { onConflict: "user_id,submodule_id" }
+          );
+      }
     }
+
+    setModuleDownloadState("done");
   }, [user, topics, currentSubmodule, submoduleId, stripHtml]);
 
   // Mark the currently selected topic as completed in Supabase
@@ -562,11 +577,45 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       .eq("submodule_id", submoduleId)
       .limit(1)
       .then(({ data, error }) => {
-        if (error || !data?.length) return;
+        if (error) {
+          console.warn("[downloads] Cross-device check failed:", error.message);
+          return;
+        }
+        if (!data?.length) return;
         setModuleDownloadState("done");
         // Cache locally so next visit (and after logout) is instant — no query needed
         try { localStorage.setItem(flagKey, "true"); } catch {}
       });
+  }, [submoduleId, user?.id]);
+
+  // Realtime subscription: instantly update "Downloaded" state on ALL open devices/tabs
+  // when any device upserts a row into user_module_downloads for this submodule
+  useEffect(() => {
+    if (!supabase || !user?.id || !submoduleId) return;
+
+    const userId = user.id;
+    const channel = supabase
+      .channel(`module_download_${userId}_${submoduleId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "user_module_downloads",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = payload.new as { submodule_id: number };
+          if (row.submodule_id !== submoduleId) return;
+          setModuleDownloadState("done");
+          const deviceId = getDeviceId();
+          const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
+          try { localStorage.setItem(flagKey, "true"); } catch {}
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [submoduleId, user?.id]);
 
   // Track reading progress via scroll position — guests see 0%, no tracking

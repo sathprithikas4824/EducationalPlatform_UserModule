@@ -71,7 +71,13 @@ CREATE POLICY "Users can delete own module downloads"
     USING (auth.uid() = user_id);
 
 
--- 3. If user_module_downloads already exists WITH device_id column, migrate it:
+-- 3. Enable Realtime on user_module_downloads so all devices get live "Downloaded" updates
+--    REQUIRED for cross-device instant sync to work
+-- =============================================
+ALTER PUBLICATION supabase_realtime ADD TABLE public.user_module_downloads;
+
+
+-- 4. If user_module_downloads already exists WITH device_id column, migrate it:
 --    Run these only if you had the old schema with device_id.
 --    (Skip if creating fresh)
 -- =============================================
