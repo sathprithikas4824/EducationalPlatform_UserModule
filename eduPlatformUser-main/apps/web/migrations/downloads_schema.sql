@@ -22,19 +22,19 @@ CREATE INDEX IF NOT EXISTS idx_user_downloads_user ON public.user_downloads(user
 
 ALTER TABLE public.user_downloads ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can view own downloads"
+CREATE POLICY "Users can view own downloads"
     ON public.user_downloads FOR SELECT
     USING (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can insert own downloads"
+CREATE POLICY "Users can insert own downloads"
     ON public.user_downloads FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can upsert own downloads"
+CREATE POLICY "Users can upsert own downloads"
     ON public.user_downloads FOR UPDATE
     USING (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can delete own downloads"
+CREATE POLICY "Users can delete own downloads"
     ON public.user_downloads FOR DELETE
     USING (auth.uid() = user_id);
 
@@ -54,19 +54,19 @@ CREATE INDEX IF NOT EXISTS idx_user_module_downloads_user ON public.user_module_
 
 ALTER TABLE public.user_module_downloads ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can view own module downloads"
+CREATE POLICY "Users can view own module downloads"
     ON public.user_module_downloads FOR SELECT
     USING (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can insert own module downloads"
+CREATE POLICY "Users can insert own module downloads"
     ON public.user_module_downloads FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can upsert own module downloads"
+CREATE POLICY "Users can upsert own module downloads"
     ON public.user_module_downloads FOR UPDATE
     USING (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can delete own module downloads"
+CREATE POLICY "Users can delete own module downloads"
     ON public.user_module_downloads FOR DELETE
     USING (auth.uid() = user_id);
 
