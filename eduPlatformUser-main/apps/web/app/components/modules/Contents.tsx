@@ -538,16 +538,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     setModuleDownloadState("idle");
   }, [submoduleId]);
 
-  // Restore "done" state — device flag first (fast/offline), then Supabase for cross-device sync
+  // Restore "done" state — runs as soon as user + submoduleId are known (no need to wait for topics)
   useEffect(() => {
-    if (!topics.length) return;
     const userId = user?.id ?? getLastUserId();
     if (!userId || !submoduleId) return;
 
     const deviceId = getDeviceId();
     const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
 
-    // Fast path: this device already downloaded the module for this user (survives logout)
+    // Fast path: localStorage flag set on this device (survives logout)
     try {
       if (localStorage.getItem(flagKey) === "true") {
         setModuleDownloadState("done");
@@ -555,7 +554,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       }
     } catch {}
 
-    // Cross-device sync: check user_module_downloads in Supabase (only when logged in)
+    // Cross-device sync: immediately query Supabase so Device 2 shows "Downloaded" right away
     if (!user?.id || !supabase) return;
     supabase
       .from("user_module_downloads")
@@ -566,10 +565,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       .then(({ data, error }) => {
         if (error || !data?.length) return;
         setModuleDownloadState("done");
-        // Cache on this device so future visits (incl. after logout) are instant
+        // Cache locally so next visit (and after logout) is instant — no query needed
         try { localStorage.setItem(flagKey, "true"); } catch {}
       });
-  }, [topics, submoduleId, user?.id]);
+  }, [submoduleId, user?.id]);
 
   // Track reading progress via scroll position — guests see 0%, no tracking
   useEffect(() => {
