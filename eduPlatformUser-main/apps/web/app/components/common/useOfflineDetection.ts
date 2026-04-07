@@ -33,7 +33,11 @@ export async function checkRealConnectivity(): Promise<boolean> {
 //
 // Returns { isOnline, wasOffline, setWasOffline, confirmed, setConfirmed }
 export function useOfflineDetection() {
-  const [isOnline, setIsOnline] = useState<boolean | null>(null);
+  // Initialise immediately from navigator.onLine so there is zero blank-screen delay.
+  // The real fetch-based check runs in the background and corrects this if wrong.
+  const [isOnline, setIsOnline] = useState<boolean | null>(
+    typeof navigator !== "undefined" ? navigator.onLine : null
+  );
   const [wasOffline, setWasOffline] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const checkingRef = useRef(false);
