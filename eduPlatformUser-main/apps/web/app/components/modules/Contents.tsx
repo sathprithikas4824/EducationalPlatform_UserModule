@@ -409,15 +409,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
-    // Persist "done" flag keyed by user + device so it survives logout on this device
-    const subId = currentSubmodule?.submodule_id ?? submoduleId;
+    // Always use the submoduleId prop (from URL) so save and restore use the same value
     const deviceId = getDeviceId();
-    const flagKey = `edu_module_done_${userId}_${deviceId}_${subId}`;
+    const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
     try { localStorage.setItem(flagKey, "true"); } catch {}
-    // Also save to Supabase so cross-device queries stay accurate
+    // Save to Supabase for cross-device sync
     if (supabase && user?.id) {
       supabase.from("user_module_downloads").upsert(
-        { user_id: userId, device_id: deviceId, submodule_id: subId },
+        { user_id: userId, device_id: deviceId, submodule_id: submoduleId },
         { onConflict: "user_id,device_id,submodule_id" }
       );
     }

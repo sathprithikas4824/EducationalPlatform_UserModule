@@ -33,14 +33,17 @@ export async function checkRealConnectivity(): Promise<boolean> {
 //
 // Returns { isOnline, wasOffline, setWasOffline, confirmed, setConfirmed }
 export function useOfflineDetection() {
-  // Initialise immediately from navigator.onLine so there is zero blank-screen delay.
-  // The real fetch-based check runs in the background and corrects this if wrong.
+  // Initialise immediately from navigator.onLine — zero blank-screen delay on open.
+  // The real fetch-based check runs in background and corrects this if wrong.
   const [isOnline, setIsOnline] = useState<boolean | null>(
     typeof navigator !== "undefined" ? navigator.onLine : null
   );
   const [wasOffline, setWasOffline] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const checkingRef = useRef(false);
+  // Require 2 consecutive fetch failures before declaring offline, so a single
+  // transient hiccup never wrongly shows the offline page while actually online.
+  const failCountRef = useRef(0);
 
   useEffect(() => {
     const check = async () => {
@@ -49,10 +52,17 @@ export function useOfflineDetection() {
       const online = await checkRealConnectivity();
       checkingRef.current = false;
 
-      setIsOnline(online);
-      if (!online) {
-        setWasOffline(true);
-        setConfirmed(false);
+      if (online) {
+        failCountRef.current = 0;
+        setIsOnline(true);
+      } else {
+        failCountRef.current += 1;
+        // Only go offline after 2 consecutive failures, OR if browser also says offline
+        if (failCountRef.current >= 2 || !navigator.onLine) {
+          setIsOnline(false);
+          setWasOffline(true);
+          setConfirmed(false);
+        }
       }
     };
 
