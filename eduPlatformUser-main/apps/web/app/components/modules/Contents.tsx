@@ -409,15 +409,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
-    // Always use the submoduleId prop (from URL) so save and restore use the same value
+    // Cache locally so this device shows "Downloaded" instantly on next visit (no Supabase query)
     const deviceId = getDeviceId();
     const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
     try { localStorage.setItem(flagKey, "true"); } catch {}
-    // Save to Supabase for cross-device sync
+    // Save to Supabase — one row per (user, module), so ALL devices see "Downloaded" immediately
     if (supabase && user?.id) {
       supabase.from("user_module_downloads").upsert(
-        { user_id: userId, device_id: deviceId, submodule_id: submoduleId },
-        { onConflict: "user_id,device_id,submodule_id" }
+        { user_id: userId, submodule_id: submoduleId },
+        { onConflict: "user_id,submodule_id" }
       );
     }
   }, [user, topics, currentSubmodule, submoduleId, stripHtml]);
