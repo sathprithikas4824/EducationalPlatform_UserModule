@@ -127,6 +127,18 @@ export async function loadDownloads(userId: string): Promise<DownloadRecord[]> {
 
       if (!error) {
         const records = (data || []).map((r) => rowToRecord(r as Record<string, unknown>));
+
+        // Restore submoduleId from localStorage cache — it's not stored in user_downloads
+        // but IS stored in the local records. Match by topicId+fileName which is unique.
+        const localRecords = localLoad(userId);
+        const localByKey = new Map(localRecords.map((r) => [`${r.topicId}_${r.fileName}`, r]));
+        for (const rec of records) {
+          if (rec.submoduleId == null) {
+            const local = localByKey.get(`${rec.topicId}_${rec.fileName}`);
+            if (local?.submoduleId != null) rec.submoduleId = local.submoduleId;
+          }
+        }
+
         // Cache to localStorage so records are available offline
         localSave(userId, records);
         return records;

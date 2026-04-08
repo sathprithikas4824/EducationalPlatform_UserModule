@@ -619,16 +619,26 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           event: "DELETE",
           schema: "public",
           table: "user_module_downloads",
+          // Note: payload.old only has the PK (id), not submodule_id, unless REPLICA IDENTITY FULL
+          // is set. So we re-query Supabase to check if this submodule's row still exists.
           filter: `user_id=eq.${userId}`,
         },
-        (payload) => {
-          const row = payload.old as { submodule_id: number };
-          if (row.submodule_id !== submoduleId) return;
-          setModuleDownloadState("idle");
-          // Clear the per-device localStorage flag so it doesn't restore on next visit
-          const deviceId = getDeviceId();
-          const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
-          try { localStorage.removeItem(flagKey); } catch {}
+        () => {
+          supabase!
+            .from("user_module_downloads")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("submodule_id", submoduleId)
+            .limit(1)
+            .then(({ data }) => {
+              if (!data?.length) {
+                // Row is gone — reset the badge
+                setModuleDownloadState("idle");
+                const deviceId = getDeviceId();
+                const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
+                try { localStorage.removeItem(flagKey); } catch {}
+              }
+            });
         }
       )
       .subscribe();
