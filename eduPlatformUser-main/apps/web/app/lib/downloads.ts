@@ -156,3 +156,52 @@ export async function removeDownload(userId: string, downloadId: string): Promis
   const existing = localLoad(userId);
   localSave(userId, existing.filter((d) => d.id !== downloadId));
 }
+
+/**
+ * Remove ALL downloaded topics for a module, plus the module's "downloaded" badge.
+ * Deletes from Supabase (user_downloads + user_module_downloads) and clears localStorage.
+ */
+export async function removeModuleDownloads(
+  userId: string,
+  moduleName: string,
+  submoduleId?: number
+): Promise<void> {
+  // ── Supabase ──
+  if (supabase && isSupabaseUserId(userId)) {
+    // Delete all topic records for this module
+    const { error: e1 } = await supabase
+      .from("user_downloads")
+      .delete()
+      .eq("user_id", userId)
+      .eq("module_name", moduleName);
+    if (e1) console.warn("Supabase removeModuleDownloads (user_downloads) failed:", e1.message);
+
+    // Delete the module-level "downloaded" badge row
+    if (submoduleId != null) {
+      const { error: e2 } = await supabase
+        .from("user_module_downloads")
+        .delete()
+        .eq("user_id", userId)
+        .eq("submodule_id", submoduleId);
+      if (e2) console.warn("Supabase removeModuleDownloads (user_module_downloads) failed:", e2.message);
+    }
+  }
+
+  // ── localStorage ──
+  const existing = localLoad(userId);
+  localSave(userId, existing.filter((d) => d.moduleName !== moduleName));
+
+  // Clear the per-device "done" flags for this submodule
+  if (typeof window !== "undefined" && submoduleId != null) {
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`edu_module_done_${userId}_`) && key.endsWith(`_${submoduleId}`)) {
+          localStorage.removeItem(key);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+}

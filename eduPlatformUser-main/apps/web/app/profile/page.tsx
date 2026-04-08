@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAnnotation } from "../components/common/AnnotationProvider";
 import { supabase, getAllModulesProgress, getUserSurvey, type TopicProgress, type SurveyRow } from "../lib/supabase";
-import { loadDownloads, removeDownload, type DownloadRecord } from "../lib/downloads";
+import { loadDownloads, removeDownload, removeModuleDownloads, type DownloadRecord } from "../lib/downloads";
 import { loadBookmarks, removeBookmark, type BookmarkRecord } from "../lib/bookmarks";
 import { BookmarkHeart } from "../components/common/icons/BookmarkHeart";
 
@@ -751,12 +751,32 @@ function MyProjects() {
   );
 }
 
+// ── Module group type for MyDownloads ─────────────────────────────────────────
+interface DownloadModuleGroup {
+  moduleName: string;
+  submoduleId?: number;
+  files: DownloadRecord[];
+}
+
+function groupDownloadsByModule(records: DownloadRecord[]): DownloadModuleGroup[] {
+  const map = new Map<string, DownloadModuleGroup>();
+  for (const d of records) {
+    if (!map.has(d.moduleName)) {
+      map.set(d.moduleName, { moduleName: d.moduleName, submoduleId: d.submoduleId, files: [] });
+    }
+    map.get(d.moduleName)!.files.push(d);
+  }
+  return Array.from(map.values());
+}
+
 // ── My Downloads ───────────────────────────────────────────────────────────────
 function MyDownloads() {
   const { user } = useAnnotation();
   const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
   const [redownloadingId, setRedownloadingId] = useState<string | null>(null);
+  const [removingModule, setRemovingModule] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
   // Load downloads from Supabase (or localStorage fallback) when user changes
   useEffect(() => {
@@ -772,10 +792,18 @@ function MyDownloads() {
     });
   }, [user?.id]);
 
-  const handleRemove = async (id: string) => {
+  const handleRemoveFile = async (id: string) => {
     if (!user?.id) return;
     await removeDownload(user.id, id);
     setDownloads((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  const handleRemoveModule = async (group: DownloadModuleGroup) => {
+    if (!user?.id) return;
+    setRemovingModule(group.moduleName);
+    await removeModuleDownloads(user.id, group.moduleName, group.submoduleId);
+    setDownloads((prev) => prev.filter((d) => d.moduleName !== group.moduleName));
+    setRemovingModule(null);
   };
 
   const handleRedownload = (d: DownloadRecord) => {
@@ -795,13 +823,24 @@ function MyDownloads() {
     setTimeout(() => setRedownloadingId(null), 2000);
   };
 
+  const toggleModule = (moduleName: string) => {
+    setExpandedModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(moduleName)) next.delete(moduleName);
+      else next.add(moduleName);
+      return next;
+    });
+  };
+
+  const groups = groupDownloadsByModule(downloads);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Downloads</h2>
         {downloads.length > 0 && (
           <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm font-semibold rounded-full">
-            {downloads.length} file{downloads.length !== 1 ? "s" : ""}
+            {groups.length} module{groups.length !== 1 ? "s" : ""} · {downloads.length} file{downloads.length !== 1 ? "s" : ""}
           </span>
         )}
       </div>
@@ -822,76 +861,103 @@ function MyDownloads() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {downloads.map((d) => {
-            const isDone = redownloadingId === d.id;
+        <div className="space-y-4">
+          {groups.map((group) => {
+            const isExpanded = expandedModules.has(group.moduleName);
+            const isRemoving = removingModule === group.moduleName;
             return (
-              <div
-                key={d.id}
-                className="flex items-center gap-3 p-4 bg-white rounded-xl border border-gray-200 hover:border-purple-200 transition-colors"
-              >
-                {/* File icon */}
-                <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{d.fileName}</p>
-                  <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                    <span className="text-xs font-medium text-purple-600 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full truncate max-w-[140px]">
-                      {d.moduleName}
-                    </span>
-                    <svg className="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                    <span className="text-xs text-gray-500 truncate max-w-[140px]">{d.topicName}</span>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-0.5">{timeAgo(d.downloadedAt)}</p>
-                </div>
-
-                {/* Re-download button */}
-                <button
-                  onClick={() => d.content ? handleRedownload(d) : undefined}
-                  disabled={!d.content}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex-shrink-0 border ${
-                    !d.content
-                      ? "bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed opacity-50"
-                      : isDone
-                        ? "bg-green-50 text-green-600 border-green-200"
-                        : "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100"
-                  }`}
-                  title={d.content ? "Download again" : "Re-download not available — please re-download from the module"}
-                >
-                  {isDone ? (
-                    <>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Done
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div key={group.moduleName} className="rounded-xl border border-gray-200 overflow-hidden">
+                {/* Module header row */}
+                <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <button
+                    onClick={() => toggleModule(group.moduleName)}
+                    className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 border border-purple-200 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      Download
-                    </>
-                  )}
-                </button>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{group.moduleName}</p>
+                      <p className="text-xs text-gray-400">{group.files.length} file{group.files.length !== 1 ? "s" : ""}</p>
+                    </div>
+                    <svg className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {/* Remove entire module button */}
+                  <button
+                    onClick={() => handleRemoveModule(group)}
+                    disabled={isRemoving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Remove entire module from downloads"
+                  >
+                    {isRemoving ? (
+                      <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    )}
+                    Remove module
+                  </button>
+                </div>
 
-                {/* Remove button */}
-                <button
-                  onClick={() => handleRemove(d.id)}
-                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                  title="Remove from list"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                {/* Expanded file list */}
+                {isExpanded && (
+                  <div className="divide-y divide-gray-100">
+                    {group.files.map((d) => {
+                      const isDone = redownloadingId === d.id;
+                      return (
+                        <div key={d.id} className="flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors">
+                          <div className="w-8 h-8 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-700 truncate">{d.topicName}</p>
+                            <p className="text-xs text-gray-400">{d.fileName} · {timeAgo(d.downloadedAt)}</p>
+                          </div>
+                          {/* Re-download button */}
+                          <button
+                            onClick={() => d.content ? handleRedownload(d) : undefined}
+                            disabled={!d.content}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex-shrink-0 border ${
+                              !d.content
+                                ? "bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed opacity-50"
+                                : isDone
+                                  ? "bg-green-50 text-green-600 border-green-200"
+                                  : "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100"
+                            }`}
+                            title={d.content ? "Download file" : "Content not available"}
+                          >
+                            {isDone ? (
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            )}
+                          </button>
+                          {/* Remove single file */}
+                          <button
+                            onClick={() => handleRemoveFile(d.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                            title="Remove this file"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}

@@ -224,9 +224,52 @@ function Reader({ group, onBack }: { group: ModuleGroup; onBack: () => void }) {
 }
 
 // ── Module card ───────────────────────────────────────────────────────────────
-function ModuleCard({ group, onOpen }: { group: ModuleGroup; onOpen: () => void }) {
+function ModuleCard({ group, onOpen, onRemove }: { group: ModuleGroup; onOpen: () => void; onRemove: () => void }) {
   const unique = buildReaderTopics(group.topics);
   const hasHtml = group.topics.some((t) => t.fileType === "html");
+  const [confirming, setConfirming] = useState(false);
+
+  const handleRemoveClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirming(true);
+  };
+
+  const handleConfirmRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRemove();
+  };
+
+  const handleCancelRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirming(false);
+  };
+
+  if (confirming) {
+    return (
+      <div style={{ borderRadius: 16, border: "1px solid #fecaca", padding: 16, background: "#fef2f2", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </div>
+          <div>
+            <p style={{ fontWeight: 700, fontSize: 14, color: "#991b1b", margin: 0 }}>Remove this module?</p>
+            <p style={{ fontSize: 12, color: "#b91c1c", margin: "2px 0 0" }}>
+              <strong>{group.moduleName}</strong> — {unique.length} topic{unique.length !== 1 ? "s" : ""} will be removed from offline storage.
+            </p>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={handleConfirmRemove} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", background: "#dc2626", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Remove
+          </button>
+          <button onClick={handleCancelRemove} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "1px solid #fecaca", background: "#fff", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div onClick={onOpen} style={{ borderRadius: 16, border: "1px solid #e5e7eb", padding: 16, cursor: "pointer", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", transition: "border-color 0.2s" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#a78bfa")}
@@ -245,6 +288,14 @@ function ModuleCard({ group, onOpen }: { group: ModuleGroup; onOpen: () => void 
           <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 20, background: hasHtml ? "#dcfce7" : "#fef3c7", color: hasHtml ? "#15803d" : "#92400e" }}>
             {hasHtml ? "Readable" : "Text"}
           </span>
+          {/* Trash / remove button */}
+          <button
+            onClick={handleRemoveClick}
+            title="Remove from offline storage"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, border: "1px solid #fecaca", background: "#fef2f2", cursor: "pointer", color: "#dc2626" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
           <span style={{ fontSize: 16, color: "#9ca3af" }}>›</span>
         </div>
       </div>
@@ -266,19 +317,65 @@ function ModuleCard({ group, onOpen }: { group: ModuleGroup; onOpen: () => void 
   );
 }
 
+// ── Remove a module group from localStorage ────────────────────────────────────
+function removeGroupLocally(userId: string | null, group: ModuleGroup): void {
+  try {
+    // Remove matching records from this user's key
+    if (userId) {
+      const raw = localStorage.getItem(`edu_downloads_${userId}`);
+      const all: DownloadRecord[] = raw ? (JSON.parse(raw) as DownloadRecord[]) : [];
+      const filtered = all.filter((d) => d.moduleName !== group.moduleName);
+      localStorage.setItem(`edu_downloads_${userId}`, JSON.stringify(filtered));
+
+      // Clear per-device "module done" flags for this submodule
+      if (group.submoduleId != null) {
+        const prefix = `edu_module_done_${userId}_`;
+        const suffix = `_${group.submoduleId}`;
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(prefix) && key.endsWith(suffix)) {
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    } else {
+      // Fallback: scan all edu_downloads_* keys
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("edu_downloads_")) {
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          const all: DownloadRecord[] = JSON.parse(raw) as DownloadRecord[];
+          const filtered = all.filter((d) => d.moduleName !== group.moduleName);
+          localStorage.setItem(key, JSON.stringify(filtered));
+        }
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
 // ── Main offline page ─────────────────────────────────────────────────────────
 export default function OfflinePage() {
   const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [openGroup, setOpenGroup] = useState<ModuleGroup | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     // Read userId from cookie, then load from localStorage — no network calls
-    const userId = readLastUserId();
-    const records = userId ? readDownloads(userId) : readAllDownloads();
+    const uid = readLastUserId();
+    setUserId(uid);
+    const records = uid ? readDownloads(uid) : readAllDownloads();
     setDownloads(records);
     setLoading(false);
   }, []);
+
+  const handleRemoveGroup = (group: ModuleGroup) => {
+    removeGroupLocally(userId, group);
+    setDownloads((prev) => prev.filter((d) => d.moduleName !== group.moduleName));
+  };
 
   if (openGroup) return <Reader group={openGroup} onBack={() => setOpenGroup(null)} />;
 
@@ -347,7 +444,7 @@ export default function OfflinePage() {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 16 }}>
             {groups.map((g) => (
-              <ModuleCard key={g.submoduleId ?? g.moduleName} group={g} onOpen={() => setOpenGroup(g)} />
+              <ModuleCard key={g.submoduleId ?? g.moduleName} group={g} onOpen={() => setOpenGroup(g)} onRemove={() => handleRemoveGroup(g)} />
             ))}
           </div>
         )}
