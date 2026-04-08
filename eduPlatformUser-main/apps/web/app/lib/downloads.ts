@@ -91,7 +91,9 @@ export async function saveDownload(
       .single();
 
     if (!error && data) {
-      const saved = rowToRecord(data as Record<string, unknown>);
+      // rowToRecord doesn't include submoduleId (not stored in user_downloads table),
+      // so carry it forward from the original record so localStorage retains it.
+      const saved = { ...rowToRecord(data as Record<string, unknown>), submoduleId: record.submoduleId };
       // Mirror to localStorage so the record is available offline
       const existing = localLoad(userId);
       const filtered = existing.filter(
