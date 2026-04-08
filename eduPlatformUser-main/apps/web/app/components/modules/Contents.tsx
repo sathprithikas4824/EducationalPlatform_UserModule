@@ -613,6 +613,24 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           try { localStorage.setItem(flagKey, "true"); } catch {}
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "user_module_downloads",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = payload.old as { submodule_id: number };
+          if (row.submodule_id !== submoduleId) return;
+          setModuleDownloadState("idle");
+          // Clear the per-device localStorage flag so it doesn't restore on next visit
+          const deviceId = getDeviceId();
+          const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
+          try { localStorage.removeItem(flagKey); } catch {}
+        }
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
