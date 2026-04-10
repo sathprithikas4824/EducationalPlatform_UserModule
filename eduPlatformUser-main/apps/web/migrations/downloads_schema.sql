@@ -76,6 +76,12 @@ CREATE POLICY "Users can delete own module downloads"
 -- =============================================
 ALTER PUBLICATION supabase_realtime ADD TABLE public.user_module_downloads;
 
+-- 3b. REPLICA IDENTITY FULL — makes DELETE events include the full old row (not just PK).
+--     Without this, the user_id column is missing from DELETE payloads, so row-level
+--     Realtime filters like `user_id=eq.xxx` never match on DELETE events.
+--     Run this once in your Supabase SQL Editor:
+ALTER TABLE public.user_module_downloads REPLICA IDENTITY FULL;
+
 
 -- 4. If user_module_downloads already exists WITH device_id column, migrate it:
 --    Run these only if you had the old schema with device_id.

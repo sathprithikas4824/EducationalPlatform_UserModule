@@ -589,11 +589,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   }, [submoduleId, user?.id]);
 
   // Realtime subscription: instantly update "Downloaded" state on ALL open devices/tabs
-  // when any device upserts a row into user_module_downloads for this submodule
+  // when any device upserts or deletes a row in user_module_downloads for this submodule
   useEffect(() => {
     if (!supabase || !user?.id || !submoduleId) return;
 
     const userId = user.id;
+    const deviceId = getDeviceId();
+    const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
+
     const channel = supabase
       .channel(`module_download_${userId}_${submoduleId}`)
       .on(
@@ -608,8 +611,6 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           const row = payload.new as { submodule_id: number };
           if (row.submodule_id !== submoduleId) return;
           setModuleDownloadState("done");
-          const deviceId = getDeviceId();
-          const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
           try { localStorage.setItem(flagKey, "true"); } catch {}
         }
       )
@@ -619,11 +620,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           event: "DELETE",
           schema: "public",
           table: "user_module_downloads",
-          // Note: payload.old only has the PK (id), not submodule_id, unless REPLICA IDENTITY FULL
-          // is set. So we re-query Supabase to check if this submodule's row still exists.
-          filter: `user_id=eq.${userId}`,
+          // No filter: DELETE payloads only carry the PK (id), not user_id, unless
+          // REPLICA IDENTITY FULL is set — so a user_id filter never matches.
+          // RLS ensures we only receive DELETE events for our own rows.
         },
         () => {
+          // Re-query to confirm this submodule's row is gone (not some other module's delete)
           supabase!
             .from("user_module_downloads")
             .select("id")
@@ -632,10 +634,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
             .limit(1)
             .then(({ data }) => {
               if (!data?.length) {
-                // Row is gone — reset the badge
                 setModuleDownloadState("idle");
-                const deviceId = getDeviceId();
-                const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
                 try { localStorage.removeItem(flagKey); } catch {}
               }
             });
@@ -644,6 +643,39 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
+  }, [submoduleId, user?.id]);
+
+  // Safety net: re-sync download state whenever this tab becomes visible again.
+  // Catches cases where a DELETE realtime event was missed while the tab was hidden
+  // (e.g. user removed the module in another tab or on another device).
+  useEffect(() => {
+    if (!supabase || !user?.id || !submoduleId) return;
+
+    const userId = user.id;
+    const deviceId = getDeviceId();
+    const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
+
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      supabase!
+        .from("user_module_downloads")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("submodule_id", submoduleId)
+        .limit(1)
+        .then(({ data }) => {
+          if (data?.length) {
+            setModuleDownloadState("done");
+            try { localStorage.setItem(flagKey, "true"); } catch {}
+          } else {
+            setModuleDownloadState("idle");
+            try { localStorage.removeItem(flagKey); } catch {}
+          }
+        });
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [submoduleId, user?.id]);
 
   // Track reading progress via scroll position — guests see 0%, no tracking
