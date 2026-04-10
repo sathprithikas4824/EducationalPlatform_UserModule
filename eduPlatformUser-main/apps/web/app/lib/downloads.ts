@@ -27,15 +27,16 @@ function isSupabaseUserId(userId: string): boolean {
 // Map Supabase snake_case row → DownloadRecord camelCase
 function rowToRecord(row: Record<string, unknown>): DownloadRecord {
   return {
-    id:           row.id           as string,
-    userId:       row.user_id      as string,
-    topicId:      row.topic_id     as number,
-    topicName:    row.topic_name   as string,
-    moduleName:   row.module_name  as string,
-    fileName:     row.file_name    as string,
-    fileType:     row.file_type    as string,
-    content:      (row.content     as string) || "",
-    downloadedAt: row.downloaded_at as string,
+    id:           row.id              as string,
+    userId:       row.user_id         as string,
+    topicId:      row.topic_id        as number,
+    topicName:    row.topic_name      as string,
+    moduleName:   row.module_name     as string,
+    submoduleId:  row.submodule_id != null ? (row.submodule_id as number) : undefined,
+    fileName:     row.file_name       as string,
+    fileType:     row.file_type       as string,
+    content:      (row.content        as string) || "",
+    downloadedAt: row.downloaded_at   as string,
   };
 }
 
@@ -80,6 +81,7 @@ export async function saveDownload(
           topic_id:      record.topicId,
           topic_name:    record.topicName,
           module_name:   record.moduleName,
+          submodule_id:  record.submoduleId ?? null,
           file_name:     record.fileName,
           file_type:     record.fileType,
           content:       record.content,
@@ -91,9 +93,8 @@ export async function saveDownload(
       .single();
 
     if (!error && data) {
-      // rowToRecord doesn't include submoduleId (not stored in user_downloads table),
-      // so carry it forward from the original record so localStorage retains it.
-      const saved = { ...rowToRecord(data as Record<string, unknown>), submoduleId: record.submoduleId };
+      // submoduleId is now stored in the DB and returned via rowToRecord
+      const saved = rowToRecord(data as Record<string, unknown>);
       // Mirror to localStorage so the record is available offline
       const existing = localLoad(userId);
       const filtered = existing.filter(
@@ -129,18 +130,6 @@ export async function loadDownloads(userId: string): Promise<DownloadRecord[]> {
 
       if (!error) {
         const records = (data || []).map((r) => rowToRecord(r as Record<string, unknown>));
-
-        // Restore submoduleId from localStorage cache — it's not stored in user_downloads
-        // but IS stored in the local records. Match by topicId+fileName which is unique.
-        const localRecords = localLoad(userId);
-        const localByKey = new Map(localRecords.map((r) => [`${r.topicId}_${r.fileName}`, r]));
-        for (const rec of records) {
-          if (rec.submoduleId == null) {
-            const local = localByKey.get(`${rec.topicId}_${rec.fileName}`);
-            if (local?.submoduleId != null) rec.submoduleId = local.submoduleId;
-          }
-        }
-
         // Cache to localStorage so records are available offline
         localSave(userId, records);
         return records;
@@ -182,6 +171,21 @@ export async function removeModuleDownloads(
 ): Promise<void> {
   // ── Supabase ──
   if (supabase && isSupabaseUserId(userId)) {
+    // If submoduleId wasn't passed (e.g. missing from localStorage on another device),
+    // look it up from user_downloads where module_name matches — submodule_id is now stored there.
+    let resolvedSubmoduleId = submoduleId;
+    if (resolvedSubmoduleId == null) {
+      const { data } = await supabase
+        .from("user_downloads")
+        .select("submodule_id")
+        .eq("user_id", userId)
+        .eq("module_name", moduleName)
+        .not("submodule_id", "is", null)
+        .limit(1)
+        .single();
+      if (data?.submodule_id != null) resolvedSubmoduleId = data.submodule_id as number;
+    }
+
     // Delete all topic records for this module
     const { error: e1 } = await supabase
       .from("user_downloads")
@@ -191,13 +195,14 @@ export async function removeModuleDownloads(
     if (e1) console.warn("Supabase removeModuleDownloads (user_downloads) failed:", e1.message);
 
     // Delete the module-level "downloaded" badge row
-    if (submoduleId != null) {
+    if (resolvedSubmoduleId != null) {
       const { error: e2 } = await supabase
         .from("user_module_downloads")
         .delete()
         .eq("user_id", userId)
-        .eq("submodule_id", submoduleId);
+        .eq("submodule_id", resolvedSubmoduleId);
       if (e2) console.warn("Supabase removeModuleDownloads (user_module_downloads) failed:", e2.message);
+      submoduleId = resolvedSubmoduleId; // use resolved value for localStorage cleanup below
     }
   }
 

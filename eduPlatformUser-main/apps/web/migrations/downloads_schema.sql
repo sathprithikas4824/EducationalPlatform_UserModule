@@ -11,12 +11,16 @@ CREATE TABLE IF NOT EXISTS public.user_downloads (
     topic_id     INTEGER NOT NULL,
     topic_name   TEXT NOT NULL,
     module_name  TEXT NOT NULL,
+    submodule_id INTEGER,
     file_name    TEXT NOT NULL,
     file_type    TEXT NOT NULL,
     content      TEXT,
     downloaded_at TIMESTAMPTZ DEFAULT now(),
     UNIQUE(user_id, topic_id, file_name)
 );
+
+-- If user_downloads already exists, add the submodule_id column:
+ALTER TABLE public.user_downloads ADD COLUMN IF NOT EXISTS submodule_id INTEGER;
 
 CREATE INDEX IF NOT EXISTS idx_user_downloads_user ON public.user_downloads(user_id);
 
