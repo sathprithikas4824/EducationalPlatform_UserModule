@@ -620,24 +620,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           event: "DELETE",
           schema: "public",
           table: "user_module_downloads",
-          // No filter: DELETE payloads only carry the PK (id), not user_id, unless
-          // REPLICA IDENTITY FULL is set — so a user_id filter never matches.
-          // RLS ensures we only receive DELETE events for our own rows.
+          // REPLICA IDENTITY FULL is set on this table, so DELETE payloads include
+          // the full old row — user_id filter works correctly here.
+          filter: `user_id=eq.${userId}`,
         },
-        () => {
-          // Re-query to confirm this submodule's row is gone (not some other module's delete)
-          supabase!
-            .from("user_module_downloads")
-            .select("id")
-            .eq("user_id", userId)
-            .eq("submodule_id", submoduleId)
-            .limit(1)
-            .then(({ data }) => {
-              if (!data?.length) {
-                setModuleDownloadState("idle");
-                try { localStorage.removeItem(flagKey); } catch {}
-              }
-            });
+        (payload) => {
+          const old = payload.old as { submodule_id: number };
+          if (old.submodule_id !== submoduleId) return;
+          setModuleDownloadState("idle");
+          try { localStorage.removeItem(flagKey); } catch {}
         }
       )
       .subscribe();
