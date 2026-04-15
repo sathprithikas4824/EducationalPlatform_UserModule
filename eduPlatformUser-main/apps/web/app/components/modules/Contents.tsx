@@ -597,6 +597,26 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const deviceId = getDeviceId();
     const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
 
+    // Re-query Supabase to get the true current state.
+    // Called on initial connect AND every reconnect (mobile drops WebSocket in background).
+    const resyncFromDB = () => {
+      supabase!
+        .from("user_module_downloads")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("submodule_id", submoduleId)
+        .limit(1)
+        .then(({ data }) => {
+          if (data?.length) {
+            setModuleDownloadState("done");
+            try { localStorage.setItem(flagKey, "true"); } catch {}
+          } else {
+            setModuleDownloadState("idle");
+            try { localStorage.removeItem(flagKey); } catch {}
+          }
+        });
+    };
+
     const channel = supabase
       // Channel name matches broadcastModuleRemoved() in downloads.ts so broadcast events arrive here
       .channel(`edu_module_badge_${userId}`)
@@ -640,7 +660,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           try { localStorage.removeItem(flagKey); } catch {}
         }
       )
-      .subscribe();
+      // ── Reconnect sync ───────────────────────────────────────────────────────
+      // Mobile browsers silently kill the WebSocket when the screen locks or the
+      // app goes to background. When Supabase reconnects (status → SUBSCRIBED),
+      // re-query the DB so any removal that happened while offline is caught.
+      // This fires on first connect too, making it the single source of truth
+      // for badge state on mount.
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") resyncFromDB();
+      });
 
     return () => { supabase.removeChannel(channel); };
   }, [submoduleId, user?.id]);
