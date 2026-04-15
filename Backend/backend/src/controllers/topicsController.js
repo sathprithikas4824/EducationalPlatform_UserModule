@@ -36,7 +36,7 @@ export const getTopicsByModule = async (req, res, next) => {
 
 export const createTopic = async (req, res, next) => {
   try {
-    const { submoduleId, moduleId, name, title, description, image_url } = req.body;
+    const { submoduleId, moduleId, name, title, description, image_url, content } = req.body;
 
     // Validate that either submoduleId or moduleId is provided (not both)
     if ((submoduleId && moduleId) || (!submoduleId && !moduleId)) {
@@ -48,6 +48,7 @@ export const createTopic = async (req, res, next) => {
       title: title || null,
       description: description || null,
       image_url: image_url || null,
+      content: content || null,
       ...(submoduleId ? { submodule_id: submoduleId } : { module_id: moduleId })
     };
 
@@ -66,11 +67,11 @@ export const createTopic = async (req, res, next) => {
 export const updateTopic = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, title, description, image_url } = req.body;
+    const { name, title, description, image_url, content } = req.body;
 
     const { data, error } = await supabase
       .from('topics')
-      .update({ name, title: title || null, description: description || null, image_url: image_url || null, updated_at: new Date() })
+      .update({ name, title: title || null, description: description || null, image_url: image_url || null, content: content || null, updated_at: new Date() })
       .eq('topic_id', id)
       .select();
 

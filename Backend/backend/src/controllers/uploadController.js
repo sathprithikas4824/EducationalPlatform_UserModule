@@ -11,12 +11,10 @@ const __dirname = dirname(__filename);
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
 
-const fileFilter = (req, file, cb) => {
-  // Accept only image files
+const imageFileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp|svg/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
   const mimetype = allowedTypes.test(file.mimetype);
-
   if (mimetype && extname) {
     return cb(null, true);
   } else {
@@ -24,12 +22,27 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+const videoFileFilter = (req, file, cb) => {
+  const allowedTypes = /mp4|webm|ogg|mov|avi|mkv/;
+  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const mimeAllowed = /video\//.test(file.mimetype);
+  if (mimeAllowed && extname) {
+    return cb(null, true);
+  } else {
+    cb(new Error('Only video files are allowed (mp4, webm, ogg, mov)'));
+  }
+};
+
 export const upload = multer({
   storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
-  fileFilter: fileFilter
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFileFilter
+});
+
+export const uploadVideoMulter = multer({
+  storage: storage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB for videos
+  fileFilter: videoFileFilter
 });
 
 // Upload image to Supabase Storage
@@ -71,6 +84,46 @@ export const uploadImage = async (req, res, next) => {
   } catch (err) {
     console.error('Upload error:', err);
     next(new AppError(err.message || 'Failed to upload image', 500));
+  }
+};
+
+// Upload video to Supabase Storage (course-videos bucket)
+export const uploadVideo = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return next(new AppError('No file uploaded', 400));
+    }
+
+    const file = req.file;
+    const fileExt = path.extname(file.originalname);
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExt}`;
+    const filePath = `videos/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('course-videos')
+      .upload(filePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false
+      });
+
+    if (error) {
+      console.error('Supabase storage error:', error);
+      return next(new AppError('Failed to upload video to storage', 500));
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('course-videos')
+      .getPublicUrl(filePath);
+
+    res.status(200).json({
+      success: true,
+      videoUrl: publicUrlData.publicUrl,
+      fileName: fileName,
+      filePath: filePath
+    });
+  } catch (err) {
+    console.error('Video upload error:', err);
+    next(new AppError(err.message || 'Failed to upload video', 500));
   }
 };
 

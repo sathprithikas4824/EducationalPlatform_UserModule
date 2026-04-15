@@ -185,20 +185,22 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
   };
 
-  // Rewrite relative or localhost image src attributes to use the production backend URL.
-  // This fixes images uploaded via the admin panel when it was pointed at localhost.
-  const fixImageUrls = (html: string): string => {
+  // Rewrite relative or localhost src attributes to use the production backend URL.
+  // Handles <img>, <video>, <source>, and <iframe> tags.
+  const fixMediaUrls = (html: string): string => {
     if (!html) return html;
-    return html.replace(
-      /(<img[^>]+src=["'])([^"']+)(["'])/gi,
-      (_match, before, src, after) => {
-        // Already an absolute non-localhost URL — leave as-is
-        if (/^https?:\/\/(?!localhost)/i.test(src)) return before + src + after;
-        // Relative path or localhost URL — prefix with backend URL
-        const normalized = src.replace(/^https?:\/\/localhost(:\d+)?/i, "");
-        return before + BACKEND_URL + (normalized.startsWith("/") ? "" : "/") + normalized + after;
-      }
-    );
+    const fixSrc = (_match: string, before: string, src: string, after: string): string => {
+      // Already an absolute non-localhost URL — leave as-is
+      if (/^https?:\/\/(?!localhost)/i.test(src)) return before + src + after;
+      // Relative path or localhost URL — prefix with backend URL
+      const normalized = src.replace(/^https?:\/\/localhost(:\d+)?/i, "");
+      return before + BACKEND_URL + (normalized.startsWith("/") ? "" : "/") + normalized + after;
+    };
+    return html
+      .replace(/(<img[^>]+src=["'])([^"']+)(["'])/gi, fixSrc)
+      .replace(/(<video[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc)
+      .replace(/(<source[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc)
+      .replace(/(<iframe[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc);
   };
 
   const handleDownload = useCallback(
@@ -1442,7 +1444,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                     {selectedTopic.title && (
                       <div
                         className="mb-4"
-                        dangerouslySetInnerHTML={{ __html: fixImageUrls(selectedTopic.title) }}
+                        dangerouslySetInnerHTML={{ __html: fixMediaUrls(selectedTopic.title) }}
                       />
                     )}
 
@@ -1461,14 +1463,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                     {selectedTopic.description && (
                       <div
                         className="mb-4"
-                        dangerouslySetInnerHTML={{ __html: fixImageUrls(selectedTopic.description) }}
+                        dangerouslySetInnerHTML={{ __html: fixMediaUrls(selectedTopic.description) }}
                       />
                     )}
 
                     {/* Topic Content from backend */}
                     {selectedTopic.content && (
                       <div
-                        dangerouslySetInnerHTML={{ __html: fixImageUrls(selectedTopic.content) }}
+                        dangerouslySetInnerHTML={{ __html: fixMediaUrls(selectedTopic.content) }}
                       />
                     )}
 
@@ -1752,6 +1754,48 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           line-height: 1.7;
           white-space: pre-wrap;
           word-break: break-word;
+        }
+
+        /* Images embedded in rich text content */
+        .ai-content-wrapper img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 8px;
+          margin: 0.75rem 0;
+          display: block;
+        }
+
+        /* Videos embedded in rich text content */
+        .ai-content-wrapper video {
+          max-width: 100%;
+          height: auto;
+          border-radius: 8px;
+          margin: 0.75rem 0;
+          display: block;
+          background-color: #000;
+        }
+
+        /* iFrames (YouTube, Vimeo, etc.) */
+        .ai-content-wrapper iframe {
+          max-width: 100%;
+          border-radius: 8px;
+          margin: 0.75rem 0;
+          display: block;
+          border: none;
+        }
+
+        /* Blockquotes */
+        .ai-content-wrapper blockquote {
+          border-left: 4px solid #9333ea;
+          margin: 1rem 0;
+          padding: 0.5rem 0 0.5rem 1rem;
+          color: #6b7280;
+          font-style: italic;
+        }
+
+        .dark .ai-content-wrapper blockquote {
+          color: #9ca3af;
+          border-left-color: #7c3aed;
         }
 
         /* Mobile: Prevent sidebar and header from being selected */
