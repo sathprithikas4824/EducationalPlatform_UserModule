@@ -161,6 +161,29 @@ export async function removeDownload(userId: string, downloadId: string): Promis
 }
 
 /**
+ * Broadcast a module_removed event to every device/tab that has the module page open.
+ * Uses Supabase Realtime Broadcast so the badge resets instantly without needing
+ * the receiver to detect a Postgres DELETE event (which can be dropped on mobile).
+ */
+function broadcastModuleRemoved(userId: string, submoduleId: number): void {
+  if (!supabase) return;
+  const ch = supabase.channel(`edu_module_badge_${userId}`);
+  ch.subscribe((status) => {
+    if (status !== "SUBSCRIBED") return;
+    ch.send({
+      type: "broadcast",
+      event: "module_removed",
+      payload: { submodule_id: submoduleId },
+    }).finally(() => {
+      // Short delay so the server can forward the message before we close the channel
+      setTimeout(() => { try { supabase!.removeChannel(ch); } catch {} }, 1500);
+    });
+  });
+  // Safety cleanup — remove channel after 12 s regardless
+  setTimeout(() => { try { supabase!.removeChannel(ch); } catch {} }, 12000);
+}
+
+/**
  * Remove ALL downloaded topics for a module, plus the module's "downloaded" badge.
  * Deletes from Supabase (user_downloads + user_module_downloads) and clears localStorage.
  */
@@ -203,6 +226,11 @@ export async function removeModuleDownloads(
         .eq("submodule_id", resolvedSubmoduleId);
       if (e2) console.warn("Supabase removeModuleDownloads (user_module_downloads) failed:", e2.message);
       submoduleId = resolvedSubmoduleId; // use resolved value for localStorage cleanup below
+
+      // Broadcast to ALL connected devices so they reset their badge instantly.
+      // This is faster and more reliable than waiting for the Postgres DELETE event,
+      // which can be dropped on mobile or when REPLICA IDENTITY is not FULL.
+      broadcastModuleRemoved(userId, resolvedSubmoduleId);
     }
   }
 

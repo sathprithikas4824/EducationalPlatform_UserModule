@@ -598,7 +598,17 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
 
     const channel = supabase
-      .channel(`module_download_${userId}_${submoduleId}`)
+      // Channel name matches broadcastModuleRemoved() in downloads.ts so broadcast events arrive here
+      .channel(`edu_module_badge_${userId}`)
+      // ── Broadcast (fast path) ────────────────────────────────────────────────
+      // Fires the moment ANY device calls removeModuleDownloads — no Postgres event needed.
+      // This is the primary mechanism for instant cross-device badge reset.
+      .on("broadcast", { event: "module_removed" }, ({ payload }: { payload: { submodule_id: number } }) => {
+        if (payload?.submodule_id !== submoduleId) return;
+        setModuleDownloadState("idle");
+        try { localStorage.removeItem(flagKey); } catch {}
+      })
+      // ── Postgres INSERT (backup for "downloaded" from another device) ─────────
       .on(
         "postgres_changes",
         {
@@ -614,14 +624,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           try { localStorage.setItem(flagKey, "true"); } catch {}
         }
       )
+      // ── Postgres DELETE (backup for "removed" — requires REPLICA IDENTITY FULL) ─
       .on(
         "postgres_changes",
         {
           event: "DELETE",
           schema: "public",
           table: "user_module_downloads",
-          // REPLICA IDENTITY FULL is set on this table, so DELETE payloads include
-          // the full old row — user_id filter works correctly here.
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
