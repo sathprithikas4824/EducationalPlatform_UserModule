@@ -636,9 +636,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     return () => { supabase.removeChannel(channel); };
   }, [submoduleId, user?.id]);
 
-  // Safety net: re-sync download state whenever this tab becomes visible again.
-  // Catches cases where a DELETE realtime event was missed while the tab was hidden
-  // (e.g. user removed the module in another tab or on another device).
+  // Safety net: re-sync download state whenever this tab/app becomes visible again.
+  // Handles three mobile scenarios:
+  //   1. visibilitychange — user switches apps or tabs on Android/iOS
+  //   2. pageshow (persisted) — iOS Safari restores page from bfcache on back navigation;
+  //      React effects do NOT re-run in that case, so we must force a re-check here.
+  //   3. focus — fallback for browsers that fire focus instead of visibilitychange
   useEffect(() => {
     if (!supabase || !user?.id || !submoduleId) return;
 
@@ -646,8 +649,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const deviceId = getDeviceId();
     const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
 
-    const handleVisibility = () => {
-      if (document.visibilityState !== "visible") return;
+    const resync = () => {
       supabase!
         .from("user_module_downloads")
         .select("id")
@@ -665,8 +667,25 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         });
     };
 
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") resync();
+    };
+
+    // iOS Safari bfcache: pageshow fires when page is restored from cache.
+    // persisted=true means the page was NOT freshly loaded — effects didn't re-run.
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) resync();
+    };
+
     document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("focus", resync);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("focus", resync);
+    };
   }, [submoduleId, user?.id]);
 
   // Track reading progress via scroll position — guests see 0%, no tracking
