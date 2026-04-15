@@ -1082,8 +1082,16 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       {/* Hero Section - Responsive */}
       <div className="w-full bg-white dark:bg-[#0d0d1a] py-6 sm:py-8 md:py-12 px-4 sm:px-6 md:px-10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-6 md:gap-12 items-center">
-          {/* Gray Placeholder Image - Responsive */}
-          <div className="w-full max-w-[280px] h-[140px] sm:h-[160px] md:h-[180px] bg-[#9a9aa3] rounded-2xl md:rounded-3xl flex-shrink-0"></div>
+          {/* Submodule Hero Image — fetched from backend; falls back to gray placeholder */}
+          {currentSubmodule?.image_url ? (
+            <img
+              src={currentSubmodule.image_url}
+              alt={currentSubmodule.name}
+              className="w-full max-w-[280px] h-[140px] sm:h-[160px] md:h-[180px] rounded-2xl md:rounded-3xl flex-shrink-0 object-cover"
+            />
+          ) : (
+            <div className="w-full max-w-[280px] h-[140px] sm:h-[160px] md:h-[180px] bg-[#9a9aa3] rounded-2xl md:rounded-3xl flex-shrink-0" />
+          )}
 
           {/* Hero Text Content */}
           <div className="flex-1 text-center md:text-left">
