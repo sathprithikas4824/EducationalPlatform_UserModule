@@ -853,9 +853,58 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
   }, []);
 
+  // Apply fresh topic data to state — called both on initial load and on background revalidation
+  const applyTopicData = useCallback((
+    topicsData: Topic[],
+    current: SubModuleData,
+    completedTopicIds: number[],
+    cancelled: { value: boolean },
+    preserveSelection: boolean
+  ) => {
+    if (cancelled.value) return;
+
+    setTopics(topicsData);
+    setCurrentSubmodule(current);
+
+    const firstUncompletedIndex = topicsData.findIndex(
+      (topic) => !completedTopicIds.includes(topic.topic_id)
+    );
+
+    const currentTopics: SidebarTopic[] = topicsData.map((topic, index) => ({
+      id: `topic-${topic.topic_id}`,
+      title: topic.name,
+      status: completedTopicIds.includes(topic.topic_id)
+        ? "completed"
+        : index === firstUncompletedIndex
+          ? "current"
+          : ("available" as const),
+    }));
+
+    setSidebarModules([{
+      id: String(current.submodule_id),
+      submoduleId: current.submodule_id,
+      title: current.name,
+      expanded: true,
+      topics: currentTopics,
+      topicsLoaded: true,
+    }]);
+
+    if (!preserveSelection && topicsData.length > 0) {
+      const startIndex = firstUncompletedIndex >= 0 ? firstUncompletedIndex : 0;
+      setSelectedTopic(topicsData[startIndex]);
+    } else if (preserveSelection) {
+      // Refresh the currently-selected topic so new images/videos appear
+      setSelectedTopic((prev) => {
+        if (!prev) return topicsData[0] ?? null;
+        const updated = topicsData.find((t) => t.topic_id === prev.topic_id);
+        return updated ?? prev;
+      });
+    }
+  }, []);
+
   // Initial data fetch with retry for backend cold starts
   useEffect(() => {
-    let cancelled = false;
+    const cancelled = { value: false };
 
     const fetchData = async (retryCount = 0) => {
       const MAX_RETRIES = 2;
@@ -864,16 +913,48 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         setLoading(true);
         setError(null);
 
-        // Fetch all submodules and topics for the current submodule in parallel (with cache)
+        const progressUserId = user?.id ?? getLastUserId();
+
+        // cachedFetch returns immediately (from cache if available) and also calls
+        // onRefresh when fresh data arrives — so images/videos added by admin show
+        // without requiring a manual page reload.
         const [rawSubmodules, topicsData] = await Promise.all([
           cachedFetch<SubModuleData[] | { data?: SubModuleData[] }>(
             `${BACKEND_URL}/api/submodules`,
-            "all_submodules"
+            "all_submodules",
+            (freshRaw) => {
+              if (cancelled.value) return;
+              const freshAll: SubModuleData[] = Array.isArray(freshRaw)
+                ? freshRaw
+                : (freshRaw as { data?: SubModuleData[] }).data || [];
+              const freshCurrent = freshAll.find((s) => s.submodule_id === submoduleId);
+              if (freshCurrent) setCurrentSubmodule(freshCurrent);
+            }
           ),
-          fetchTopicsForSubmodule(submoduleId),
+          cachedFetch<Topic[]>(
+            `${BACKEND_URL}/api/topics/${submoduleId}`,
+            `topics_${submoduleId}`,
+            async (freshTopics) => {
+              if (cancelled.value) return;
+              const freshCompleted = progressUserId
+                ? await getCompletedTopics(progressUserId, submoduleId)
+                : [];
+              const freshSubmodules = await cachedFetch<SubModuleData[] | { data?: SubModuleData[] }>(
+                `${BACKEND_URL}/api/submodules`,
+                "all_submodules"
+              );
+              const freshAll: SubModuleData[] = Array.isArray(freshSubmodules)
+                ? freshSubmodules
+                : (freshSubmodules as { data?: SubModuleData[] }).data || [];
+              const freshCurrent = freshAll.find((s) => s.submodule_id === submoduleId);
+              if (freshCurrent) {
+                applyTopicData(freshTopics, freshCurrent, freshCompleted, cancelled, true);
+              }
+            }
+          ),
         ]);
 
-        if (cancelled) return;
+        if (cancelled.value) return;
 
         // Normalize response: handle both array and { data: [...] } formats
         const allSubmodules: SubModuleData[] = Array.isArray(rawSubmodules)
@@ -884,13 +965,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         const current = allSubmodules.find(
           (s) => s.submodule_id === submoduleId
         );
-        setCurrentSubmodule(current || null);
 
         if (!current) {
-          // If we got an empty response, the backend might still be waking up — retry
           if (allSubmodules.length === 0 && retryCount < MAX_RETRIES) {
             await new Promise((r) => setTimeout(r, 1500 * (retryCount + 1)));
-            if (!cancelled) return fetchData(retryCount + 1);
+            if (!cancelled.value) return fetchData(retryCount + 1);
             return;
           }
           setError("Submodule not found");
@@ -898,65 +977,28 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           return;
         }
 
-        setTopics(topicsData);
+        const completedTopicIds = progressUserId
+          ? await getCompletedTopics(progressUserId, submoduleId)
+          : [];
 
-        // Fetch completed topics — use last user ID cookie so progress shows after logout
-        const progressUserId = user?.id ?? getLastUserId();
-        const completedTopicIds = progressUserId ? await getCompletedTopics(progressUserId, submoduleId) : [];
-
-        // Find the first uncompleted topic index
-        const firstUncompletedIndex = topicsData.findIndex(
-          (topic) => !completedTopicIds.includes(topic.topic_id)
-        );
-
-        // Build sidebar topics for the current submodule only
-        const currentTopics: SidebarTopic[] = topicsData.map(
-          (topic, index) => ({
-            id: `topic-${topic.topic_id}`,
-            title: topic.name,
-            status: completedTopicIds.includes(topic.topic_id)
-              ? "completed"
-              : index === firstUncompletedIndex
-                ? "current"
-                : ("available" as const),
-          })
-        );
-
-        // Only show the selected submodule in the sidebar
-        const sidebarData: SidebarModule[] = [{
-          id: String(current.submodule_id),
-          submoduleId: current.submodule_id,
-          title: current.name,
-          expanded: true,
-          topics: currentTopics,
-          topicsLoaded: true,
-        }];
-
-        setSidebarModules(sidebarData);
-
-        // Select the first uncompleted topic, or first topic if all completed
-        if (topicsData.length > 0) {
-          const startIndex = firstUncompletedIndex >= 0 ? firstUncompletedIndex : 0;
-          setSelectedTopic(topicsData[startIndex]);
-        }
+        applyTopicData(topicsData, current, completedTopicIds, cancelled, false);
       } catch (err) {
-        if (cancelled) return;
-        // Retry on network/server errors (backend cold start)
+        if (cancelled.value) return;
         if (retryCount < MAX_RETRIES) {
           await new Promise((r) => setTimeout(r, 1500 * (retryCount + 1)));
-          if (!cancelled) return fetchData(retryCount + 1);
+          if (!cancelled.value) return fetchData(retryCount + 1);
           return;
         }
         setError(err instanceof Error ? err.message : "An error occurred");
         console.error("Error fetching data:", err);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled.value) setLoading(false);
       }
     };
 
     fetchData();
-    return () => { cancelled = true; };
-  }, [submoduleId, fetchTopicsForSubmodule, user]);
+    return () => { cancelled.value = true; };
+  }, [submoduleId, fetchTopicsForSubmodule, user, applyTopicData]);
 
   // Toggle a sidebar module (expand/collapse) and lazy-load its topics
   const toggleModule = async (moduleId: string) => {

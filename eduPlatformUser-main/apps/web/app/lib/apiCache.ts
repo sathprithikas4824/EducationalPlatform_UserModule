@@ -1,10 +1,15 @@
 /**
- * Lightweight API cache with in-memory + sessionStorage for fast page loads.
- * Uses stale-while-revalidate: returns cached data instantly, refreshes in background.
+ * Lightweight API cache with in-memory + localStorage for fast page loads.
+ * Strategy:
+ *   - Return cached data instantly if fresh (< CACHE_TTL)
+ *   - If stale, return cached data AND fetch fresh, calling onRefresh when done
+ *   - If no cache, fetch and return fresh data
+ *
+ * TTL is kept short so admin content updates (images, videos) show quickly.
  */
 
 const CACHE_PREFIX = "edu_api_";
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours — module data is static
+const CACHE_TTL = 2 * 60 * 1000; // 2 minutes — keeps content fresh after admin edits
 
 // In-memory cache for instant access (survives client-side navigation)
 const memoryCache = new Map<string, { data: unknown; timestamp: number }>();
@@ -37,12 +42,11 @@ function getCached<T>(key: string): { data: T; isStale: boolean } | null {
   }
 
   // Fall back to localStorage
-  const session = getLocalCache(key);
-  if (session) {
-    // Promote to memory cache
-    memoryCache.set(key, session);
-    const isStale = Date.now() - session.timestamp > CACHE_TTL;
-    return { data: session.data as T, isStale };
+  const local = getLocalCache(key);
+  if (local) {
+    memoryCache.set(key, local);
+    const isStale = Date.now() - local.timestamp > CACHE_TTL;
+    return { data: local.data as T, isStale };
   }
 
   return null;
@@ -55,40 +59,52 @@ function setCache<T>(key: string, data: T): void {
 }
 
 /**
- * Fetch with cache. Returns cached data instantly if available.
- * If stale or missing, fetches fresh data.
+ * Fetch with cache. Returns cached data instantly if fresh.
+ * If stale, returns cached data immediately and calls onRefresh with fresh data
+ * when the network request completes — so the UI can update without a page reload.
  *
- * @param url - The API URL to fetch
- * @param cacheKey - A unique key for this request
+ * @param url       - The API URL to fetch
+ * @param cacheKey  - A unique key for this request
+ * @param onRefresh - Called with fresh data when a background revalidation finishes
  * @returns The data (from cache or network)
  */
-export async function cachedFetch<T>(url: string, cacheKey: string): Promise<T> {
+export async function cachedFetch<T>(
+  url: string,
+  cacheKey: string,
+  onRefresh?: (freshData: T) => void
+): Promise<T> {
   const cached = getCached<T>(cacheKey);
 
   if (cached && !cached.isStale) {
+    // Fresh cache — return immediately. Still schedule a silent background check
+    // so that if admin updated content very recently, the NEXT navigation gets it.
+    fetchAndCache<T>(url, cacheKey).then((freshData) => {
+      if (onRefresh) onRefresh(freshData);
+    }).catch(() => {});
     return cached.data;
   }
 
-  // If we have stale data, start a background refresh and return stale data
+  // Stale cache — return stale data immediately so UI isn't blank,
+  // fetch fresh in background and notify caller so it can re-render.
   if (cached) {
-    fetchAndCache<T>(url, cacheKey).catch(() => {});
+    fetchAndCache<T>(url, cacheKey).then((freshData) => {
+      if (onRefresh) onRefresh(freshData);
+    }).catch(() => {});
     return cached.data;
   }
 
-  // No cache at all — must fetch
+  // No cache at all — must fetch (shows loading spinner)
   return fetchAndCache<T>(url, cacheKey);
 }
 
 async function fetchAndCache<T>(url: string, cacheKey: string): Promise<T> {
   const MAX_RETRIES = 6;
-  // Per-attempt timeout: 25s to accommodate Render.com cold starts (~30-60s to wake)
   const ATTEMPT_TIMEOUT_MS = 25000;
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       if (attempt > 0) {
-        // Fixed 5s gap between retries — keeps total window ~2.5 min for cold starts
         await new Promise((r) => setTimeout(r, 5000));
       }
       const controller = new AbortController();
@@ -97,13 +113,11 @@ async function fetchAndCache<T>(url: string, cacheKey: string): Promise<T> {
         clearTimeout(timeoutId)
       );
 
-      // 429 = rate limited — always retry with backoff
       if (res.status === 429) {
         lastError = new Error(`Fetch failed: 429`);
         continue;
       }
 
-      // Other 4xx = permanent client error, don't retry
       if (res.status >= 400 && res.status < 500) {
         throw new Error(`Fetch failed: ${res.status}`);
       }
@@ -114,9 +128,7 @@ async function fetchAndCache<T>(url: string, cacheKey: string): Promise<T> {
       return data;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      // Don't retry permanent 4xx errors
       if (lastError.message.match(/Fetch failed: 4(?!29)\d\d/)) break;
-      // AbortError = timeout — always retry
     }
   }
 
@@ -125,14 +137,10 @@ async function fetchAndCache<T>(url: string, cacheKey: string): Promise<T> {
 
 /**
  * Prefetch multiple URLs in parallel and cache them.
- * Call this early to warm up the cache.
  */
 export function prefetchAll(entries: { url: string; cacheKey: string }[]): void {
   entries.forEach(({ url, cacheKey }) => {
-    const cached = getCached(cacheKey);
-    if (!cached || cached.isStale) {
-      fetchAndCache(url, cacheKey).catch(() => {});
-    }
+    fetchAndCache(url, cacheKey).catch(() => {});
   });
 }
 
@@ -149,4 +157,12 @@ export function getCachedSync<T>(cacheKey: string): T | null {
  */
 export function setCacheManual<T>(cacheKey: string, data: T): void {
   setCache(cacheKey, data);
+}
+
+/**
+ * Bust the cache for a specific key (call this after admin updates).
+ */
+export function bustCache(cacheKey: string): void {
+  memoryCache.delete(cacheKey);
+  try { localStorage.removeItem(CACHE_PREFIX + cacheKey); } catch {}
 }
