@@ -185,6 +185,22 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
   };
 
+  // Rewrite relative or localhost image src attributes to use the production backend URL.
+  // This fixes images uploaded via the admin panel when it was pointed at localhost.
+  const fixImageUrls = (html: string): string => {
+    if (!html) return html;
+    return html.replace(
+      /(<img[^>]+src=["'])([^"']+)(["'])/gi,
+      (_match, before, src, after) => {
+        // Already an absolute non-localhost URL — leave as-is
+        if (/^https?:\/\/(?!localhost)/i.test(src)) return before + src + after;
+        // Relative path or localhost URL — prefix with backend URL
+        const normalized = src.replace(/^https?:\/\/localhost(:\d+)?/i, "");
+        return before + BACKEND_URL + (normalized.startsWith("/") ? "" : "/") + normalized + after;
+      }
+    );
+  };
+
   const handleDownload = useCallback(
     (materialType: "notes" | "summary" | "exercises") => {
       if (!selectedTopic) return;
@@ -1426,19 +1442,38 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                     {selectedTopic.title && (
                       <div
                         className="mb-4"
-                        dangerouslySetInnerHTML={{ __html: selectedTopic.title }}
+                        dangerouslySetInnerHTML={{ __html: fixImageUrls(selectedTopic.title) }}
                       />
+                    )}
+
+                    {/* Topic image (standalone image_url field) */}
+                    {selectedTopic.image_url && (
+                      <div className="mb-4">
+                        <img
+                          src={selectedTopic.image_url}
+                          alt={selectedTopic.name}
+                          className="max-w-full rounded-xl object-contain"
+                        />
+                      </div>
                     )}
 
                     {/* Topic Description from backend */}
                     {selectedTopic.description && (
                       <div
-                        dangerouslySetInnerHTML={{ __html: selectedTopic.description }}
+                        className="mb-4"
+                        dangerouslySetInnerHTML={{ __html: fixImageUrls(selectedTopic.description) }}
                       />
                     )}
 
-                    {/* Show message if no title and no description */}
-                    {!selectedTopic.title && !selectedTopic.description && (
+                    {/* Topic Content from backend */}
+                    {selectedTopic.content && (
+                      <div
+                        dangerouslySetInnerHTML={{ __html: fixImageUrls(selectedTopic.content) }}
+                      />
+                    )}
+
+                    {/* Show message if no content at all */}
+                    {!selectedTopic.title && !selectedTopic.description && !selectedTopic.content && !selectedTopic.image_url && (
                       <p className="text-gray-500 italic">
                         Content for this topic is coming soon...
                       </p>
