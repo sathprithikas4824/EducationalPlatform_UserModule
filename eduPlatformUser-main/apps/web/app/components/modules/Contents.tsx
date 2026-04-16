@@ -203,6 +203,41 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       .replace(/(<iframe[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc);
   };
 
+  // Fix <video> elements in downloaded HTML so they play on all devices.
+  // Problems solved:
+  //   1. Browsers block Range requests from file:// unless crossorigin is set
+  //   2. Without a <source type="..."> element mobile browsers (iOS Safari,
+  //      Android Chrome) often show a blank box because they don't know the codec
+  //   3. controls="true" (TipTap attribute serialisation) is ignored by some parsers
+  const fixVideoForDownload = useCallback((html: string): string => {
+    const MIME: Record<string, string> = {
+      mp4: "video/mp4", webm: "video/webm",
+      ogg: "video/ogg", mov: "video/mp4",
+      avi: "video/x-msvideo", mkv: "video/x-matroska",
+    };
+    // Parse through real DOM so we get accurate attribute values after browser normalisation
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    container.querySelectorAll("video").forEach((vid) => {
+      const src = vid.getAttribute("src") || vid.querySelector("source")?.getAttribute("src");
+      if (!src) return;
+
+      const ext = src.split("?")[0].split(".").pop()?.toLowerCase() ?? "mp4";
+      const mime = MIME[ext] ?? "video/mp4";
+
+      // Rebuild with proper attributes
+      vid.removeAttribute("src");
+      vid.setAttribute("controls", "");
+      vid.setAttribute("crossorigin", "anonymous");
+      vid.setAttribute("preload", "auto");
+      vid.style.cssText = "max-width:100%;width:100%;border-radius:8px;margin:8px 0;display:block;";
+
+      // Replace inner content with a proper <source> + fallback link
+      vid.innerHTML = `<source src="${src}" type="${mime}"><source src="${src}" type="video/mp4"><p style="margin:8px 0;font-size:0.9rem;">Video cannot play inline — <a href="${src}" target="_blank" style="color:#4f46e5;text-decoration:underline;">open in browser</a></p>`;
+    });
+    return container.innerHTML;
+  }, []);
+
   // Apply user highlights inline to HTML content — same offset-based approach
   // as the Highlightable component, so marks appear exactly where the user highlighted.
   const applyHighlightsToHtml = useCallback((html: string, topicId: number): string => {
@@ -323,13 +358,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const topicName = selectedTopic.name;
       const moduleName = currentSubmodule?.name || "Module";
       const tid = selectedTopic.topic_id;
-      // Apply inline highlights then fix media URLs — same order as the live page
-      const titleHtml = applyHighlightsToHtml(
+      // Apply inline highlights → fix media URLs → fix video elements for offline playback
+      const titleHtml = fixVideoForDownload(applyHighlightsToHtml(
         selectedTopic.title ? fixMediaUrls(selectedTopic.title) : `<p>${topicName}</p>`, tid
-      );
-      const descHtml = applyHighlightsToHtml(
+      ));
+      const descHtml = fixVideoForDownload(applyHighlightsToHtml(
         selectedTopic.description ? fixMediaUrls(selectedTopic.description) : "", tid
-      );
+      ));
 
       let content = "";
       let fileName = "";
@@ -407,7 +442,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         });
       }
     },
-    [selectedTopic, currentSubmodule, user, buildHtmlDoc, applyHighlightsToHtml, fixMediaUrls]
+    [selectedTopic, currentSubmodule, user, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls]
   );
 
   // Download all topics in the current module as styled HTML files
@@ -433,13 +468,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
       const fileName = `${safeName}_Notes.html`;
 
-      // Build a styled HTML file with inline highlights, TipTap styles, and media URLs
-      const titleHtml = applyHighlightsToHtml(
+      // Build a styled HTML file with inline highlights, TipTap styles, fixed video and media URLs
+      const titleHtml = fixVideoForDownload(applyHighlightsToHtml(
         topic.title ? fixMediaUrls(topic.title) : `<p>${topicName}</p>`, topic.topic_id
-      );
-      const descHtml = applyHighlightsToHtml(
+      ));
+      const descHtml = fixVideoForDownload(applyHighlightsToHtml(
         topic.description ? fixMediaUrls(topic.description) : "", topic.topic_id
-      );
+      ));
       const content = buildHtmlDoc(
         "📝 Topic Notes",
         `${titleHtml}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${descHtml}`,
@@ -484,7 +519,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
-  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, applyHighlightsToHtml, fixMediaUrls]);
+  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls]);
 
   // Mark the currently selected topic as completed in Supabase
   // Only runs for logged-in users — guests cannot track progress
