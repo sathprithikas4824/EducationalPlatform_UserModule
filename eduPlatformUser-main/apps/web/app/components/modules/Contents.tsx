@@ -203,14 +203,75 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       .replace(/(<iframe[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc);
   };
 
+  // Apply user highlights inline to HTML content — same offset-based approach
+  // as the Highlightable component, so marks appear exactly where the user highlighted.
+  const applyHighlightsToHtml = useCallback((html: string, topicId: number): string => {
+    const pageHighlights = getHighlightsForPage(`topic-${topicId}`);
+    if (!pageHighlights.length) return html;
+
+    // Parse into a real DOM so we can walk text nodes exactly like Highlightable does
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    // Build text-node boundary map: [{startOffset, endOffset, node}]
+    const buildBoundaries = (root: Node) => {
+      const list: { startOffset: number; endOffset: number; node: Text }[] = [];
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      let pos = 0;
+      let n = walker.nextNode() as Text | null;
+      while (n) {
+        const len = n.textContent?.length ?? 0;
+        list.push({ startOffset: pos, endOffset: pos + len, node: n });
+        pos += len;
+        n = walker.nextNode() as Text | null;
+      }
+      return list;
+    };
+
+    // Apply highlights from last to first so earlier offsets stay valid
+    const sorted = [...pageHighlights].sort((a, b) => b.startOffset - a.startOffset);
+
+    for (const h of sorted) {
+      const boundaries = buildBoundaries(container);
+      const start = h.startOffset;
+      const end   = h.endOffset;
+      if (start >= end) continue;
+
+      // All text nodes that overlap [start, end)
+      const overlapping = boundaries.filter(b => b.endOffset > start && b.startOffset < end);
+      if (!overlapping.length) continue;
+
+      // Process each overlapping node from last to first to avoid invalidating sibling refs
+      for (let i = overlapping.length - 1; i >= 0; i--) {
+        const b = overlapping[i];
+        const startInNode = Math.max(0, start - b.startOffset);
+        const endInNode   = Math.min(b.node.textContent?.length ?? 0, end - b.startOffset);
+        if (startInNode >= endInNode) continue;
+
+        const text = b.node.textContent ?? "";
+        const mark = document.createElement("mark");
+        mark.style.cssText = `background:${h.color || "#fef08a"};border-radius:3px;padding:1px 2px;`;
+        mark.textContent = text.slice(startInNode, endInNode);
+
+        const frag = document.createDocumentFragment();
+        if (startInNode > 0) frag.appendChild(document.createTextNode(text.slice(0, startInNode)));
+        frag.appendChild(mark);
+        if (endInNode < text.length) frag.appendChild(document.createTextNode(text.slice(endInNode)));
+
+        b.node.parentNode?.replaceChild(frag, b.node);
+      }
+    }
+
+    return container.innerHTML;
+  }, [getHighlightsForPage]);
+
   // Build a styled HTML document that preserves TipTap rich-text formatting
   const buildHtmlDoc = useCallback((
     docTitle: string,
     bodyHtml: string,
     topicName: string,
     moduleName: string,
-    date: string,
-    highlightsHtml: string = ""
+    date: string
   ): string => `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -237,15 +298,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     img{max-width:100%;border-radius:8px;margin:8px 0;display:block;}
     video{max-width:100%;border-radius:8px;margin:8px 0;}
     a{color:#4f46e5;}
+    mark{border-radius:3px;padding:1px 2px;}
     span[data-circle],.circled-text{border:2px solid currentColor;border-radius:50%;padding:2px 6px;display:inline-block;line-height:1;}
     .exercise-block{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin:16px 0;}
     .exercise-block h3{color:#374151;margin-top:0;}
     .answer-line{border-bottom:1px solid #d1d5db;margin:10px 0;height:28px;}
-    .highlights-section{margin-top:40px;padding-top:24px;border-top:3px solid #f59e0b;}
-    .highlights-section h2{color:#b45309;font-size:1.1rem;margin:0 0 16px;}
-    .highlight-item{display:flex;align-items:flex-start;gap:12px;padding:10px 14px;border-radius:8px;margin-bottom:10px;border-left:4px solid #f59e0b;}
-    .highlight-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;margin-top:4px;}
-    .highlight-text{font-size:0.95rem;line-height:1.6;}
     .doc-footer{margin-top:48px;padding-top:16px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:0.8rem;text-align:center;}
   </style>
 </head>
@@ -255,29 +312,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     <div class="doc-meta">Module: ${moduleName} &nbsp;·&nbsp; Topic: ${topicName} &nbsp;·&nbsp; ${date}</div>
   </div>
   <div class="doc-body">${bodyHtml}</div>
-  ${highlightsHtml}
   <div class="doc-footer">Downloaded from EduPlatform</div>
 </body>
 </html>`, []);
-
-  // Build the "Your Highlights" section HTML for a given topic
-  const buildHighlightsHtml = useCallback((topicId: number): string => {
-    const pageHighlights = getHighlightsForPage(`topic-${topicId}`);
-    if (!pageHighlights.length) return "";
-    const items = pageHighlights.map((h) => {
-      // Use the highlight color with reduced opacity as background
-      const bg = h.color ? `${h.color}33` : "#fef08a";
-      const border = h.color || "#f59e0b";
-      return `<div class="highlight-item" style="background:${bg};border-left-color:${border};">
-        <div class="highlight-dot" style="background:${border};"></div>
-        <span class="highlight-text">"${h.text.replace(/"/g, "&quot;")}"</span>
-      </div>`;
-    }).join("\n");
-    return `<div class="highlights-section">
-  <h2>🖊 Your Highlights (${pageHighlights.length})</h2>
-  ${items}
-</div>`;
-  }, [getHighlightsForPage]);
 
   const handleDownload = useCallback(
     (materialType: "notes" | "summary" | "exercises") => {
@@ -285,16 +322,19 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
       const topicName = selectedTopic.name;
       const moduleName = currentSubmodule?.name || "Module";
-      // Use raw HTML (with media URLs fixed) to preserve all TipTap styles
-      const titleHtml = selectedTopic.title ? fixMediaUrls(selectedTopic.title) : `<p>${topicName}</p>`;
-      const descHtml  = selectedTopic.description ? fixMediaUrls(selectedTopic.description) : "";
+      const tid = selectedTopic.topic_id;
+      // Apply inline highlights then fix media URLs — same order as the live page
+      const titleHtml = applyHighlightsToHtml(
+        selectedTopic.title ? fixMediaUrls(selectedTopic.title) : `<p>${topicName}</p>`, tid
+      );
+      const descHtml = applyHighlightsToHtml(
+        selectedTopic.description ? fixMediaUrls(selectedTopic.description) : "", tid
+      );
 
       let content = "";
       let fileName = "";
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
       const date = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
-
-      const highlightsHtml = buildHighlightsHtml(selectedTopic.topic_id);
 
       switch (materialType) {
         case "notes":
@@ -302,7 +342,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           content = buildHtmlDoc(
             "📝 Topic Notes",
             `${titleHtml}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${descHtml}`,
-            topicName, moduleName, date, highlightsHtml
+            topicName, moduleName, date
           );
           break;
 
@@ -311,7 +351,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           content = buildHtmlDoc(
             "📋 Quick Reference Guide",
             `<h2 style="color:#4f46e5;">Key Concepts</h2>${descHtml}`,
-            topicName, moduleName, date, highlightsHtml
+            topicName, moduleName, date
           );
           break;
         }
@@ -327,7 +367,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 <div class="exercise-block"><h3>Exercise 3 — Real-World Application</h3><p>Describe one real-world scenario where you would apply the concepts from this topic.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>
 <div class="exercise-block"><h3>Exercise 4 — Self-Assessment Questions</h3><p>Write 3 questions you still have about this topic:</p><p>Q1: <span class="answer-line" style="display:inline-block;width:80%;"></span></p><p>Q2: <span class="answer-line" style="display:inline-block;width:80%;"></span></p><p>Q3: <span class="answer-line" style="display:inline-block;width:80%;"></span></p></div>
 <div class="exercise-block"><h3>Exercise 5 — Teach It Back</h3><p>Explain this topic as if teaching it to someone new.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>`,
-            topicName, moduleName, date, highlightsHtml
+            topicName, moduleName, date
           );
           break;
       }
@@ -367,7 +407,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         });
       }
     },
-    [selectedTopic, currentSubmodule, user, buildHtmlDoc, buildHighlightsHtml, fixMediaUrls]
+    [selectedTopic, currentSubmodule, user, buildHtmlDoc, applyHighlightsToHtml, fixMediaUrls]
   );
 
   // Download all topics in the current module as styled HTML files
@@ -393,14 +433,17 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
       const fileName = `${safeName}_Notes.html`;
 
-      // Build a styled HTML file preserving all TipTap rich-text formatting + user highlights
-      const titleHtml = topic.title ? fixMediaUrls(topic.title) : `<p>${topicName}</p>`;
-      const descHtml  = topic.description ? fixMediaUrls(topic.description) : "";
-      const highlightsHtml = buildHighlightsHtml(topic.topic_id);
+      // Build a styled HTML file with inline highlights, TipTap styles, and media URLs
+      const titleHtml = applyHighlightsToHtml(
+        topic.title ? fixMediaUrls(topic.title) : `<p>${topicName}</p>`, topic.topic_id
+      );
+      const descHtml = applyHighlightsToHtml(
+        topic.description ? fixMediaUrls(topic.description) : "", topic.topic_id
+      );
       const content = buildHtmlDoc(
         "📝 Topic Notes",
         `${titleHtml}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${descHtml}`,
-        topicName, moduleName, date, highlightsHtml
+        topicName, moduleName, date
       );
 
       await saveDownload(userId, {
@@ -441,7 +484,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
-  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, buildHighlightsHtml, fixMediaUrls]);
+  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, applyHighlightsToHtml, fixMediaUrls]);
 
   // Mark the currently selected topic as completed in Supabase
   // Only runs for logged-in users — guests cannot track progress
