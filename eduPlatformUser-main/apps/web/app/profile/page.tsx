@@ -808,7 +808,8 @@ function MyDownloads() {
 
   const handleRedownload = (d: DownloadRecord) => {
     if (!d.content) return;
-    const blob = new Blob([d.content], { type: "text/plain" });
+    const mimeType = d.fileType === "html" ? "text/html" : "text/plain";
+    const blob = new Blob([d.content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

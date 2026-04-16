@@ -203,154 +203,109 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       .replace(/(<iframe[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc);
   };
 
+  // Build a styled HTML document that preserves TipTap rich-text formatting
+  const buildHtmlDoc = useCallback((
+    docTitle: string,
+    bodyHtml: string,
+    topicName: string,
+    moduleName: string,
+    date: string
+  ): string => `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${docTitle} – ${topicName}</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;max-width:860px;margin:40px auto;padding:0 24px;color:#1a1a1a;line-height:1.75;}
+    .doc-header{border-bottom:3px solid #4f46e5;padding-bottom:16px;margin-bottom:32px;}
+    .doc-header h1{color:#4f46e5;font-size:1.4rem;margin:0 0 6px;}
+    .doc-meta{color:#6b7280;font-size:0.85rem;}
+    h1,h2,h3,h4,h5,h6{margin-top:1.4em;margin-bottom:0.4em;}
+    p{margin:0.6em 0;}
+    strong{font-weight:700;}
+    em{font-style:italic;}
+    u{text-decoration:underline;}
+    s{text-decoration:line-through;}
+    ul,ol{padding-left:1.8em;margin:0.6em 0;}
+    li{margin:0.3em 0;}
+    blockquote{border-left:4px solid #e5e7eb;padding:8px 16px;color:#6b7280;margin:1em 0;background:#f9fafb;border-radius:0 8px 8px 0;}
+    code{background:#f3f4f6;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:0.9em;}
+    pre{background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;overflow-x:auto;font-family:monospace;}
+    pre code{background:none;padding:0;color:inherit;}
+    img{max-width:100%;border-radius:8px;margin:8px 0;display:block;}
+    video{max-width:100%;border-radius:8px;margin:8px 0;}
+    a{color:#4f46e5;}
+    span[data-circle],.circled-text{border:2px solid currentColor;border-radius:50%;padding:2px 6px;display:inline-block;line-height:1;}
+    .exercise-block{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin:16px 0;}
+    .exercise-block h3{color:#374151;margin-top:0;}
+    .answer-line{border-bottom:1px solid #d1d5db;margin:10px 0;height:28px;}
+    .doc-footer{margin-top:48px;padding-top:16px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:0.8rem;text-align:center;}
+  </style>
+</head>
+<body>
+  <div class="doc-header">
+    <h1>${docTitle}</h1>
+    <div class="doc-meta">Module: ${moduleName} &nbsp;·&nbsp; Topic: ${topicName} &nbsp;·&nbsp; ${date}</div>
+  </div>
+  <div class="doc-body">${bodyHtml}</div>
+  <div class="doc-footer">Downloaded from EduPlatform</div>
+</body>
+</html>`, []);
+
   const handleDownload = useCallback(
     (materialType: "notes" | "summary" | "exercises") => {
       if (!selectedTopic) return;
 
       const topicName = selectedTopic.name;
       const moduleName = currentSubmodule?.name || "Module";
-      const titleText = selectedTopic.title ? stripHtml(selectedTopic.title) : topicName;
-      const descText = selectedTopic.description ? stripHtml(selectedTopic.description) : "";
+      // Use raw HTML (with media URLs fixed) to preserve all TipTap styles
+      const titleHtml = selectedTopic.title ? fixMediaUrls(selectedTopic.title) : `<p>${topicName}</p>`;
+      const descHtml  = selectedTopic.description ? fixMediaUrls(selectedTopic.description) : "";
 
       let content = "";
       let fileName = "";
-
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
       const date = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
-      const line  = "=".repeat(64);
-      const thin  = "-".repeat(64);
 
       switch (materialType) {
         case "notes":
-          fileName = `${safeName}_Notes.txt`;
-          content = [
-            line,
-            "  TOPIC NOTES",
-            line,
-            "",
-            `  Module : ${moduleName}`,
-            `  Topic  : ${topicName}`,
-            `  Date   : ${date}`,
-            "",
-            line,
-            "",
-            ...(titleText && titleText !== topicName ? [titleText, "", thin, ""] : []),
-            descText,
-            "",
-            line,
-            "  End of Topic Notes",
-            line,
-          ].join("\n");
+          fileName = `${safeName}_Notes.html`;
+          content = buildHtmlDoc(
+            "📝 Topic Notes",
+            `${titleHtml}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${descHtml}`,
+            topicName, moduleName, date
+          );
           break;
 
         case "summary": {
-          fileName = `${safeName}_Quick_Reference.txt`;
-          // Extract non-trivial lines (skip very short fragments) as bullet points
-          const bullets = descText
-            .split(/\n+/)
-            .map((l) => l.trim())
-            .filter((l) => l.length > 30)
-            .slice(0, 8)
-            .map((l) => `  •  ${l}`)
-            .join("\n\n");
-          content = [
-            line,
-            "  QUICK REFERENCE GUIDE",
-            line,
-            "",
-            `  Module : ${moduleName}`,
-            `  Topic  : ${topicName}`,
-            `  Date   : ${date}`,
-            "",
-            line,
-            "",
-            "KEY CONCEPTS",
-            thin,
-            "",
-            bullets || descText,
-            "",
-            line,
-            "  End of Quick Reference",
-            line,
-          ].join("\n");
+          fileName = `${safeName}_Quick_Reference.html`;
+          content = buildHtmlDoc(
+            "📋 Quick Reference Guide",
+            `<h2 style="color:#4f46e5;">Key Concepts</h2>${descHtml}`,
+            topicName, moduleName, date
+          );
           break;
         }
 
         case "exercises":
-          fileName = `${safeName}_Practice_Exercises.txt`;
-          content = [
-            line,
-            "  PRACTICE EXERCISES",
-            line,
-            "",
-            `  Module : ${moduleName}`,
-            `  Topic  : ${topicName}`,
-            `  Date   : ${date}`,
-            "",
-            line,
-            "",
-            "TOPIC OVERVIEW",
-            thin,
-            titleText !== topicName ? titleText : descText.split("\n")[0] || topicName,
-            "",
-            line,
-            "",
-            "EXERCISE 1  —  Review Key Concepts",
-            thin,
-            "  Read through the topic notes and list the main concepts",
-            "  from this topic in your own words.",
-            "",
-            "  Answer:",
-            "  ________________________________________________________________",
-            "  ________________________________________________________________",
-            "  ________________________________________________________________",
-            "",
-            "EXERCISE 2  —  Summarise Without Notes",
-            thin,
-            "  Write a 3–5 sentence summary of this topic without looking",
-            "  at any reference material.",
-            "",
-            "  Answer:",
-            "  ________________________________________________________________",
-            "  ________________________________________________________________",
-            "  ________________________________________________________________",
-            "",
-            "EXERCISE 3  —  Real-World Application",
-            thin,
-            "  Describe one real-world scenario where you would apply the",
-            "  concepts from this topic.",
-            "",
-            "  Answer:",
-            "  ________________________________________________________________",
-            "  ________________________________________________________________",
-            "  ________________________________________________________________",
-            "",
-            "EXERCISE 4  —  Self-Assessment Questions",
-            thin,
-            "  Write 3 questions you still have about this topic:",
-            "",
-            "  Q1: _____________________________________________________________",
-            "  Q2: _____________________________________________________________",
-            "  Q3: _____________________________________________________________",
-            "",
-            "EXERCISE 5  —  Teach It Back",
-            thin,
-            "  Explain this topic as if teaching it to someone new.",
-            "",
-            "  ________________________________________________________________",
-            "  ________________________________________________________________",
-            "  ________________________________________________________________",
-            "  ________________________________________________________________",
-            "",
-            line,
-            "  End of Practice Exercises",
-            line,
-          ].join("\n");
+          fileName = `${safeName}_Practice_Exercises.html`;
+          content = buildHtmlDoc(
+            "✏️ Practice Exercises",
+            `<h2>Topic Overview</h2>${titleHtml}
+<h2 style="margin-top:32px;">Exercises</h2>
+<div class="exercise-block"><h3>Exercise 1 — Review Key Concepts</h3><p>Read through the topic notes and list the main concepts in your own words.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>
+<div class="exercise-block"><h3>Exercise 2 — Summarise Without Notes</h3><p>Write a 3–5 sentence summary of this topic without looking at any reference material.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>
+<div class="exercise-block"><h3>Exercise 3 — Real-World Application</h3><p>Describe one real-world scenario where you would apply the concepts from this topic.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>
+<div class="exercise-block"><h3>Exercise 4 — Self-Assessment Questions</h3><p>Write 3 questions you still have about this topic:</p><p>Q1: <span class="answer-line" style="display:inline-block;width:80%;"></span></p><p>Q2: <span class="answer-line" style="display:inline-block;width:80%;"></span></p><p>Q3: <span class="answer-line" style="display:inline-block;width:80%;"></span></p></div>
+<div class="exercise-block"><h3>Exercise 5 — Teach It Back</h3><p>Explain this topic as if teaching it to someone new.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>`,
+            topicName, moduleName, date
+          );
           break;
       }
 
-      // Trigger real browser download
-      const blob = new Blob([content], { type: "text/plain" });
+      // Trigger browser download as HTML
+      const blob = new Blob([content], { type: "text/html" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -370,7 +325,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         });
       }, 2000);
 
-      // Persist record (with content) so it shows up in Profile → My Downloads
+      // Persist record so it shows up in Profile → My Downloads
       if (user) {
         saveDownload(user.id, {
           userId: user.id,
@@ -379,15 +334,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           moduleName,
           submoduleId: currentSubmodule?.submodule_id ?? submoduleId,
           fileName,
-          fileType: "txt",
+          fileType: "html",
           content,
         });
       }
     },
-    [selectedTopic, currentSubmodule, user]
+    [selectedTopic, currentSubmodule, user, buildHtmlDoc, fixMediaUrls]
   );
 
-  // Download all topics in the current module for offline reading
+  // Download all topics in the current module as styled HTML files
   const handleModuleDownload = useCallback(async () => {
     if (!topics.length) return;
     const userId = user?.id ?? getLastUserId();
@@ -400,6 +355,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     setModuleDownloadProgress({ current: 0, total: topics.length });
 
     const moduleName = currentSubmodule?.name || "Module";
+    const date = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
 
     for (let i = 0; i < topics.length; i++) {
       const topic = topics[i];
@@ -407,12 +363,16 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
       const topicName = topic.name;
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
-      const fileName = `${safeName}_offline.json`;
-      // Store original HTML so the offline reader can render it properly
-      const content = JSON.stringify({
-        title: topic.title || null,
-        description: topic.description || null,
-      });
+      const fileName = `${safeName}_Notes.html`;
+
+      // Build a styled HTML file preserving all TipTap rich-text formatting
+      const titleHtml = topic.title ? fixMediaUrls(topic.title) : `<p>${topicName}</p>`;
+      const descHtml  = topic.description ? fixMediaUrls(topic.description) : "";
+      const content = buildHtmlDoc(
+        "📝 Topic Notes",
+        `${titleHtml}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${descHtml}`,
+        topicName, moduleName, date
+      );
 
       await saveDownload(userId, {
         userId,
@@ -426,7 +386,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       });
     }
 
-    // Cache locally so this device shows "Downloaded" instantly on next visit (no Supabase query)
+    // Cache locally so this device shows "Downloaded" instantly on next visit
     const deviceId = getDeviceId();
     const flagKey = `edu_module_done_${userId}_${deviceId}_${submoduleId}`;
     try { localStorage.setItem(flagKey, "true"); } catch {}
@@ -442,7 +402,6 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         );
       if (upsertError) {
         console.error("[downloads] Failed to sync module download to Supabase:", upsertError.message);
-        // Retry once
         await supabase
           .from("user_module_downloads")
           .upsert(
@@ -453,7 +412,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
-  }, [user, topics, currentSubmodule, submoduleId, stripHtml]);
+  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, fixMediaUrls]);
 
   // Mark the currently selected topic as completed in Supabase
   // Only runs for logged-in users — guests cannot track progress

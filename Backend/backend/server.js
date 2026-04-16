@@ -194,9 +194,9 @@ app.use((req, res, next) => {
     return next();
   }
 
-  // Skip CSRF for file upload endpoint (multipart/form-data has issues with CSRF validation)
-  // This is acceptable since upload requires authentication
-  if (req.path === "/api/upload/image") {
+  // Skip CSRF for file upload endpoints (multipart/form-data has issues with CSRF validation)
+  // This is acceptable since uploads require authentication
+  if (req.path === "/api/upload/image" || req.path === "/api/upload/video") {
     return next();
   }
 
