@@ -416,6 +416,38 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   </div>
   <div class="doc-body">${bodyHtml}</div>
   <div class="doc-footer">Downloaded from EduPlatform</div>
+  <script>
+  // iOS Safari cannot play data: URIs for video. Convert them to blob: URLs at page load.
+  (function(){
+    function dataUriToBlob(dataUri){
+      var parts=dataUri.split(',');
+      var mime=parts[0].match(/:(.*?);/)[1];
+      var b64=parts[1];
+      var bytes=atob(b64);
+      var arr=new Uint8Array(bytes.length);
+      for(var i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i);
+      return new Blob([arr],{type:mime});
+    }
+    document.querySelectorAll('video').forEach(function(vid){
+      // Gather all base64 sources
+      var sources=Array.from(vid.querySelectorAll('source[src^="data:video"]'));
+      if(vid.getAttribute('src')&&vid.getAttribute('src').indexOf('data:video')===0){
+        sources=[vid];
+      }
+      if(!sources.length) return;
+      var dataUri=sources[0].getAttribute('src');
+      try{
+        var blob=dataUriToBlob(dataUri);
+        var blobUrl=URL.createObjectURL(blob);
+        // Remove all <source> children and set src directly — most reliable on Safari
+        Array.from(vid.querySelectorAll('source')).forEach(function(s){s.remove();});
+        vid.removeAttribute('src');
+        vid.src=blobUrl;
+        vid.load();
+      }catch(e){}
+    });
+  })();
+  </script>
 </body>
 </html>`, []);
 
