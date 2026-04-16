@@ -114,7 +114,7 @@ const HeroSkeleton: React.FC = () => (
 );
 
 const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
-  const { user } = useAnnotation();
+  const { user, getHighlightsForPage } = useAnnotation();
   const [sidebarModules, setSidebarModules] = useState<SidebarModule[]>([]);
   const [currentSubmodule, setCurrentSubmodule] = useState<SubModuleData | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -209,7 +209,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     bodyHtml: string,
     topicName: string,
     moduleName: string,
-    date: string
+    date: string,
+    highlightsHtml: string = ""
   ): string => `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -240,6 +241,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     .exercise-block{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin:16px 0;}
     .exercise-block h3{color:#374151;margin-top:0;}
     .answer-line{border-bottom:1px solid #d1d5db;margin:10px 0;height:28px;}
+    .highlights-section{margin-top:40px;padding-top:24px;border-top:3px solid #f59e0b;}
+    .highlights-section h2{color:#b45309;font-size:1.1rem;margin:0 0 16px;}
+    .highlight-item{display:flex;align-items:flex-start;gap:12px;padding:10px 14px;border-radius:8px;margin-bottom:10px;border-left:4px solid #f59e0b;}
+    .highlight-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+    .highlight-text{font-size:0.95rem;line-height:1.6;}
     .doc-footer{margin-top:48px;padding-top:16px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:0.8rem;text-align:center;}
   </style>
 </head>
@@ -249,9 +255,29 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     <div class="doc-meta">Module: ${moduleName} &nbsp;·&nbsp; Topic: ${topicName} &nbsp;·&nbsp; ${date}</div>
   </div>
   <div class="doc-body">${bodyHtml}</div>
+  ${highlightsHtml}
   <div class="doc-footer">Downloaded from EduPlatform</div>
 </body>
 </html>`, []);
+
+  // Build the "Your Highlights" section HTML for a given topic
+  const buildHighlightsHtml = useCallback((topicId: number): string => {
+    const pageHighlights = getHighlightsForPage(`topic-${topicId}`);
+    if (!pageHighlights.length) return "";
+    const items = pageHighlights.map((h) => {
+      // Use the highlight color with reduced opacity as background
+      const bg = h.color ? `${h.color}33` : "#fef08a";
+      const border = h.color || "#f59e0b";
+      return `<div class="highlight-item" style="background:${bg};border-left-color:${border};">
+        <div class="highlight-dot" style="background:${border};"></div>
+        <span class="highlight-text">"${h.text.replace(/"/g, "&quot;")}"</span>
+      </div>`;
+    }).join("\n");
+    return `<div class="highlights-section">
+  <h2>🖊 Your Highlights (${pageHighlights.length})</h2>
+  ${items}
+</div>`;
+  }, [getHighlightsForPage]);
 
   const handleDownload = useCallback(
     (materialType: "notes" | "summary" | "exercises") => {
@@ -268,13 +294,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
       const date = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
 
+      const highlightsHtml = buildHighlightsHtml(selectedTopic.topic_id);
+
       switch (materialType) {
         case "notes":
           fileName = `${safeName}_Notes.html`;
           content = buildHtmlDoc(
             "📝 Topic Notes",
             `${titleHtml}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${descHtml}`,
-            topicName, moduleName, date
+            topicName, moduleName, date, highlightsHtml
           );
           break;
 
@@ -283,7 +311,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           content = buildHtmlDoc(
             "📋 Quick Reference Guide",
             `<h2 style="color:#4f46e5;">Key Concepts</h2>${descHtml}`,
-            topicName, moduleName, date
+            topicName, moduleName, date, highlightsHtml
           );
           break;
         }
@@ -299,7 +327,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 <div class="exercise-block"><h3>Exercise 3 — Real-World Application</h3><p>Describe one real-world scenario where you would apply the concepts from this topic.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>
 <div class="exercise-block"><h3>Exercise 4 — Self-Assessment Questions</h3><p>Write 3 questions you still have about this topic:</p><p>Q1: <span class="answer-line" style="display:inline-block;width:80%;"></span></p><p>Q2: <span class="answer-line" style="display:inline-block;width:80%;"></span></p><p>Q3: <span class="answer-line" style="display:inline-block;width:80%;"></span></p></div>
 <div class="exercise-block"><h3>Exercise 5 — Teach It Back</h3><p>Explain this topic as if teaching it to someone new.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>`,
-            topicName, moduleName, date
+            topicName, moduleName, date, highlightsHtml
           );
           break;
       }
@@ -339,7 +367,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         });
       }
     },
-    [selectedTopic, currentSubmodule, user, buildHtmlDoc, fixMediaUrls]
+    [selectedTopic, currentSubmodule, user, buildHtmlDoc, buildHighlightsHtml, fixMediaUrls]
   );
 
   // Download all topics in the current module as styled HTML files
@@ -365,13 +393,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
       const fileName = `${safeName}_Notes.html`;
 
-      // Build a styled HTML file preserving all TipTap rich-text formatting
+      // Build a styled HTML file preserving all TipTap rich-text formatting + user highlights
       const titleHtml = topic.title ? fixMediaUrls(topic.title) : `<p>${topicName}</p>`;
       const descHtml  = topic.description ? fixMediaUrls(topic.description) : "";
+      const highlightsHtml = buildHighlightsHtml(topic.topic_id);
       const content = buildHtmlDoc(
         "📝 Topic Notes",
         `${titleHtml}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${descHtml}`,
-        topicName, moduleName, date
+        topicName, moduleName, date, highlightsHtml
       );
 
       await saveDownload(userId, {
@@ -412,7 +441,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
-  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, fixMediaUrls]);
+  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, buildHighlightsHtml, fixMediaUrls]);
 
   // Mark the currently selected topic as completed in Supabase
   // Only runs for logged-in users — guests cannot track progress
