@@ -203,6 +203,74 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       .replace(/(<iframe[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc);
   };
 
+  // Fetch all images and videos in the HTML, convert them to base64 data URLs,
+  // and replace the src attributes so the file works with ZERO internet access.
+  // Videos over 30 MB are skipped (keeps the HTML file manageable) and get a
+  // "tap to open" fallback link instead.
+  const embedMediaAsBase64 = useCallback(async (html: string): Promise<string> => {
+    const MAX_VIDEO_BYTES = 30 * 1024 * 1024; // 30 MB cap for videos
+
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    const urlToDataUrl = async (src: string, isVideo: boolean): Promise<string | null> => {
+      if (!src || src.startsWith("data:")) return null; // already embedded
+      try {
+        const res = await fetch(src, { cache: "no-store" });
+        if (!res.ok) return null;
+        // Skip large videos to avoid huge HTML files
+        if (isVideo) {
+          const cl = Number(res.headers.get("content-length") ?? 0);
+          if (cl > MAX_VIDEO_BYTES) return null;
+        }
+        const blob = await res.blob();
+        if (isVideo && blob.size > MAX_VIDEO_BYTES) return null;
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        return null;
+      }
+    };
+
+    // Embed images
+    const imgs = Array.from(container.querySelectorAll("img[src]"));
+    await Promise.all(imgs.map(async (img) => {
+      const src = img.getAttribute("src");
+      if (!src) return;
+      const dataUrl = await urlToDataUrl(src, false);
+      if (dataUrl) img.setAttribute("src", dataUrl);
+    }));
+
+    // Embed videos — look for src on <video> or <source> inside <video>
+    const videos = Array.from(container.querySelectorAll("video"));
+    await Promise.all(videos.map(async (vid) => {
+      const srcEl = vid.querySelector("source") ?? vid;
+      const src = srcEl.getAttribute("src");
+      if (!src || src.startsWith("data:")) return;
+
+      const dataUrl = await urlToDataUrl(src, true);
+      if (dataUrl) {
+        // Replace every <source src> with the data URL
+        vid.querySelectorAll("source").forEach((s) => {
+          if (s.getAttribute("src") === src) s.setAttribute("src", dataUrl);
+        });
+        if (vid.getAttribute("src") === src) vid.setAttribute("src", dataUrl);
+      } else {
+        // Too large or failed — add a prominent download link below the video
+        const link = document.createElement("p");
+        link.style.cssText = "margin:8px 0;font-size:0.9rem;";
+        link.innerHTML = `Video too large to embed — <a href="${src}" target="_blank" style="color:#4f46e5;text-decoration:underline;">tap to open/download</a>`;
+        vid.parentNode?.insertBefore(link, vid.nextSibling);
+      }
+    }));
+
+    return container.innerHTML;
+  }, []);
+
   // Fix <video> elements in downloaded HTML so they play on all devices.
   // Problems solved:
   //   1. Browsers block Range requests from file:// unless crossorigin is set
@@ -352,19 +420,26 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 </html>`, []);
 
   const handleDownload = useCallback(
-    (materialType: "notes" | "summary" | "exercises") => {
+    async (materialType: "notes" | "summary" | "exercises") => {
       if (!selectedTopic) return;
 
       const topicName = selectedTopic.name;
       const moduleName = currentSubmodule?.name || "Module";
       const tid = selectedTopic.topic_id;
-      // Apply inline highlights → fix media URLs → fix video elements for offline playback
-      const titleHtml = fixVideoForDownload(applyHighlightsToHtml(
-        selectedTopic.title ? fixMediaUrls(selectedTopic.title) : `<p>${topicName}</p>`, tid
-      ));
-      const descHtml = fixVideoForDownload(applyHighlightsToHtml(
-        selectedTopic.description ? fixMediaUrls(selectedTopic.description) : "", tid
-      ));
+
+      // Visual feedback immediately so the user knows download started
+      setDownloadedSet((prev) => new Set([...prev, materialType]));
+
+      // Pipeline: fix URLs → apply highlights → fix video attrs → embed media as base64
+      const prepareHtml = async (raw: string | null, fallback: string) => {
+        const step1 = raw ? fixMediaUrls(raw) : fallback;
+        const step2 = applyHighlightsToHtml(step1, tid);
+        const step3 = fixVideoForDownload(step2);
+        return await embedMediaAsBase64(step3);
+      };
+
+      const titleHtml = await prepareHtml(selectedTopic.title, `<p>${topicName}</p>`);
+      const descHtml  = await prepareHtml(selectedTopic.description, "");
 
       let content = "";
       let fileName = "";
@@ -418,8 +493,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      // Visual feedback
-      setDownloadedSet((prev) => new Set([...prev, materialType]));
+      // Clear visual feedback after 2 s
       setTimeout(() => {
         setDownloadedSet((prev) => {
           const next = new Set(prev);
@@ -442,7 +516,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         });
       }
     },
-    [selectedTopic, currentSubmodule, user, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls]
+    [selectedTopic, currentSubmodule, user, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls, embedMediaAsBase64]
   );
 
   // Download all topics in the current module as styled HTML files
@@ -468,13 +542,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
       const fileName = `${safeName}_Notes.html`;
 
-      // Build a styled HTML file with inline highlights, TipTap styles, fixed video and media URLs
-      const titleHtml = fixVideoForDownload(applyHighlightsToHtml(
-        topic.title ? fixMediaUrls(topic.title) : `<p>${topicName}</p>`, topic.topic_id
-      ));
-      const descHtml = fixVideoForDownload(applyHighlightsToHtml(
-        topic.description ? fixMediaUrls(topic.description) : "", topic.topic_id
-      ));
+      // Build a styled HTML file with inline highlights, TipTap styles, fixed video and embedded media
+      const prepHtml = async (raw: string | null, fallback: string) => {
+        const s1 = raw ? fixMediaUrls(raw) : fallback;
+        const s2 = applyHighlightsToHtml(s1, topic.topic_id);
+        const s3 = fixVideoForDownload(s2);
+        return await embedMediaAsBase64(s3);
+      };
+      const titleHtml = await prepHtml(topic.title, `<p>${topicName}</p>`);
+      const descHtml  = await prepHtml(topic.description, "");
       const content = buildHtmlDoc(
         "📝 Topic Notes",
         `${titleHtml}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${descHtml}`,
@@ -519,7 +595,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
-  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls]);
+  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls, embedMediaAsBase64]);
 
   // Mark the currently selected topic as completed in Supabase
   // Only runs for logged-in users — guests cannot track progress
