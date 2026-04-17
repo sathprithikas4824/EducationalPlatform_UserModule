@@ -4,6 +4,14 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { v2 as cloudinary } from 'cloudinary';
+import { Readable } from 'stream';
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -41,7 +49,7 @@ export const upload = multer({
 
 export const uploadVideoMulter = multer({
   storage: storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB for videos
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200MB for videos
   fileFilter: videoFileFilter
 });
 
@@ -87,7 +95,7 @@ export const uploadImage = async (req, res, next) => {
   }
 };
 
-// Upload video to Supabase Storage (course-videos bucket)
+// Upload video to Cloudinary
 export const uploadVideo = async (req, res, next) => {
   try {
     if (!req.file) {
@@ -95,34 +103,27 @@ export const uploadVideo = async (req, res, next) => {
     }
 
     const file = req.file;
-    const fileExt = path.extname(file.originalname);
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExt}`;
-    const filePath = `videos/${fileName}`;
 
-    const { data, error } = await supabase.storage
-      .from('course-videos')
-      .upload(filePath, file.buffer, {
-        contentType: file.mimetype,
-        upsert: false
-      });
-
-    if (error) {
-      console.error('Supabase storage error:', error);
-      return next(new AppError('Failed to upload video to storage', 500));
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from('course-videos')
-      .getPublicUrl(filePath);
-
-    res.status(200).json({
-      success: true,
-      videoUrl: publicUrlData.publicUrl,
-      fileName: fileName,
-      filePath: filePath
+    const videoUrl = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'video',
+          folder: 'course-videos',
+          use_filename: true,
+          unique_filename: true,
+          overwrite: false,
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result.secure_url);
+        }
+      );
+      Readable.from(file.buffer).pipe(uploadStream);
     });
+
+    res.status(200).json({ success: true, videoUrl });
   } catch (err) {
-    console.error('Video upload error:', err);
+    console.error('Cloudinary video upload error:', err);
     next(new AppError(err.message || 'Failed to upload video', 500));
   }
 };
