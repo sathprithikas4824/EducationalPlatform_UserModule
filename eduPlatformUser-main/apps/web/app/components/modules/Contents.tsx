@@ -501,17 +501,17 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
       // Save to My Downloads immediately (URL-based, instant — no waiting for media fetch)
       const fastContent = buildHtmlDoc(docTitles[materialType], buildBody(titleFast, descFast), topicName, moduleName, date);
+      const recordBase = {
+        userId: user?.id ?? "",
+        topicId: selectedTopic.topic_id,
+        topicName,
+        moduleName,
+        submoduleId: currentSubmodule?.submodule_id ?? submoduleId,
+        fileName,
+        fileType: "html",
+      };
       if (user) {
-        saveDownload(user.id, {
-          userId: user.id,
-          topicId: selectedTopic.topic_id,
-          topicName,
-          moduleName,
-          submoduleId: currentSubmodule?.submodule_id ?? submoduleId,
-          fileName,
-          fileType: "html",
-          content: fastContent,
-        });
+        saveDownload(user.id, { ...recordBase, content: fastContent });
       }
 
       // Embed base64 for the actual file download (works offline on all devices)
@@ -531,6 +531,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+
+      // Update the saved record with base64 content so profile viewer works offline too
+      if (user) {
+        saveDownload(user.id, { ...recordBase, content: offlineContent });
+      }
 
       // Clear visual feedback
       setTimeout(() => {
@@ -581,7 +586,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         topicName, moduleName, date
       );
 
-      await saveDownload(userId, {
+      const dlBase = {
         userId,
         topicId: topic.topic_id,
         topicName,
@@ -589,8 +594,21 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         submoduleId: currentSubmodule?.submodule_id ?? submoduleId,
         fileName,
         fileType: "html",
-        content,
-      });
+      };
+
+      // Save immediately (URL-based, instant)
+      await saveDownload(userId, { ...dlBase, content });
+
+      // Background: embed base64 then update the record so offline profile viewer works
+      embedMediaAsBase64(titleHtml).then(async (t64) => {
+        const d64 = await embedMediaAsBase64(descHtml);
+        const offlineContent = buildHtmlDoc(
+          "📝 Topic Notes",
+          `${t64}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${d64}`,
+          topicName, moduleName, date
+        );
+        saveDownload(userId, { ...dlBase, content: offlineContent });
+      }).catch(() => {});
     }
 
     // Cache locally so this device shows "Downloaded" instantly on next visit
@@ -619,7 +637,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
-  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls]);
+  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls, embedMediaAsBase64]);
 
   // Mark the currently selected topic as completed in Supabase
   // Only runs for logged-in users — guests cannot track progress
