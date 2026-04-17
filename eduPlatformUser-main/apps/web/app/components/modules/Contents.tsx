@@ -216,9 +216,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const urlToDataUrl = async (src: string, isVideo: boolean): Promise<string | null> => {
       if (!src || src.startsWith("data:")) return null; // already embedded
       try {
-        const res = await fetch(src, { cache: "no-store" });
+        const controller = new AbortController();
+        // Timeout: 8 s for images, 60 s for videos
+        const timer = setTimeout(() => controller.abort(), isVideo ? 60000 : 8000);
+        const res = await fetch(src, { cache: "no-store", signal: controller.signal });
+        clearTimeout(timer);
         if (!res.ok) return null;
-        // Skip large videos to avoid huge HTML files
         if (isVideo) {
           const cl = Number(res.headers.get("content-length") ?? 0);
           if (cl > MAX_VIDEO_BYTES) return null;
@@ -462,79 +465,42 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       // Visual feedback immediately so the user knows download started
       setDownloadedSet((prev) => new Set([...prev, materialType]));
 
-      // Pipeline: fix URLs → apply highlights → fix video attrs → embed media as base64
-      const prepareHtml = async (raw: string | null, fallback: string) => {
-        const step1 = raw ? fixMediaUrls(raw) : fallback;
-        const step2 = applyHighlightsToHtml(step1, tid);
-        const step3 = fixVideoForDownload(step2);
-        return await embedMediaAsBase64(step3);
+      // Fast pipeline — fix URLs + highlights + video attrs (no base64, instant)
+      const fastHtml = (raw: string | null, fallback: string) => {
+        const s1 = raw ? fixMediaUrls(raw) : fallback;
+        const s2 = applyHighlightsToHtml(s1, tid);
+        return fixVideoForDownload(s2);
       };
+      const titleFast = fastHtml(selectedTopic.title, `<p>${topicName}</p>`);
+      const descFast  = fastHtml(selectedTopic.description, "");
 
-      const titleHtml = await prepareHtml(selectedTopic.title, `<p>${topicName}</p>`);
-      const descHtml  = await prepareHtml(selectedTopic.description, "");
-
-      let content = "";
-      let fileName = "";
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
       const date = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
 
-      switch (materialType) {
-        case "notes":
-          fileName = `${safeName}_Notes.html`;
-          content = buildHtmlDoc(
-            "📝 Topic Notes",
-            `${titleHtml}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${descHtml}`,
-            topicName, moduleName, date
-          );
-          break;
-
-        case "summary": {
-          fileName = `${safeName}_Quick_Reference.html`;
-          content = buildHtmlDoc(
-            "📋 Quick Reference Guide",
-            `<h2 style="color:#4f46e5;">Key Concepts</h2>${descHtml}`,
-            topicName, moduleName, date
-          );
-          break;
-        }
-
-        case "exercises":
-          fileName = `${safeName}_Practice_Exercises.html`;
-          content = buildHtmlDoc(
-            "✏️ Practice Exercises",
-            `<h2>Topic Overview</h2>${titleHtml}
+      let fileName = "";
+      const buildBody = (title: string, desc: string) => {
+        switch (materialType) {
+          case "notes":     return `${title}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${desc}`;
+          case "summary":   return `<h2 style="color:#4f46e5;">Key Concepts</h2>${desc}`;
+          case "exercises": return `<h2>Topic Overview</h2>${title}
 <h2 style="margin-top:32px;">Exercises</h2>
 <div class="exercise-block"><h3>Exercise 1 — Review Key Concepts</h3><p>Read through the topic notes and list the main concepts in your own words.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>
 <div class="exercise-block"><h3>Exercise 2 — Summarise Without Notes</h3><p>Write a 3–5 sentence summary of this topic without looking at any reference material.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>
 <div class="exercise-block"><h3>Exercise 3 — Real-World Application</h3><p>Describe one real-world scenario where you would apply the concepts from this topic.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>
 <div class="exercise-block"><h3>Exercise 4 — Self-Assessment Questions</h3><p>Write 3 questions you still have about this topic:</p><p>Q1: <span class="answer-line" style="display:inline-block;width:80%;"></span></p><p>Q2: <span class="answer-line" style="display:inline-block;width:80%;"></span></p><p>Q3: <span class="answer-line" style="display:inline-block;width:80%;"></span></p></div>
-<div class="exercise-block"><h3>Exercise 5 — Teach It Back</h3><p>Explain this topic as if teaching it to someone new.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>`,
-            topicName, moduleName, date
-          );
-          break;
+<div class="exercise-block"><h3>Exercise 5 — Teach It Back</h3><p>Explain this topic as if teaching it to someone new.</p><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div><div class="answer-line"></div></div>`;
+          default: return desc;
+        }
+      };
+      const docTitles: Record<string, string> = { notes: "📝 Topic Notes", summary: "📋 Quick Reference Guide", exercises: "✏️ Practice Exercises" };
+      switch (materialType) {
+        case "notes":     fileName = `${safeName}_Notes.html`; break;
+        case "summary":   fileName = `${safeName}_Quick_Reference.html`; break;
+        case "exercises": fileName = `${safeName}_Practice_Exercises.html`; break;
       }
 
-      // Trigger browser download as HTML
-      const blob = new Blob([content], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      // Clear visual feedback after 2 s
-      setTimeout(() => {
-        setDownloadedSet((prev) => {
-          const next = new Set(prev);
-          next.delete(materialType);
-          return next;
-        });
-      }, 2000);
-
-      // Persist record so it shows up in Profile → My Downloads
+      // Save to My Downloads immediately (URL-based, instant — no waiting for media fetch)
+      const fastContent = buildHtmlDoc(docTitles[materialType], buildBody(titleFast, descFast), topicName, moduleName, date);
       if (user) {
         saveDownload(user.id, {
           userId: user.id,
@@ -544,9 +510,36 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           submoduleId: currentSubmodule?.submodule_id ?? submoduleId,
           fileName,
           fileType: "html",
-          content,
+          content: fastContent,
         });
       }
+
+      // Embed base64 for the actual file download (works offline on all devices)
+      const [titleHtml, descHtml] = await Promise.all([
+        embedMediaAsBase64(titleFast),
+        embedMediaAsBase64(descFast),
+      ]);
+      const offlineContent = buildHtmlDoc(docTitles[materialType], buildBody(titleHtml, descHtml), topicName, moduleName, date);
+
+      // Trigger browser file download
+      const blob = new Blob([offlineContent], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Clear visual feedback
+      setTimeout(() => {
+        setDownloadedSet((prev) => {
+          const next = new Set(prev);
+          next.delete(materialType);
+          return next;
+        });
+      }, 2000);
     },
     [selectedTopic, currentSubmodule, user, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls, embedMediaAsBase64]
   );
@@ -574,15 +567,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const safeName = topicName.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
       const fileName = `${safeName}_Notes.html`;
 
-      // Build a styled HTML file with inline highlights, TipTap styles, fixed video and embedded media
-      const prepHtml = async (raw: string | null, fallback: string) => {
+      // Build HTML instantly (URL-based, no base64 fetch) so save is immediate
+      const prepHtml = (raw: string | null, fallback: string) => {
         const s1 = raw ? fixMediaUrls(raw) : fallback;
         const s2 = applyHighlightsToHtml(s1, topic.topic_id);
-        const s3 = fixVideoForDownload(s2);
-        return await embedMediaAsBase64(s3);
+        return fixVideoForDownload(s2);
       };
-      const titleHtml = await prepHtml(topic.title, `<p>${topicName}</p>`);
-      const descHtml  = await prepHtml(topic.description, "");
+      const titleHtml = prepHtml(topic.title, `<p>${topicName}</p>`);
+      const descHtml  = prepHtml(topic.description, "");
       const content = buildHtmlDoc(
         "📝 Topic Notes",
         `${titleHtml}<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0"/>${descHtml}`,
@@ -627,7 +619,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
 
     setModuleDownloadState("done");
-  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls, embedMediaAsBase64]);
+  }, [user, topics, currentSubmodule, submoduleId, buildHtmlDoc, applyHighlightsToHtml, fixVideoForDownload, fixMediaUrls]);
 
   // Mark the currently selected topic as completed in Supabase
   // Only runs for logged-in users — guests cannot track progress
