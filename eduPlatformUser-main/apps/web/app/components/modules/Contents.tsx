@@ -438,10 +438,33 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   <div class="doc-body">${bodyHtml}</div>
   <div class="doc-footer">Downloaded from EduPlatform</div>
   <script>
-  // Convert embedded base64 video data to blob: URLs for cross-browser offline playback.
-  // iOS Safari refuses data: URIs on video; Chrome/Firefox/Android accept both but blob
-  // is more memory-efficient. Using fetch(data:) avoids the slow atob() byte-loop.
+  // Convert embedded base64 video data URIs to blob: URLs.
+  // iOS Safari in sandboxed iframes cannot fetch() data: URIs and cannot play them directly.
+  // Strategy: try fetch() first (Chrome/Firefox/Android), then fall back to chunked atob()
+  // which works in iOS Safari by building a Blob from raw bytes without a large contiguous array.
   (async function(){
+    async function dataUriToBlobUrl(dataUri){
+      try{
+        var r=await fetch(dataUri);
+        var b=await r.blob();
+        return URL.createObjectURL(b);
+      }catch(e){
+        // iOS Safari sandboxed iframe fallback: chunked atob to avoid memory spike
+        var comma=dataUri.indexOf(',');
+        var meta=dataUri.substring(0,comma);
+        var mime=meta.match(/:(.*?);/)[1];
+        var raw=atob(dataUri.substring(comma+1));
+        var chunkSize=512*1024;
+        var chunks=[];
+        for(var i=0;i<raw.length;i+=chunkSize){
+          var slice=raw.slice(i,i+chunkSize);
+          var bytes=new Uint8Array(slice.length);
+          for(var j=0;j<slice.length;j++) bytes[j]=slice.charCodeAt(j);
+          chunks.push(bytes);
+        }
+        return URL.createObjectURL(new Blob(chunks,{type:mime}));
+      }
+    }
     var videos=Array.from(document.querySelectorAll('video'));
     for(var i=0;i<videos.length;i++){
       var vid=videos[i];
@@ -449,21 +472,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       var dataUri=source?source.getAttribute('src'):vid.getAttribute('src');
       if(!dataUri||dataUri.indexOf('data:video')!==0) continue;
       try{
-        // fetch() handles data: URIs natively — no manual atob loop, memory-efficient
-        var res=await fetch(dataUri);
-        var blob=await res.blob();
-        var blobUrl=URL.createObjectURL(blob);
+        var blobUrl=await dataUriToBlobUrl(dataUri);
         while(vid.firstChild) vid.removeChild(vid.firstChild);
         vid.removeAttribute('src');
         vid.src=blobUrl;
         vid.load();
-      }catch(e){
-        // Fallback: data: URI directly (works on Chrome, Firefox, Android Chrome)
-        while(vid.firstChild) vid.removeChild(vid.firstChild);
-        vid.removeAttribute('src');
-        vid.src=dataUri;
-        vid.load();
-      }
+      }catch(e){}
     }
   })();
   </script>

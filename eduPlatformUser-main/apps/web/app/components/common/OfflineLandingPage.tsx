@@ -248,6 +248,7 @@ function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => vo
                       srcDoc={selected.content}
                       title={selected.topicName}
                       sandbox="allow-scripts allow-same-origin"
+                      allow="autoplay; fullscreen; picture-in-picture"
                       style={{ width: "100%", border: "none", minHeight: "70vh", display: "block" }}
                       onLoad={(e) => {
                         const iframe = e.currentTarget;
