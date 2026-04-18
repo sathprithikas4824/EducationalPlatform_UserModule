@@ -131,21 +131,6 @@ function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => vo
     boxShadow: "var(--pill-shadow)",
   };
 
-  // Parse HTML content from a record
-  const parseContent = (topic: ReaderTopic): { title: string | null; description: string | null } => {
-    if (topic.fileType === "html") {
-      try {
-        const parsed = JSON.parse(topic.content) as { title?: string; description?: string };
-        return { title: parsed.title || null, description: parsed.description || null };
-      } catch {
-        return { title: null, description: topic.content };
-      }
-    }
-    // Plain text record — show as-is
-    return { title: null, description: null };
-  };
-
-  const { title, description } = selected ? parseContent(selected) : { title: null, description: null };
   const isPlainText = selected?.fileType !== "html";
 
   return (
@@ -254,23 +239,23 @@ function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => vo
                   );
                 })()
               ) : (
-                // Proper HTML content
-                <div>
-                  {title && (
-                    <div
-                      className="ai-content-wrapper mb-4"
-                      dangerouslySetInnerHTML={{ __html: title }}
-                    />
-                  )}
-                  {!title && (
-                    <h2 className="jakarta-font text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                      {selected.topicName}
-                    </h2>
-                  )}
-                  {description ? (
-                    <div
-                      className="ai-content-wrapper"
-                      dangerouslySetInnerHTML={{ __html: description }}
+                // HTML content — render in iframe so scripts execute (blob video conversion)
+                // and images/videos embedded as base64 display correctly in all browsers
+                <div className="w-full">
+                  {selected.content ? (
+                    <iframe
+                      key={selected.topicId}
+                      srcDoc={selected.content}
+                      title={selected.topicName}
+                      sandbox="allow-scripts allow-same-origin"
+                      style={{ width: "100%", border: "none", minHeight: "70vh", display: "block" }}
+                      onLoad={(e) => {
+                        const iframe = e.currentTarget;
+                        try {
+                          const h = iframe.contentDocument?.documentElement?.scrollHeight ?? 0;
+                          if (h > 0) iframe.style.height = h + "px";
+                        } catch {}
+                      }}
                     />
                   ) : (
                     <p className="text-gray-400 italic text-sm">No content available for this topic.</p>
