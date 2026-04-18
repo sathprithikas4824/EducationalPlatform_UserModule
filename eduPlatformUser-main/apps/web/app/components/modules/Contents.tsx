@@ -296,15 +296,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const ext = src.split("?")[0].split(".").pop()?.toLowerCase() ?? "mp4";
       const mime = MIME[ext] ?? "video/mp4";
 
-      // Rebuild with proper attributes
+      // Rebuild with proper attributes — no crossorigin (blocks offline playback)
       vid.removeAttribute("src");
       vid.setAttribute("controls", "");
-      vid.setAttribute("crossorigin", "anonymous");
       vid.setAttribute("preload", "auto");
+      vid.setAttribute("playsinline", "");
       vid.style.cssText = "max-width:100%;width:100%;border-radius:8px;margin:8px 0;display:block;";
 
-      // Replace inner content with a proper <source> + fallback link
-      vid.innerHTML = `<source src="${src}" type="${mime}"><source src="${src}" type="video/mp4"><p style="margin:8px 0;font-size:0.9rem;">Video cannot play inline — <a href="${src}" target="_blank" style="color:#4f46e5;text-decoration:underline;">open in browser</a></p>`;
+      // Single <source> with correct MIME type + fallback link
+      vid.innerHTML = `<source src="${src}" type="${mime}"><p style="margin:8px 0;font-size:0.9rem;">Video cannot play inline — <a href="${src}" target="_blank" style="color:#4f46e5;text-decoration:underline;">open in browser</a></p>`;
     });
     return container.innerHTML;
   }, []);
@@ -402,7 +402,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     pre{background:#1e1e1e;color:#d4d4d4;padding:16px;border-radius:8px;overflow-x:auto;font-family:monospace;}
     pre code{background:none;padding:0;color:inherit;}
     img{max-width:100%;border-radius:8px;margin:8px 0;display:block;}
-    video{max-width:100%;border-radius:8px;margin:8px 0;}
+    video{max-width:100%;width:100%;border-radius:8px;margin:8px 0;display:block;}
     a{color:#4f46e5;}
     mark{border-radius:3px;padding:1px 2px;}
     span[data-circle],.circled-text{border:2px solid currentColor;border-radius:50%;padding:2px 6px;display:inline-block;line-height:1;}
@@ -420,35 +420,33 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   <div class="doc-body">${bodyHtml}</div>
   <div class="doc-footer">Downloaded from EduPlatform</div>
   <script>
-  // iOS Safari cannot play data: URIs for video. Convert them to blob: URLs at page load.
-  (function(){
-    function dataUriToBlob(dataUri){
-      var parts=dataUri.split(',');
-      var mime=parts[0].match(/:(.*?);/)[1];
-      var b64=parts[1];
-      var bytes=atob(b64);
-      var arr=new Uint8Array(bytes.length);
-      for(var i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i);
-      return new Blob([arr],{type:mime});
-    }
-    document.querySelectorAll('video').forEach(function(vid){
-      // Gather all base64 sources
-      var sources=Array.from(vid.querySelectorAll('source[src^="data:video"]'));
-      if(vid.getAttribute('src')&&vid.getAttribute('src').indexOf('data:video')===0){
-        sources=[vid];
-      }
-      if(!sources.length) return;
-      var dataUri=sources[0].getAttribute('src');
+  // Convert embedded base64 video data to blob: URLs for cross-browser offline playback.
+  // iOS Safari refuses data: URIs on video; Chrome/Firefox/Android accept both but blob
+  // is more memory-efficient. Using fetch(data:) avoids the slow atob() byte-loop.
+  (async function(){
+    var videos=Array.from(document.querySelectorAll('video'));
+    for(var i=0;i<videos.length;i++){
+      var vid=videos[i];
+      var source=vid.querySelector('source');
+      var dataUri=source?source.getAttribute('src'):vid.getAttribute('src');
+      if(!dataUri||dataUri.indexOf('data:video')!==0) continue;
       try{
-        var blob=dataUriToBlob(dataUri);
+        // fetch() handles data: URIs natively — no manual atob loop, memory-efficient
+        var res=await fetch(dataUri);
+        var blob=await res.blob();
         var blobUrl=URL.createObjectURL(blob);
-        // Remove all <source> children and set src directly — most reliable on Safari
-        Array.from(vid.querySelectorAll('source')).forEach(function(s){s.remove();});
+        while(vid.firstChild) vid.removeChild(vid.firstChild);
         vid.removeAttribute('src');
         vid.src=blobUrl;
         vid.load();
-      }catch(e){}
-    });
+      }catch(e){
+        // Fallback: data: URI directly (works on Chrome, Firefox, Android Chrome)
+        while(vid.firstChild) vid.removeChild(vid.firstChild);
+        vid.removeAttribute('src');
+        vid.src=dataUri;
+        vid.load();
+      }
+    }
   })();
   </script>
 </body>
