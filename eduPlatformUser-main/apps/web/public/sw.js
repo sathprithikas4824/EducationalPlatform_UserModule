@@ -1,7 +1,8 @@
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const STATIC_CACHE = `edu-static-${CACHE_VERSION}`;
 const PAGE_CACHE   = `edu-pages-${CACHE_VERSION}`;
-const ALL_CACHES   = [STATIC_CACHE, PAGE_CACHE];
+const MEDIA_CACHE  = `edu-media-${CACHE_VERSION}`;
+const ALL_CACHES   = [STATIC_CACHE, PAGE_CACHE, MEDIA_CACHE];
 
 const OFFLINE_PAGE  = "/offline.html";
 const PRECACHE_URLS = [OFFLINE_PAGE];
@@ -24,11 +25,44 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Returns true for Cloudinary or Supabase media (images + videos)
+function isMediaRequest(url) {
+  return (
+    url.hostname.includes("res.cloudinary.com") ||
+    (url.hostname.includes("supabase.co") &&
+      (url.pathname.includes("course-images") || url.pathname.includes("course-videos")))
+  );
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+  if (request.method !== "GET") return;
+
   const url = new URL(request.url);
 
-  if (request.method !== "GET" || url.origin !== self.location.origin) return;
+  // ── Cross-origin media (Cloudinary / Supabase storage) ──────────────────────
+  // Cache-first: serve instantly offline; populate cache on first online fetch.
+  // This is what makes downloaded topic images and videos work offline in the
+  // iframe reader — the SW intercepts the Cloudinary/Supabase URL and serves
+  // the cached response without needing internet.
+  if (isMediaRequest(url)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(MEDIA_CACHE).then((c) => c.put(request, clone));
+          }
+          return res;
+        }).catch(() => Response.error());
+      })
+    );
+    return;
+  }
+
+  // ── Same-origin only beyond this point ────────────────────────────────────
+  if (url.origin !== self.location.origin) return;
 
   // Real connectivity checks — bypass SW entirely
   if (url.searchParams.has("_swbypass")) {
@@ -66,10 +100,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Pages: network-first.
-  // On ANY failure, serve the pre-cached offline.html (standalone, zero chunk deps).
-  // NEVER serve stale cached pages — they have broken chunk references
-  // after a Vercel deploy and cause "Application error".
+  // Pages: network-first with offline.html fallback
   event.respondWith(
     fetch(request)
       .then((response) => {

@@ -213,21 +213,39 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const container = document.createElement("div");
     container.innerHTML = html;
 
+    const cacheMediaForSW = async (src: string, res: Response) => {
+      try {
+        if ("caches" in window) {
+          const cache = await caches.open("edu-media-v6");
+          await cache.put(src, res);
+        }
+      } catch {}
+    };
+
     const urlToDataUrl = async (src: string, isVideo: boolean): Promise<string | null> => {
       if (!src || src.startsWith("data:")) return null; // already embedded
       try {
         const controller = new AbortController();
-        // Timeout: 8 s for images, 60 s for videos
-        const timer = setTimeout(() => controller.abort(), isVideo ? 60000 : 8000);
+        // Timeout: 10 s for images, 120 s for videos
+        const timer = setTimeout(() => controller.abort(), isVideo ? 120000 : 10000);
         const res = await fetch(src, { cache: "no-store", signal: controller.signal });
         clearTimeout(timer);
         if (!res.ok) return null;
+
         if (isVideo) {
           const cl = Number(res.headers.get("content-length") ?? 0);
-          if (cl > MAX_VIDEO_BYTES) return null;
+          if (cl > MAX_VIDEO_BYTES) {
+            // Too large to embed — cache it so the SW serves it offline instead
+            await cacheMediaForSW(src, res);
+            return null;
+          }
         }
         const blob = await res.blob();
-        if (isVideo && blob.size > MAX_VIDEO_BYTES) return null;
+        if (isVideo && blob.size > MAX_VIDEO_BYTES) {
+          // Actual size exceeded — cache what we got
+          await cacheMediaForSW(src, new Response(blob, { headers: { "Content-Type": blob.type || "video/mp4" } }));
+          return null;
+        }
         return await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
