@@ -112,10 +112,17 @@ export const uploadVideo = async (req, res, next) => {
           use_filename: true,
           unique_filename: true,
           overwrite: false,
+          // Pre-generate the faststart version synchronously so the CDN-cached URL
+          // is ready before any user tries to play the video. fl_faststart moves the
+          // moov atom to the front of the MP4 so browsers can start playing after
+          // downloading just the first few KB instead of the entire file.
+          eager: [{ flags: 'faststart', format: 'mp4' }],
+          eager_async: false,
         },
         (error, result) => {
           if (error) return reject(error);
-          resolve(result.secure_url);
+          // Prefer the faststart-optimised URL; fall back to original if eager failed
+          resolve(result.eager?.[0]?.secure_url || result.secure_url);
         }
       );
       Readable.from(file.buffer).pipe(uploadStream);
