@@ -204,11 +204,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   };
 
   // Fix <video> elements for fast online playback.
-  // Problems solved:
-  //   1. TipTap serialises controls="true" — browsers need bare controls attribute
-  //   2. No preload="metadata" means the browser buffers the full video on page load
-  //   3. Cloudinary MP4s often have the moov atom at the end → browser must download
-  //      the whole file before it can start. fl_faststart moves moov to the front.
+  // TipTap's VideoNode serialises controls="true" which browsers ignore (need bare controls).
+  // Adding preload="metadata" + a proper <source type> lets the browser show the player
+  // and first frame immediately without buffering the full file.
   const fixVideoForOnline = (html: string): string => {
     if (!html || typeof document === "undefined") return html;
     const MIME: Record<string, string> = {
@@ -219,15 +217,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const container = document.createElement("div");
     container.innerHTML = html;
     container.querySelectorAll("video").forEach((vid) => {
-      let src = vid.getAttribute("src") || vid.querySelector("source")?.getAttribute("src");
+      const src = vid.getAttribute("src") || vid.querySelector("source")?.getAttribute("src");
       if (!src) return;
-
-      // Add fl_faststart so Cloudinary moves the moov atom to the front →
-      // browser can begin playing after downloading just the first few KB.
-      // q_auto reduces file size for faster streaming without manual quality tuning.
-      if (src.includes("res.cloudinary.com") && src.includes("/upload/")) {
-        src = src.replace("/upload/", "/upload/fl_faststart,q_auto/");
-      }
 
       const ext = src.split("?")[0].split(".").pop()?.toLowerCase() ?? "mp4";
       const mime = MIME[ext] ?? "video/mp4";
@@ -237,7 +228,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       vid.setAttribute("preload", "metadata");
       vid.setAttribute("playsinline", "");
       vid.style.cssText = "max-width:100%;width:100%;border-radius:8px;margin:8px 0;display:block;";
-      vid.innerHTML = `<source src="${src}" type="${mime}"><p style="margin:8px 0;font-size:0.9rem;">Video cannot play inline — <a href="${src}" target="_blank" style="color:#4f46e5;text-decoration:underline;">open in browser</a></p>`;
+      vid.innerHTML = `<source src="${src}" type="${mime}">`;
     });
     return container.innerHTML;
   };
