@@ -205,9 +205,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
   // Fix <video> elements for fast online playback.
   // TipTap's VideoNode serialises controls="true" which browsers ignore (need bare controls).
-  // fl_faststart moves the moov atom to the front of the MP4 so the browser can start
-  // playing after the first few KB. New uploads have this pre-generated at upload time;
-  // for existing videos Cloudinary generates it on first view then caches it permanently.
+  // Adding preload="metadata" + a declared <source type> lets the browser show the player
+  // and first frame immediately, then stream on click without buffering the full file.
+  // Never rewrite the Cloudinary URL — on-demand transformations block until Cloudinary
+  // finishes processing (can be 30-60 s for large videos). The stored URL is already CDN-cached.
   const fixVideoForOnline = (html: string): string => {
     if (!html || typeof document === "undefined") return html;
     const MIME: Record<string, string> = {
@@ -218,16 +219,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const container = document.createElement("div");
     container.innerHTML = html;
     container.querySelectorAll("video").forEach((vid) => {
-      let src = vid.getAttribute("src") || vid.querySelector("source")?.getAttribute("src");
+      const src = vid.getAttribute("src") || vid.querySelector("source")?.getAttribute("src");
       if (!src) return;
-
-      // Apply fl_faststart only when not already present. New uploads already have
-      // this URL stored (pre-generated at upload time), so the replace is a no-op for them.
-      // For older videos already in the DB, Cloudinary generates the derived asset on first
-      // view and caches it — all subsequent views are served from CDN instantly.
-      if (src.includes("res.cloudinary.com") && src.includes("/upload/") && !src.includes("fl_faststart")) {
-        src = src.replace("/upload/", "/upload/fl_faststart/");
-      }
 
       const ext = src.split("?")[0].split(".").pop()?.toLowerCase() ?? "mp4";
       const mime = MIME[ext] ?? "video/mp4";

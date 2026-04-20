@@ -121,8 +121,11 @@ export const uploadVideo = async (req, res, next) => {
         },
         (error, result) => {
           if (error) return reject(error);
-          // Prefer the faststart-optimised URL; fall back to original if eager failed
-          resolve(result.eager?.[0]?.secure_url || result.secure_url);
+          // Always return the original secure_url. The eager transformation pre-warms
+          // Cloudinary's CDN so the fl_faststart derived asset is ready when anyone
+          // later requests it via the admin panel's transformation URL, but we store
+          // the canonical URL to keep DB and SW cache consistent.
+          resolve(result.secure_url);
         }
       );
       Readable.from(file.buffer).pipe(uploadStream);
