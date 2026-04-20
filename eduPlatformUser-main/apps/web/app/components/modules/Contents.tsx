@@ -203,6 +203,45 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       .replace(/(<iframe[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc);
   };
 
+  // Fix <video> elements for fast online playback.
+  // Problems solved:
+  //   1. TipTap serialises controls="true" — browsers need bare controls attribute
+  //   2. No preload="metadata" means the browser buffers the full video on page load
+  //   3. Cloudinary MP4s often have the moov atom at the end → browser must download
+  //      the whole file before it can start. fl_faststart moves moov to the front.
+  const fixVideoForOnline = (html: string): string => {
+    if (!html || typeof document === "undefined") return html;
+    const MIME: Record<string, string> = {
+      mp4: "video/mp4", webm: "video/webm",
+      ogg: "video/ogg", mov: "video/mp4",
+      avi: "video/x-msvideo", mkv: "video/x-matroska",
+    };
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    container.querySelectorAll("video").forEach((vid) => {
+      let src = vid.getAttribute("src") || vid.querySelector("source")?.getAttribute("src");
+      if (!src) return;
+
+      // Add fl_faststart so Cloudinary moves the moov atom to the front →
+      // browser can begin playing after downloading just the first few KB.
+      // q_auto reduces file size for faster streaming without manual quality tuning.
+      if (src.includes("res.cloudinary.com") && src.includes("/upload/")) {
+        src = src.replace("/upload/", "/upload/fl_faststart,q_auto/");
+      }
+
+      const ext = src.split("?")[0].split(".").pop()?.toLowerCase() ?? "mp4";
+      const mime = MIME[ext] ?? "video/mp4";
+
+      vid.removeAttribute("src");
+      vid.setAttribute("controls", "");
+      vid.setAttribute("preload", "metadata");
+      vid.setAttribute("playsinline", "");
+      vid.style.cssText = "max-width:100%;width:100%;border-radius:8px;margin:8px 0;display:block;";
+      vid.innerHTML = `<source src="${src}" type="${mime}"><p style="margin:8px 0;font-size:0.9rem;">Video cannot play inline — <a href="${src}" target="_blank" style="color:#4f46e5;text-decoration:underline;">open in browser</a></p>`;
+    });
+    return container.innerHTML;
+  };
+
   // Fetch all images and videos in the HTML, convert them to base64 data URLs,
   // and replace the src attributes so the file works with ZERO internet access.
   // Videos over 30 MB are skipped (keeps the HTML file manageable) and get a
@@ -1700,7 +1739,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                     {selectedTopic.title && (
                       <div
                         className="mb-4"
-                        dangerouslySetInnerHTML={{ __html: fixMediaUrls(selectedTopic.title) }}
+                        dangerouslySetInnerHTML={{ __html: fixVideoForOnline(fixMediaUrls(selectedTopic.title)) }}
                       />
                     )}
 
@@ -1719,14 +1758,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                     {selectedTopic.description && (
                       <div
                         className="mb-4"
-                        dangerouslySetInnerHTML={{ __html: fixMediaUrls(selectedTopic.description) }}
+                        dangerouslySetInnerHTML={{ __html: fixVideoForOnline(fixMediaUrls(selectedTopic.description)) }}
                       />
                     )}
 
                     {/* Topic Content from backend */}
                     {selectedTopic.content && (
                       <div
-                        dangerouslySetInnerHTML={{ __html: fixMediaUrls(selectedTopic.content) }}
+                        dangerouslySetInnerHTML={{ __html: fixVideoForOnline(fixMediaUrls(selectedTopic.content)) }}
                       />
                     )}
 
