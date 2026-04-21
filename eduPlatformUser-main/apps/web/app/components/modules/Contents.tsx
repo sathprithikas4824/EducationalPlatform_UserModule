@@ -11,6 +11,7 @@ import { cachedFetch } from "../../lib/apiCache";
 import { saveDownload } from "../../lib/downloads";
 import { loadBookmarks, toggleBookmark } from "../../lib/bookmarks";
 import { BookmarkHeart } from "../common/icons/BookmarkHeart";
+import TopicComments from "./TopicComments";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 
@@ -1857,6 +1858,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                       })}
                     </div>
                   </div>
+
+                  {/* Real-time comments + upvoting */}
+                  <TopicComments
+                    topicId={selectedTopic.topic_id}
+                    currentUserId={user?.id}
+                    currentUserName={user?.name}
+                  />
 
                   {/* Sentinel: when this scrolls into view, topic is marked complete */}
                   <div ref={contentEndRef} className="h-1" />
