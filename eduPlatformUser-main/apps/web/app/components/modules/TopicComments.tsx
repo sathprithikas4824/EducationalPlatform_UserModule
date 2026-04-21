@@ -48,7 +48,6 @@ export default function TopicComments({ topicId, currentUserId, currentUserName 
     const channel = supabase
       .channel(`topic-comments-${topicId}`)
       .on(
-        // @ts-expect-error — supabase types don't expose the overload correctly
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "topic_comments", filter: `topic_id=eq.${topicId}` },
         (payload: { new: Record<string, unknown> }) => {
@@ -71,7 +70,6 @@ export default function TopicComments({ topicId, currentUserId, currentUserName 
         }
       )
       .on(
-        // @ts-expect-error
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "topic_comments", filter: `topic_id=eq.${topicId}` },
         (payload: { new: Record<string, unknown> }) => {
@@ -82,7 +80,6 @@ export default function TopicComments({ topicId, currentUserId, currentUserName 
         }
       )
       .on(
-        // @ts-expect-error
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "topic_comments", filter: `topic_id=eq.${topicId}` },
         (payload: { old: Record<string, unknown> }) => {
