@@ -141,11 +141,10 @@ export default function TopicComments({ topicId, currentUserId, currentUserName 
   };
 
   const handleDelete = async (commentId: string) => {
-    const ok = await deleteComment(commentId);
-    if (ok) {
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
-      seenIds.current.delete(commentId);
-    }
+    // Remove from UI immediately — don't wait for DB round-trip
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+    seenIds.current.delete(commentId);
+    await deleteComment(commentId);
   };
 
   return (
