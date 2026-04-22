@@ -1,6 +1,6 @@
 import express from "express";
 import { supabase } from "../config/supabaseClient.js";
-import { verifyToken } from "../middleware/authMiddleware.js";
+import { verifyToken, requireAdmin } from "../middleware/authMiddleware.js";
 import { sanitizeBody } from "../middleware/sanitizeInput.js";
 
 const router = express.Router();
@@ -81,7 +81,7 @@ router.get("/category/:categoryId", async (req, res, next) => {
   }
 });
 
-router.post("/", verifyToken, sanitizeBody(['description']), async (req, res, next) => {
+router.post("/", verifyToken, requireAdmin, sanitizeBody(['description']), async (req, res, next) => {
   try {
     const { category_id, name, description } = req.body;
 
@@ -140,7 +140,7 @@ router.post("/", verifyToken, sanitizeBody(['description']), async (req, res, ne
   }
 });
 
-router.put("/:id", verifyToken, sanitizeBody(['description']), async (req, res, next) => {
+router.put("/:id", verifyToken, requireAdmin, sanitizeBody(['description']), async (req, res, next) => {
   try {
     const { name, description } = req.body;
     const { id } = req.params;
@@ -191,7 +191,7 @@ router.put("/:id", verifyToken, sanitizeBody(['description']), async (req, res, 
   }
 });
 
-router.delete("/:id", verifyToken, async (req, res, next) => {
+router.delete("/:id", verifyToken, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
 

@@ -135,8 +135,12 @@ app.use(
         return callback(null, true);
       }
 
-      // Allow all *.vercel.app subdomains (production + preview deployments)
-      if (/^https:\/\/.*\.vercel\.app$/.test(origin)) {
+      // Allow only specific production deployments — NOT a wildcard
+      const allowedProduction = [
+        "https://educational-platform-user-module.vercel.app",
+        // Add your admin panel Vercel URL here when deployed
+      ];
+      if (allowedProduction.includes(origin)) {
         return callback(null, true);
       }
 
@@ -235,13 +239,22 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate limiter
+// General rate limiter — all routes
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  message: "Too many requests. Try again later.",
+  message: { error: "Too many requests. Try again later." },
 });
 app.use(generalLimiter);
+
+// Stricter limiter for auth endpoints (login/signup brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many login attempts. Please wait 15 minutes." },
+});
+app.use("/auth/login", authLimiter);
+app.use("/auth/signup", authLimiter);
 
 // Routes
 app.use("/auth", authRoutes);

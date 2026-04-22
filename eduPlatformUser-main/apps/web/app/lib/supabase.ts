@@ -697,7 +697,7 @@ export function getDeviceId(): string {
   try {
     const existing = localStorage.getItem(DEVICE_ID_KEY);
     if (existing) return existing;
-    const id = "dev_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const id = "dev_" + crypto.randomUUID().replace(/-/g, "");
     localStorage.setItem(DEVICE_ID_KEY, id);
     return id;
   } catch {

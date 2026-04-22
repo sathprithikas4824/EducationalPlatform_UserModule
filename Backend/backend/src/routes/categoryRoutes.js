@@ -151,7 +151,7 @@
 
 import express from "express";
 import { body, param } from "express-validator";
-import { verifyToken } from "../middleware/authMiddleware.js";
+import { verifyToken, requireAdmin } from "../middleware/authMiddleware.js";
 import * as categoriesController from "../controllers/categoriesController.js";
 import { validate } from "../middleware/validationMiddleware.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
@@ -342,7 +342,8 @@ router.get(
 router.post(
   "/",
   verifyToken,
-  sanitizeBody(['description']), // ✅ Sanitize HTML in description
+  requireAdmin,
+  sanitizeBody(['description']),
   categoryCreateValidation,
   validate,
   asyncHandler(async (req, res) => {
@@ -359,7 +360,8 @@ router.post(
 router.put(
   "/:id",
   verifyToken,
-  sanitizeBody(['description']), // ✅ Sanitize HTML in description
+  requireAdmin,
+  sanitizeBody(['description']),
   categoryUpdateValidation,
   validate,
   asyncHandler(async (req, res) => {
@@ -376,6 +378,7 @@ router.put(
 router.delete(
   "/:id",
   verifyToken,
+  requireAdmin,
   categoryIdValidation,
   validate,
   asyncHandler(async (req, res) => {

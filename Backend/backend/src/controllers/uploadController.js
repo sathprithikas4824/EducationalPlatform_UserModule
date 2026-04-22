@@ -20,13 +20,15 @@ const __dirname = dirname(__filename);
 const storage = multer.memoryStorage();
 
 const imageFileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|gif|webp|svg/;
+  // SVG excluded — can contain embedded JavaScript
+  const allowedTypes = /jpeg|jpg|png|gif|webp/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+  const allowedMime = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const mimetype = allowedMime.includes(file.mimetype);
   if (mimetype && extname) {
     return cb(null, true);
   } else {
-    cb(new Error('Only image files are allowed (jpeg, jpg, png, gif, webp, svg)'));
+    cb(new Error('Only image files are allowed (jpeg, jpg, png, gif, webp)'));
   }
 };
 

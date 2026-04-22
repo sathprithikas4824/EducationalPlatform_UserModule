@@ -43,6 +43,7 @@ export async function postComment(
   content: string
 ): Promise<Comment | null> {
   if (!supabase) return null;
+  if (!content.trim() || content.length > 2000) return null;
   const { data, error } = await supabase
     .from("topic_comments")
     .insert({ topic_id: topicId, user_id: userId, user_name: userName, content })
