@@ -1088,12 +1088,23 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTopic?.topic_id, user]);
 
-  // Fetch topics for a specific submodule (with cache)
+  // Fetch topics for a specific submodule (with cache + live refresh)
   const fetchTopicsForSubmodule = useCallback(async (subId: number): Promise<Topic[]> => {
     try {
       return await cachedFetch<Topic[]>(
         `${BACKEND_URL}/api/topics/${subId}`,
-        `topics_${subId}`
+        `topics_${subId}`,
+        (freshTopics) => {
+          // Background refresh arrived — update selected topic if it belongs to this submodule
+          setTopics((prev) => {
+            if (prev.length === 0 || (prev[0] && prev[0].submodule_id !== subId)) return prev;
+            return freshTopics;
+          });
+          setSelectedTopic((prev) => {
+            if (!prev || prev.submodule_id !== subId) return prev;
+            return freshTopics.find((t) => t.topic_id === prev.topic_id) ?? prev;
+          });
+        }
       );
     } catch {
       return [];

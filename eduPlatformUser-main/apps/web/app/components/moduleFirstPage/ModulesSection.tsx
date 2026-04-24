@@ -12,7 +12,7 @@ import { BookmarkHeart } from "../common/icons/BookmarkHeart";
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 const CATEGORY_ID = 185; // AI course category
 const CACHE_PREFIX = "edu_api_";
-const CACHE_TTL = 24 * 60 * 60 * 1000;
+const CACHE_TTL = 2 * 60 * 1000; // 2 minutes — matches apiCache.ts so instant-paint stays recent
 
 interface BackendSubmodule {
   submodule_id: number;
@@ -162,10 +162,38 @@ const ModulesSection: React.FC = () => {
         ? undefined
         : setTimeout(() => setWakingUp(true), 12000);
 
+      // Helper: given fresh submodules, fetch their topics and rebuild the module list
+      const rebuildFromFresh = async (freshSubs: BackendSubmodule[]) => {
+        if (freshSubs.length === 0) return;
+        const freshTopics = await Promise.all(
+          freshSubs.map((sub) =>
+            cachedFetch<BackendTopic[]>(
+              `${BACKEND_URL}/api/topics/${sub.submodule_id}`,
+              `topics_${sub.submodule_id}`
+            ).catch(() => [] as BackendTopic[])
+          )
+        );
+        const progressUserId = user?.id ?? getLastUserId();
+        const freshProgress = progressUserId ? await getAllModulesProgress(progressUserId).catch(() => []) : [];
+        const freshBuilt = buildModulesFromData(freshSubs, freshTopics, freshProgress);
+        if (freshBuilt.length > 0) {
+          modulesRef.current = freshBuilt;
+          setCachedData({ submodules: freshSubs, topicsPerSubmodule: freshTopics });
+          setModules(freshBuilt);
+        }
+      };
+
       try {
         const submodulesData = await cachedFetch<{ data?: BackendSubmodule[] } | BackendSubmodule[]>(
           `${BACKEND_URL}/api/submodules/category/${CATEGORY_ID}`,
-          `submodules_cat_${CATEGORY_ID}`
+          `submodules_cat_${CATEGORY_ID}`,
+          async (freshRaw) => {
+            // Background refresh arrived — update UI with latest data
+            const freshSubs: BackendSubmodule[] = Array.isArray(freshRaw)
+              ? freshRaw
+              : (freshRaw as { data?: BackendSubmodule[] }).data || [];
+            await rebuildFromFresh(freshSubs);
+          }
         );
         const submodules: BackendSubmodule[] =
           Array.isArray(submodulesData) ? submodulesData :
@@ -174,7 +202,30 @@ const ModulesSection: React.FC = () => {
         const topicPromises = submodules.map((sub) =>
           cachedFetch<BackendTopic[]>(
             `${BACKEND_URL}/api/topics/${sub.submodule_id}`,
-            `topics_${sub.submodule_id}`
+            `topics_${sub.submodule_id}`,
+            async (freshTopics) => {
+              // Individual topic list updated — rebuild with latest topics for this sub
+              const latestSubs = modulesRef.current.length > 0 ? submodules : [];
+              if (latestSubs.length === 0) return;
+              const allTopics = await Promise.all(
+                latestSubs.map((s) =>
+                  s.submodule_id === sub.submodule_id
+                    ? Promise.resolve(freshTopics)
+                    : cachedFetch<BackendTopic[]>(
+                        `${BACKEND_URL}/api/topics/${s.submodule_id}`,
+                        `topics_${s.submodule_id}`
+                      ).catch(() => [] as BackendTopic[])
+                )
+              );
+              const progressUserId = user?.id ?? getLastUserId();
+              const freshProgress = progressUserId ? await getAllModulesProgress(progressUserId).catch(() => []) : [];
+              const freshBuilt = buildModulesFromData(latestSubs, allTopics, freshProgress);
+              if (freshBuilt.length > 0) {
+                modulesRef.current = freshBuilt;
+                setCachedData({ submodules: latestSubs, topicsPerSubmodule: allTopics });
+                setModules(freshBuilt);
+              }
+            }
           ).catch(() => [] as BackendTopic[])
         );
 

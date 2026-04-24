@@ -9,7 +9,7 @@
  */
 
 const CACHE_PREFIX = "edu_api_";
-const CACHE_TTL = 2 * 60 * 1000; // 2 minutes — keeps content fresh after admin edits
+const CACHE_TTL = 30 * 1000; // 30 seconds — ensures admin edits appear quickly on refresh
 
 // In-memory cache for instant access (survives client-side navigation)
 const memoryCache = new Map<string, { data: unknown; timestamp: number }>();
