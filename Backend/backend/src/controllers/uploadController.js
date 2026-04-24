@@ -5,7 +5,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { v2 as cloudinary } from 'cloudinary';
-import { Readable } from 'stream';
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -114,23 +113,14 @@ export const uploadVideo = async (req, res, next) => {
           use_filename: true,
           unique_filename: true,
           overwrite: false,
-          // Pre-generate the faststart version synchronously so the CDN-cached URL
-          // is ready before any user tries to play the video. fl_faststart moves the
-          // moov atom to the front of the MP4 so browsers can start playing after
-          // downloading just the first few KB instead of the entire file.
-          eager: [{ flags: 'faststart', format: 'mp4' }],
-          eager_async: false,
         },
         (error, result) => {
           if (error) return reject(error);
-          // Always return the original secure_url. The eager transformation pre-warms
-          // Cloudinary's CDN so the fl_faststart derived asset is ready when anyone
-          // later requests it via the admin panel's transformation URL, but we store
-          // the canonical URL to keep DB and SW cache consistent.
           resolve(result.secure_url);
         }
       );
-      Readable.from(file.buffer).pipe(uploadStream);
+      // Write buffer directly — Readable.from(Buffer) iterates bytes which breaks Cloudinary
+      uploadStream.end(file.buffer);
     });
 
     res.status(200).json({ success: true, videoUrl });
