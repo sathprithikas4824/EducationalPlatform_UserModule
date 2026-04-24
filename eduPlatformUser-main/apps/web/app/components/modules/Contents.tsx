@@ -257,7 +257,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const cacheMediaForSW = async (src: string, res: Response) => {
       try {
         if ("caches" in window) {
-          const cache = await caches.open("edu-media-v6");
+          const cache = await caches.open("edu-media-v8");
           await cache.put(src, res);
         }
       } catch {}
@@ -1095,6 +1095,17 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTopic?.topic_id, user]);
+
+  // After topic content renders, call video.load() on every <video> element.
+  // dangerouslySetInnerHTML creates new DOM nodes but mobile browsers (especially iOS Safari)
+  // don't always trigger the resource selection algorithm automatically for <video><source>.
+  // Calling .load() explicitly ensures the browser starts loading metadata and shows the player.
+  useEffect(() => {
+    if (!selectedTopic) return;
+    const el = contentWrapperRef.current;
+    if (!el) return;
+    el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => v.load());
+  }, [selectedTopic?.topic_id, selectedTopic?.content]);
 
   // Fetch topics for a specific submodule (with cache + live refresh)
   const fetchTopicsForSubmodule = useCallback(async (subId: number): Promise<Topic[]> => {

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v7";
+const CACHE_VERSION = "v8";
 const STATIC_CACHE = `edu-static-${CACHE_VERSION}`;
 const PAGE_CACHE   = `edu-pages-${CACHE_VERSION}`;
 const MEDIA_CACHE  = `edu-media-${CACHE_VERSION}`;
@@ -34,6 +34,39 @@ function isMediaRequest(url) {
   );
 }
 
+// Synthesize a proper 206 Partial Content response from a cached full response.
+// Needed for offline video seeking — the browser sends Range requests which must
+// be answered with the correct byte slice, not the full file.
+async function synthesizeRangeResponse(cachedFull, rangeHeader) {
+  const buffer = await cachedFull.clone().arrayBuffer();
+  const total = buffer.byteLength;
+  const contentType = cachedFull.headers.get("Content-Type") || "video/mp4";
+
+  const match = /bytes=(\d+)-(\d*)/.exec(rangeHeader);
+  if (!match) {
+    return new Response(buffer, {
+      status: 200,
+      headers: { "Content-Type": contentType, "Content-Length": String(total) },
+    });
+  }
+
+  const start = parseInt(match[1], 10);
+  const end = match[2] !== "" ? parseInt(match[2], 10) : total - 1;
+  const safeEnd = Math.min(end, total - 1);
+  const chunk = buffer.slice(start, safeEnd + 1);
+
+  return new Response(chunk, {
+    status: 206,
+    statusText: "Partial Content",
+    headers: {
+      "Content-Type": contentType,
+      "Content-Range": `bytes ${start}-${safeEnd}/${total}`,
+      "Content-Length": String(chunk.byteLength),
+      "Accept-Ranges": "bytes",
+    },
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
@@ -41,22 +74,53 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
 
   // ── Cross-origin media (Cloudinary / Supabase storage) ──────────────────────
-  // Cache-first: serve instantly offline; populate cache on first online fetch.
-  // This is what makes downloaded topic images and videos work offline in the
-  // iframe reader — the SW intercepts the Cloudinary/Supabase URL and serves
-  // the cached response without needing internet.
+  // Cache full responses under a URL-only key so any Range request can be served
+  // offline by synthesizing a byte-range slice from the cached complete file.
+  // This makes video offline seeking work after the video has been viewed online.
   if (isMediaRequest(url)) {
     event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((res) => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(MEDIA_CACHE).then((c) => c.put(request, clone));
+      (async () => {
+        const cacheKey = url.href; // canonical key: URL only, no Range header
+        const rangeHeader = request.headers.get("Range");
+
+        // Check if we already have the full response cached
+        const cache = await caches.open(MEDIA_CACHE);
+        const cachedFull = await cache.match(cacheKey);
+
+        if (cachedFull && cachedFull.status === 200) {
+          // Serve full response or synthesize a Range slice for video seeking
+          return rangeHeader
+            ? synthesizeRangeResponse(cachedFull, rangeHeader)
+            : cachedFull;
+        }
+
+        // Not cached — fetch from network
+        try {
+          const res = await fetch(request);
+
+          if (res.status === 200 && res.ok) {
+            // Full response — cache it directly
+            cache.put(cacheKey, res.clone());
+          } else if (res.status === 206 || res.ok) {
+            // Partial (Range) response — background-fetch the full file so future
+            // offline requests (including seeks) can be served from cache
+            (async () => {
+              try {
+                const fullRes = await fetch(
+                  new Request(cacheKey, { mode: "cors", credentials: "omit" })
+                );
+                if (fullRes.status === 200) {
+                  cache.put(cacheKey, fullRes);
+                }
+              } catch { /* network unavailable — skip background cache */ }
+            })();
           }
+
           return res;
-        }).catch(() => Response.error());
-      })
+        } catch {
+          return Response.error();
+        }
+      })()
     );
     return;
   }
