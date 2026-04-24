@@ -22,7 +22,7 @@ const nextConfig = {
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://*.supabase.co https://res.cloudinary.com",
               "media-src 'self' blob: data: https://res.cloudinary.com https://*.supabase.co",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://*.vercel.app",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://*.vercel.app https://educationalplatform-usermodule-2.onrender.com",
               "frame-src 'self'",
               "worker-src 'self'",
             ].join("; "),
