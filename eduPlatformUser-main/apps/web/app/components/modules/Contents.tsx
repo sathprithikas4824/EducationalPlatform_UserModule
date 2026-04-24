@@ -186,6 +186,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
   };
 
+  // Fix a standalone URL (not inside HTML) — same rules as fixMediaUrls.
+  const fixSrcUrl = (url: string | null): string => {
+    if (!url) return "";
+    if (/^https?:\/\/(?!localhost)/i.test(url)) return url;
+    const normalized = url.replace(/^https?:\/\/localhost(:\d+)?/i, "");
+    return BACKEND_URL + (normalized.startsWith("/") ? "" : "/") + normalized;
+  };
+
   // Rewrite relative or localhost src attributes to use the production backend URL.
   // Handles <img>, <video>, <source>, and <iframe> tags.
   const fixMediaUrls = (html: string): string => {
@@ -1403,7 +1411,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           {/* Submodule Hero Image — fetched from backend; falls back to gray placeholder */}
           {currentSubmodule?.image_url ? (
             <img
-              src={currentSubmodule.image_url}
+              src={fixSrcUrl(currentSubmodule.image_url)}
               alt={currentSubmodule.name}
               className="w-full max-w-[280px] h-[140px] sm:h-[160px] md:h-[180px] rounded-2xl md:rounded-3xl flex-shrink-0 object-cover"
             />
@@ -1752,7 +1760,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                     {selectedTopic.image_url && (
                       <div className="mb-4">
                         <img
-                          src={selectedTopic.image_url}
+                          src={fixSrcUrl(selectedTopic.image_url)}
                           alt={selectedTopic.name}
                           className="max-w-full rounded-xl object-contain"
                         />
