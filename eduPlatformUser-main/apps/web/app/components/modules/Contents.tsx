@@ -219,7 +219,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   // widest browser compatibility — moving it to <source> confuses some mobile browsers
   // and causes them to show "0:00" with no metadata loaded.
   // preload="auto" starts buffering immediately so playback begins within 1-2 s on click.
-  const fixVideoForOnline = (html: string): string => {
+  const fixVideoForOnline = useCallback((html: string): string => {
     if (!html || typeof document === "undefined") return html;
     const container = document.createElement("div");
     container.innerHTML = html;
@@ -239,7 +239,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       vid.style.cssText = "max-width:100%;width:100%;border-radius:8px;margin:8px 0;display:block;";
     });
     return container.innerHTML;
-  };
+  }, []);
 
   // Fetch all images and videos in the HTML, convert them to base64 data URLs,
   // and replace the src attributes so the file works with ZERO internet access.
@@ -254,7 +254,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const cacheMediaForSW = async (src: string, res: Response) => {
       try {
         if ("caches" in window) {
-          const cache = await caches.open("edu-media-v8");
+          const cache = await caches.open("edu-media-v9");
           await cache.put(src, res);
         }
       } catch {}
@@ -1097,12 +1097,23 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   // dangerouslySetInnerHTML creates new DOM nodes but mobile browsers (especially iOS Safari)
   // don't always trigger the resource selection algorithm automatically for <video><source>.
   // Calling .load() explicitly ensures the browser starts loading metadata and shows the player.
+  // Dependency is topic_id only — not content — so background data refreshes don't interrupt
+  // a video that is already buffering or playing.
   useEffect(() => {
     if (!selectedTopic) return;
     const el = contentWrapperRef.current;
     if (!el) return;
-    el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => v.load());
-  }, [selectedTopic?.topic_id, selectedTopic?.content]);
+    // requestAnimationFrame ensures the browser has painted the new DOM before we call load(),
+    // which is the safest point to trigger the resource-selection algorithm on mobile.
+    const raf = requestAnimationFrame(() => {
+      el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
+        // Only trigger load if the element hasn't started yet (HAVE_NOTHING = 0).
+        // If the browser already started buffering due to preload="auto", don't reset it.
+        if (v.readyState === 0) v.load();
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [selectedTopic?.topic_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch topics for a specific submodule (with cache + live refresh)
   const fetchTopicsForSubmodule = useCallback(async (subId: number): Promise<Topic[]> => {

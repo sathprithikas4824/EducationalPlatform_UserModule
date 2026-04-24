@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v8";
+const CACHE_VERSION = "v9";
 const STATIC_CACHE = `edu-static-${CACHE_VERSION}`;
 const PAGE_CACHE   = `edu-pages-${CACHE_VERSION}`;
 const MEDIA_CACHE  = `edu-media-${CACHE_VERSION}`;
@@ -34,37 +34,17 @@ function isMediaRequest(url) {
   );
 }
 
-// Synthesize a proper 206 Partial Content response from a cached full response.
-// Needed for offline video seeking — the browser sends Range requests which must
-// be answered with the correct byte slice, not the full file.
-async function synthesizeRangeResponse(cachedFull, rangeHeader) {
-  const buffer = await cachedFull.clone().arrayBuffer();
-  const total = buffer.byteLength;
+// Serve a cached full response for a Range request.
+// Returning the full 200 response is safe — all modern browsers accept a 200
+// in place of the expected 206 and simply download the complete file from
+// the local cache (fast) before playing. This avoids loading the entire
+// video into a RAM ArrayBuffer, which crashes the SW for large files (>50 MB).
+function synthesizeRangeResponse(cachedFull) {
   const contentType = cachedFull.headers.get("Content-Type") || "video/mp4";
-
-  const match = /bytes=(\d+)-(\d*)/.exec(rangeHeader);
-  if (!match) {
-    return new Response(buffer, {
-      status: 200,
-      headers: { "Content-Type": contentType, "Content-Length": String(total) },
-    });
-  }
-
-  const start = parseInt(match[1], 10);
-  const end = match[2] !== "" ? parseInt(match[2], 10) : total - 1;
-  const safeEnd = Math.min(end, total - 1);
-  const chunk = buffer.slice(start, safeEnd + 1);
-
-  return new Response(chunk, {
-    status: 206,
-    statusText: "Partial Content",
-    headers: {
-      "Content-Type": contentType,
-      "Content-Range": `bytes ${start}-${safeEnd}/${total}`,
-      "Content-Length": String(chunk.byteLength),
-      "Accept-Ranges": "bytes",
-    },
-  });
+  const contentLength = cachedFull.headers.get("Content-Length") || "";
+  const headers = { "Content-Type": contentType, "Accept-Ranges": "bytes" };
+  if (contentLength) headers["Content-Length"] = contentLength;
+  return new Response(cachedFull.clone().body, { status: 200, headers });
 }
 
 self.addEventListener("fetch", (event) => {
@@ -88,9 +68,9 @@ self.addEventListener("fetch", (event) => {
         const cachedFull = await cache.match(cacheKey);
 
         if (cachedFull && cachedFull.status === 200) {
-          // Serve full response or synthesize a Range slice for video seeking
+          // Serve full response (or wrap it to satisfy a Range request)
           return rangeHeader
-            ? synthesizeRangeResponse(cachedFull, rangeHeader)
+            ? synthesizeRangeResponse(cachedFull)
             : cachedFull;
         }
 
