@@ -64,10 +64,16 @@ export async function cachedFetch<T>(
   const cached = getCached<T>(cacheKey);
 
   if (cached) {
-    // Return cached data immediately for instant paint, then revalidate in background
-    backgroundRefresh<T>(url, cacheKey).then((freshData) => {
-      if (onRefresh) onRefresh(freshData);
-    }).catch(() => {});
+    // Return cached data immediately for instant paint, then revalidate in background.
+    // If background refresh fails (e.g. Render cold start > 25s on mobile), fall back to
+    // fetchWithRetry so the user eventually sees fresh data rather than stale forever.
+    backgroundRefresh<T>(url, cacheKey)
+      .then((freshData) => { if (onRefresh) onRefresh(freshData); })
+      .catch(() => {
+        fetchWithRetry<T>(url, cacheKey)
+          .then((freshData) => { if (onRefresh) onRefresh(freshData); })
+          .catch(() => {});
+      });
     return cached.data;
   }
 
@@ -75,24 +81,32 @@ export async function cachedFetch<T>(
   return fetchWithRetry<T>(url, cacheKey);
 }
 
-/** Background revalidation: single fast attempt, no long retries */
+/** Background revalidation: up to 2 attempts so mobile networks + Render cold starts are handled */
 async function backgroundRefresh<T>(url: string, cacheKey: string): Promise<T> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s — fast fail
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      cache: "no-store", // bypass browser HTTP cache
-    });
-    clearTimeout(timeoutId);
-    if (!res.ok) throw new Error(`${res.status}`);
-    const data: T = await res.json();
-    setCache(cacheKey, data);
-    return data;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    throw err;
+  const TIMEOUT_MS = 25000; // 25s — covers Render cold start on slow mobile networks
+  let lastErr: Error | null = null;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        cache: "no-store", // bypass browser HTTP cache
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error(`${res.status}`);
+      const data: T = await res.json();
+      setCache(cacheKey, data);
+      return data;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 3000)); // brief pause before retry
+    }
   }
+
+  throw lastErr ?? new Error("Background refresh failed");
 }
 
 /** Initial load fetch: retries with back-off to handle Render cold starts */
