@@ -212,34 +212,31 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       .replace(/(<iframe[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc);
   };
 
-  // Fix <video> elements for fast online playback.
-  // TipTap's VideoNode serialises controls="true" which browsers ignore (need bare controls).
-  // Adding preload="metadata" + a declared <source type> lets the browser show the player
-  // and first frame immediately, then stream on click without buffering the full file.
-  // Never rewrite the Cloudinary URL — on-demand transformations block until Cloudinary
-  // finishes processing (can be 30-60 s for large videos). The stored URL is already CDN-cached.
+  // Fix <video> elements for immediate online playback.
+  // TipTap's VideoNode serialises controls="true" (JS boolean) which browsers treat as
+  // the string "true" and may ignore — replace with the bare boolean attribute.
+  // Keep src directly on the <video> element (not inside a <source> child) for the
+  // widest browser compatibility — moving it to <source> confuses some mobile browsers
+  // and causes them to show "0:00" with no metadata loaded.
+  // preload="auto" starts buffering immediately so playback begins within 1-2 s on click.
   const fixVideoForOnline = (html: string): string => {
     if (!html || typeof document === "undefined") return html;
-    const MIME: Record<string, string> = {
-      mp4: "video/mp4", webm: "video/webm",
-      ogg: "video/ogg", mov: "video/mp4",
-      avi: "video/x-msvideo", mkv: "video/x-matroska",
-    };
     const container = document.createElement("div");
     container.innerHTML = html;
     container.querySelectorAll("video").forEach((vid) => {
-      const src = vid.getAttribute("src") || vid.querySelector("source")?.getAttribute("src");
+      // Resolve src — may be on the <video> or on an existing <source> child
+      const src = vid.getAttribute("src") || vid.querySelector("source")?.getAttribute("src") || "";
       if (!src) return;
 
-      const ext = src.split("?")[0].split(".").pop()?.toLowerCase() ?? "mp4";
-      const mime = MIME[ext] ?? "video/mp4";
+      // Remove any <source> children — we put src directly on the element
+      Array.from(vid.querySelectorAll("source")).forEach((s) => s.remove());
 
-      vid.removeAttribute("src");
+      vid.setAttribute("src", src);
       vid.setAttribute("controls", "");
-      vid.setAttribute("preload", "metadata");
-      vid.setAttribute("playsinline", "");
+      vid.setAttribute("preload", "auto"); // buffer immediately so click-to-play is instant
+      vid.setAttribute("playsinline", ""); // required for inline play on iOS
+      vid.removeAttribute("autoplay");     // never autoplay (respect user intent)
       vid.style.cssText = "max-width:100%;width:100%;border-radius:8px;margin:8px 0;display:block;";
-      vid.innerHTML = `<source src="${src}" type="${mime}">`;
     });
     return container.innerHTML;
   };
