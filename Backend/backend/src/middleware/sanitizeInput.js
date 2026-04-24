@@ -7,13 +7,16 @@ const sanitizeConfig = {
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'u', 's', 'mark',
     'blockquote', 'code', 'pre',
-    'img', 'div'
+    'img', 'div', 'figure', 'figcaption',
+    'video', 'source',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'colgroup', 'col',
+    'hr', 'details', 'summary'
   ],
   allowedAttributes: {
     'a': ['href', 'title', 'target', 'rel', 'class', 'style'],
     'span': ['class', 'style', 'data-circle', 'data-color'],
     'p': ['class', 'style'],
-    'div': ['class', 'style'],
+    'div': ['class', 'style', 'data-youtube-video', 'data-type'],
     'h1': ['class', 'style'],
     'h2': ['class', 'style'],
     'h3': ['class', 'style'],
@@ -27,7 +30,21 @@ const sanitizeConfig = {
     'code': ['class', 'style'],
     'pre': ['class', 'style'],
     'mark': ['class', 'style', 'data-color'],
-    'img': ['src', 'alt', 'title', 'class', 'style'],
+    'img': ['src', 'alt', 'title', 'class', 'style', 'width', 'height'],
+    'figure': ['class', 'style'],
+    'figcaption': ['class', 'style'],
+    'video': ['src', 'controls', 'autoplay', 'muted', 'loop', 'preload', 'playsinline', 'width', 'height', 'class', 'style', 'poster'],
+    'source': ['src', 'type'],
+    'table': ['class', 'style'],
+    'thead': ['class', 'style'],
+    'tbody': ['class', 'style'],
+    'tfoot': ['class', 'style'],
+    'tr': ['class', 'style'],
+    'th': ['class', 'style', 'colspan', 'rowspan'],
+    'td': ['class', 'style', 'colspan', 'rowspan'],
+    'hr': ['class', 'style'],
+    'details': ['class', 'style'],
+    'summary': ['class', 'style'],
     'strong': ['style'],
     'em': ['style'],
     'b': ['style'],
@@ -121,10 +138,10 @@ export const sanitizeBody = (fields) => {
         // Sanitize HTML content
         req.body[field] = sanitizeHtml(req.body[field], sanitizeConfig);
 
-        // Additional length check (max 50KB per field)
-        if (req.body[field].length > 50000) {
+        // Additional length check (max 400KB per field)
+        if (req.body[field].length > 400000) {
           return res.status(400).json({
-            error: `Field "${field}" exceeds maximum length of 50,000 characters`
+            error: `Field "${field}" exceeds maximum length of 400,000 characters`
           });
         }
       }

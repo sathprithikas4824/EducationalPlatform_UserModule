@@ -153,7 +153,7 @@ app.use(
 );
 
 // Parsers
-app.use(express.json({ limit: "50kb" }));
+app.use(express.json({ limit: "500kb" }));
 app.use(cookieParser());
 app.use(compression());
 
