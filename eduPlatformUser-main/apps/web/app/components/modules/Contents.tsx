@@ -1108,9 +1108,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
-          // readyState 0 = HAVE_NOTHING — browser hasn't started loading at all.
-          // Don't reset videos that are already buffering or playing.
-          if (v.readyState === 0) v.load();
+          // Trigger load() only if the video hasn't started playing yet.
+          // v.played.length === 0 means no portion has ever been played.
+          // v.paused covers both "not started" and "paused before first play".
+          // This handles readyState 0 (HAVE_NOTHING) and readyState 1 (HAVE_METADATA
+          // but can't play yet) while never interrupting an active or buffering playback.
+          if (v.played.length === 0 && v.paused) v.load();
         });
       });
     });

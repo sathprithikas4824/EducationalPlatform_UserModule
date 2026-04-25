@@ -88,12 +88,13 @@ self.addEventListener("fetch", (event) => {
           if (res.status === 200 && res.ok) {
             // Full CORS response — cache it directly
             cache.put(cacheKey, res.clone());
-          } else if (res.type === "opaque") {
-            // Opaque (no-cors) response from cross-origin <video>/<img> — cache it so the
-            // resource is available offline. We can't inspect headers/status but the browser
-            // can use opaque responses for media playback.
+          } else if (res.type === "opaque" && !rangeHeader) {
+            // Full opaque response (non-Range request) — safe to cache for offline use.
+            // IMPORTANT: never cache opaque Range responses — they are partial chunks,
+            // not the full file. Caching a Range chunk and serving it as the full file
+            // corrupts the video (wrong bytes for every subsequent Range request).
             try { cache.put(cacheKey, res.clone()); } catch { /* quota exceeded — skip */ }
-          } else if (res.status === 206) {
+          } else if (res.status === 206 || (res.type === "opaque" && rangeHeader)) {
             // Partial (Range) response — background-fetch the full file so future
             // offline requests (including seeks) can be served from cache
             (async () => {
@@ -104,7 +105,7 @@ self.addEventListener("fetch", (event) => {
                 if (fullRes.status === 200) {
                   cache.put(cacheKey, fullRes);
                 }
-              } catch { /* network unavailable — skip background cache */ }
+              } catch { /* network unavailable or no CORS — skip background cache */ }
             })();
           }
 
