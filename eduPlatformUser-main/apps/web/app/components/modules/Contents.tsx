@@ -995,46 +995,6 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     };
   }, [submoduleId, user?.id]);
 
-  // iPhone bfcache restoration: when iOS Safari restores a page from the back/forward cache,
-  // React effects do NOT re-run, so content stays frozen at whatever was cached in localStorage.
-  // This catches the pageshow event (persisted=true) and forces a fresh network fetch so the
-  // user sees updated text, images, and videos added by the admin.
-  useEffect(() => {
-    const handlePageShow = (e: PageTransitionEvent) => {
-      if (!e.persisted) return; // normal page load — main useEffect already handles this
-      const progressUserId = user?.id ?? getLastUserId();
-      const cancelled = { value: false };
-      (async () => {
-        try {
-          const [rawSubs, freshTopics] = await Promise.all([
-            cachedFetch<SubModuleData[] | { data?: SubModuleData[] }>(
-              `${BACKEND_URL}/api/submodules`,
-              "all_submodules"
-            ),
-            cachedFetch<Topic[]>(
-              `${BACKEND_URL}/api/topics/${submoduleId}`,
-              `topics_${submoduleId}`
-            ),
-          ]);
-          if (cancelled.value) return;
-          const freshAll: SubModuleData[] = Array.isArray(rawSubs)
-            ? rawSubs
-            : (rawSubs as { data?: SubModuleData[] }).data || [];
-          const freshCurrent = freshAll.find((s) => s.submodule_id === submoduleId);
-          const freshCompleted = progressUserId
-            ? await getCompletedTopics(progressUserId, submoduleId)
-            : [];
-          if (freshCurrent && !cancelled.value) {
-            applyTopicData(freshTopics, freshCurrent, freshCompleted, cancelled, true);
-          }
-        } catch { /* network unavailable — show cached content as-is */ }
-      })();
-      return () => { cancelled.value = true; };
-    };
-    window.addEventListener("pageshow", handlePageShow);
-    return () => window.removeEventListener("pageshow", handlePageShow);
-  }, [submoduleId, user?.id, applyTopicData]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Track reading progress via scroll position — guests see 0%, no tracking
   useEffect(() => {
     const contentEl = contentWrapperRef.current;
@@ -1229,6 +1189,47 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       });
     }
   }, []);
+
+  // iPhone bfcache restoration: when iOS Safari restores a page from the back/forward cache,
+  // React effects do NOT re-run, so content stays frozen at whatever was cached in localStorage.
+  // This catches the pageshow event (persisted=true) and forces a fresh network fetch so the
+  // user sees updated text, images, and videos added by the admin.
+  // Must be declared after applyTopicData (useCallback above) to avoid "used before declaration".
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return; // normal page load — main useEffect already handles this
+      const progressUserId = user?.id ?? getLastUserId();
+      const cancelled = { value: false };
+      (async () => {
+        try {
+          const [rawSubs, freshTopics] = await Promise.all([
+            cachedFetch<SubModuleData[] | { data?: SubModuleData[] }>(
+              `${BACKEND_URL}/api/submodules`,
+              "all_submodules"
+            ),
+            cachedFetch<Topic[]>(
+              `${BACKEND_URL}/api/topics/${submoduleId}`,
+              `topics_${submoduleId}`
+            ),
+          ]);
+          if (cancelled.value) return;
+          const freshAll: SubModuleData[] = Array.isArray(rawSubs)
+            ? rawSubs
+            : (rawSubs as { data?: SubModuleData[] }).data || [];
+          const freshCurrent = freshAll.find((s) => s.submodule_id === submoduleId);
+          const freshCompleted = progressUserId
+            ? await getCompletedTopics(progressUserId, submoduleId)
+            : [];
+          if (freshCurrent && !cancelled.value) {
+            applyTopicData(freshTopics, freshCurrent, freshCompleted, cancelled, true);
+          }
+        } catch { /* network unavailable — show cached content as-is */ }
+      })();
+      return () => { cancelled.value = true; };
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, [submoduleId, user?.id, applyTopicData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initial data fetch with retry for backend cold starts
   useEffect(() => {
