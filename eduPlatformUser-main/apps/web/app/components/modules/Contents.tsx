@@ -1108,12 +1108,17 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
-          // Trigger load() only if the video hasn't started playing yet.
-          // v.played.length === 0 means no portion has ever been played.
-          // v.paused covers both "not started" and "paused before first play".
-          // This handles readyState 0 (HAVE_NOTHING) and readyState 1 (HAVE_METADATA
-          // but can't play yet) while never interrupting an active or buffering playback.
-          if (v.played.length === 0 && v.paused) v.load();
+          // Set via JS IDL attributes — required because browsers sometimes don't
+          // trigger the resource-selection algorithm for <video> elements created
+          // via innerHTML (dangerouslySetInnerHTML). Setting the IDL property directly
+          // guarantees the browser re-runs resource selection for this element.
+          v.controls = true;
+          v.preload = "auto";
+          v.setAttribute("playsinline", "");
+          // Always call load() — this is the most reliable way to make a video element
+          // start fetching its source after being injected via innerHTML.
+          // Safe because this effect only re-runs when the content string changes.
+          v.load();
         });
       });
     });
