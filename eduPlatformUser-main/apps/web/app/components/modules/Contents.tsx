@@ -995,6 +995,46 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     };
   }, [submoduleId, user?.id]);
 
+  // iPhone bfcache restoration: when iOS Safari restores a page from the back/forward cache,
+  // React effects do NOT re-run, so content stays frozen at whatever was cached in localStorage.
+  // This catches the pageshow event (persisted=true) and forces a fresh network fetch so the
+  // user sees updated text, images, and videos added by the admin.
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return; // normal page load — main useEffect already handles this
+      const progressUserId = user?.id ?? getLastUserId();
+      const cancelled = { value: false };
+      (async () => {
+        try {
+          const [rawSubs, freshTopics] = await Promise.all([
+            cachedFetch<SubModuleData[] | { data?: SubModuleData[] }>(
+              `${BACKEND_URL}/api/submodules`,
+              "all_submodules"
+            ),
+            cachedFetch<Topic[]>(
+              `${BACKEND_URL}/api/topics/${submoduleId}`,
+              `topics_${submoduleId}`
+            ),
+          ]);
+          if (cancelled.value) return;
+          const freshAll: SubModuleData[] = Array.isArray(rawSubs)
+            ? rawSubs
+            : (rawSubs as { data?: SubModuleData[] }).data || [];
+          const freshCurrent = freshAll.find((s) => s.submodule_id === submoduleId);
+          const freshCompleted = progressUserId
+            ? await getCompletedTopics(progressUserId, submoduleId)
+            : [];
+          if (freshCurrent && !cancelled.value) {
+            applyTopicData(freshTopics, freshCurrent, freshCompleted, cancelled, true);
+          }
+        } catch { /* network unavailable — show cached content as-is */ }
+      })();
+      return () => { cancelled.value = true; };
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, [submoduleId, user?.id, applyTopicData]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Track reading progress via scroll position — guests see 0%, no tracking
   useEffect(() => {
     const contentEl = contentWrapperRef.current;
@@ -1093,27 +1133,30 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTopic?.topic_id, user]);
 
-  // After topic content renders, call video.load() on every <video> element.
-  // dangerouslySetInnerHTML creates new DOM nodes but mobile browsers (especially iOS Safari)
-  // don't always trigger the resource selection algorithm automatically for <video><source>.
-  // Calling .load() explicitly ensures the browser starts loading metadata and shows the player.
-  // Dependency is topic_id only — not content — so background data refreshes don't interrupt
-  // a video that is already buffering or playing.
+  // After topic content renders (or after background refresh changes the HTML), call video.load()
+  // on every <video> element that hasn't started loading yet.
+  // iOS Safari often ignores preload="auto" and keeps readyState=0 until load() is called
+  // explicitly. Double-RAF ensures we're past iOS's internal rendering phase before we trigger
+  // the resource-selection algorithm. Including content fields in deps means newly added videos
+  // (from admin background refresh) also get load() called while already-playing videos are
+  // protected by the readyState===0 guard.
   useEffect(() => {
     if (!selectedTopic) return;
     const el = contentWrapperRef.current;
     if (!el) return;
-    // requestAnimationFrame ensures the browser has painted the new DOM before we call load(),
-    // which is the safest point to trigger the resource-selection algorithm on mobile.
-    const raf = requestAnimationFrame(() => {
-      el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
-        // Only trigger load if the element hasn't started yet (HAVE_NOTHING = 0).
-        // If the browser already started buffering due to preload="auto", don't reset it.
-        if (v.readyState === 0) v.load();
+    let raf1: number, raf2: number;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
+          // readyState 0 = HAVE_NOTHING — browser hasn't started loading at all.
+          // Don't reset videos that are already buffering or playing.
+          if (v.readyState === 0) v.load();
+        });
       });
     });
-    return () => cancelAnimationFrame(raf);
-  }, [selectedTopic?.topic_id]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTopic?.topic_id, selectedTopic?.title, selectedTopic?.description, selectedTopic?.content]);
 
   // Fetch topics for a specific submodule (with cache + live refresh)
   const fetchTopicsForSubmodule = useCallback(async (subId: number): Promise<Topic[]> => {

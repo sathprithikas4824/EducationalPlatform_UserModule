@@ -25,12 +25,16 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Returns true for Cloudinary or Supabase media (images + videos)
+// Returns true for Cloudinary, Supabase media, or Render backend media files.
+// We match Render backend by file extension so API routes (/api/*) are never intercepted.
+const MEDIA_EXTS = /\.(mp4|webm|ogg|mov|avi|mkv|jpg|jpeg|png|gif|webp)(\?|$)/i;
 function isMediaRequest(url) {
   return (
     url.hostname.includes("res.cloudinary.com") ||
     (url.hostname.includes("supabase.co") &&
-      (url.pathname.includes("course-images") || url.pathname.includes("course-videos")))
+      (url.pathname.includes("course-images") || url.pathname.includes("course-videos"))) ||
+    (url.hostname === "educationalplatform-usermodule-2.onrender.com" &&
+      MEDIA_EXTS.test(url.pathname))
   );
 }
 
@@ -67,11 +71,14 @@ self.addEventListener("fetch", (event) => {
         const cache = await caches.open(MEDIA_CACHE);
         const cachedFull = await cache.match(cacheKey);
 
-        if (cachedFull && cachedFull.status === 200) {
-          // Serve full response (or wrap it to satisfy a Range request)
-          return rangeHeader
-            ? synthesizeRangeResponse(cachedFull)
-            : cachedFull;
+        if (cachedFull && (cachedFull.status === 200 || cachedFull.type === "opaque")) {
+          if (rangeHeader && cachedFull.status === 200) {
+            // Synthesize a Range response only for inspectable (non-opaque) cached responses
+            return synthesizeRangeResponse(cachedFull);
+          }
+          // For opaque cached responses or non-Range requests, serve as-is.
+          // Browsers accept opaque responses for <video> / <img> playback.
+          return cachedFull;
         }
 
         // Not cached — fetch from network
@@ -79,9 +86,14 @@ self.addEventListener("fetch", (event) => {
           const res = await fetch(request);
 
           if (res.status === 200 && res.ok) {
-            // Full response — cache it directly
+            // Full CORS response — cache it directly
             cache.put(cacheKey, res.clone());
-          } else if (res.status === 206 || res.ok) {
+          } else if (res.type === "opaque") {
+            // Opaque (no-cors) response from cross-origin <video>/<img> — cache it so the
+            // resource is available offline. We can't inspect headers/status but the browser
+            // can use opaque responses for media playback.
+            try { cache.put(cacheKey, res.clone()); } catch { /* quota exceeded — skip */ }
+          } else if (res.status === 206) {
             // Partial (Range) response — background-fetch the full file so future
             // offline requests (including seeks) can be served from cache
             (async () => {

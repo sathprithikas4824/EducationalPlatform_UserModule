@@ -90,9 +90,13 @@ async function backgroundRefresh<T>(url: string, cacheKey: string): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-      const res = await fetch(url, {
+      // Append _cb timestamp: iOS Safari sometimes ignores cache:"no-store" and serves a
+      // stale HTTP-cached response. A unique query param guarantees a true network round-trip.
+      const bustUrl = url + (url.includes("?") ? "&" : "?") + `_cb=${Date.now()}`;
+      const res = await fetch(bustUrl, {
         signal: controller.signal,
-        cache: "no-store", // bypass browser HTTP cache
+        cache: "no-store",
+        headers: { "Pragma": "no-cache" }, // belt-and-suspenders for iOS Safari
       });
       clearTimeout(timeoutId);
       if (!res.ok) throw new Error(`${res.status}`);
@@ -125,6 +129,7 @@ async function fetchWithRetry<T>(url: string, cacheKey: string): Promise<T> {
       const res = await fetch(url, {
         signal: controller.signal,
         cache: "no-store",
+        headers: { "Pragma": "no-cache" },
       }).finally(() => clearTimeout(timeoutId));
 
       if (res.status === 429) {
