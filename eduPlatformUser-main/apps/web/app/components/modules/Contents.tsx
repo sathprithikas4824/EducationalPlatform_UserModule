@@ -1157,17 +1157,24 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
   // Offline mode: convert pre-cached video URLs to blob: so they play without network.
   // Large videos (>30 MB) are stored in the SW media cache during the Download action via
-  // cacheMediaForSW(). The SW itself cannot serve them for cross-origin Range requests
-  // (opaque no-cors responses break Chrome/Android), so we pull them from the Cache API
-  // on the client and replace <source src> with a blob: URL before calling load().
+  // cacheMediaForSW(). We pull them from the Cache API on the client and replace
+  // <source src> with a blob: URL before calling load().
+  // Runs immediately (handles "started offline") AND on the 'offline' event (handles
+  // "went offline mid-session" — without this the effect never re-fires after the user
+  // drops connectivity, so navigator.onLine was true at mount and never checked again).
   useEffect(() => {
-    if (typeof window === "undefined" || navigator.onLine || !("caches" in window)) return;
+    if (typeof window === "undefined" || !("caches" in window)) return;
     const el = contentWrapperRef.current;
     if (!el) return;
 
-    (async () => {
+    const swapVideosForOffline = async () => {
+      if (navigator.onLine) return; // Cloudinary serves natively when online
       try {
-        const cache = await caches.open("edu-media-v13");
+        // Version-agnostic: pick the most recent edu-media-* cache
+        const allNames = await caches.keys();
+        const mediaName = allNames.filter((n) => n.startsWith("edu-media-")).sort().pop();
+        if (!mediaName) return;
+        const cache = await caches.open(mediaName);
         const videos = Array.from(el.querySelectorAll<HTMLVideoElement>("video"));
         for (const v of videos) {
           const source = v.querySelector("source");
@@ -1182,7 +1189,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           v.load();
         }
       } catch { /* cache unavailable — videos stay at original URL */ }
-    })();
+    };
+
+    swapVideosForOffline();
+    window.addEventListener("offline", swapVideosForOffline);
+    return () => window.removeEventListener("offline", swapVideosForOffline);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTopic?.topic_id, selectedTopic?.content]);
 
