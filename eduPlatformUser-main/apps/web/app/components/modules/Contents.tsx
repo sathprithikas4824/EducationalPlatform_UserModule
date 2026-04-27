@@ -1130,10 +1130,34 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           v.removeAttribute("crossorigin"); // SW no longer intercepts videos; crossorigin not needed and causes iOS 200-vs-206 failure
           v.setAttribute("playsinline", "");
 
-          // Show a fallback link if the video cannot load on this device
-          v.onerror = () => {
+          // When video fails to load, try the offline cache first (most reliable mobile
+          // trigger — the 'offline' event can be delayed or suppressed on Android/iOS).
+          // Only show the error fallback link if the cache also has nothing.
+          v.onerror = async () => {
+            const source = v.querySelector("source");
+            const src = source?.getAttribute("src") || v.getAttribute("src") || "";
+            // Attempt cache lookup when the src is a remote URL (not already blob/data)
+            if (src && !src.startsWith("blob:") && !src.startsWith("data:") && "caches" in window) {
+              try {
+                const allNames = await caches.keys();
+                const mediaName = allNames.filter((n) => n.startsWith("edu-media-")).sort().pop();
+                if (mediaName) {
+                  const cache = await caches.open(mediaName);
+                  const cached = await cache.match(src);
+                  if (cached && cached.status === 200) {
+                    const blob = await cached.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    v.onerror = null; // clear to prevent retry loop
+                    if (source) source.setAttribute("src", blobUrl);
+                    else v.setAttribute("src", blobUrl);
+                    v.load();
+                    return; // served from cache — no fallback link needed
+                  }
+                }
+              } catch { /* cache unavailable — fall through to error link */ }
+            }
+            // Cache miss or online error — show fallback link
             if (v.parentNode && !v.parentElement?.querySelector(".video-fallback")) {
-              const src = v.querySelector("source")?.getAttribute("src") || v.getAttribute("src") || "";
               const p = document.createElement("p");
               p.className = "video-fallback";
               p.style.cssText = "margin:8px 0;font-size:0.9rem;color:#6b7280;";
