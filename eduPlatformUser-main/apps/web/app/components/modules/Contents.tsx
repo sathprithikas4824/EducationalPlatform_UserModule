@@ -238,7 +238,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const mime = MIME[ext] ?? "video/mp4";
 
       vid.setAttribute("controls", "");
-      vid.setAttribute("preload", "auto");        // buffer immediately so click-to-play is instant
+      vid.setAttribute("preload", "metadata");    // iOS Safari reliably honours "metadata"; "auto" is often silently ignored
       vid.setAttribute("playsinline", "");        // required for inline play on iOS
       // Only apply crossorigin for CDN origins that return CORS headers (Cloudinary, Supabase).
       // Render backend videos do NOT return Access-Control-Allow-Origin, so setting
@@ -276,7 +276,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const cacheMediaForSW = async (src: string, res: Response) => {
       try {
         if ("caches" in window) {
-          const cache = await caches.open("edu-media-v10");
+          const cache = await caches.open("edu-media-v11");
           await cache.put(src, res);
         }
       } catch {}
@@ -1128,7 +1128,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       raf2 = requestAnimationFrame(() => {
         el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
           v.controls = true;
-          v.preload = "auto";
+          v.preload = "metadata";
           // Only apply crossorigin for CDN origins that genuinely support CORS.
           // Setting it on Render backend videos forces CORS mode — the server does not
           // return Access-Control-Allow-Origin, so iOS Safari / Android Chrome block the
@@ -1155,7 +1155,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
             }
           };
 
-          v.load();
+          // Only call load() when the browser has not yet started a network request
+          // (networkState 0 = NETWORK_EMPTY). Calling load() while a request is already
+          // in progress (networkState 2 = NETWORK_LOADING) aborts it, which puts iOS
+          // Safari / Android Chrome into an error state and shows the fallback link.
+          if (v.networkState === 0) {
+            v.load();
+          }
         });
       });
     });
@@ -1175,7 +1181,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
     (async () => {
       try {
-        const cache = await caches.open("edu-media-v10");
+        const cache = await caches.open("edu-media-v11");
         const videos = Array.from(el.querySelectorAll<HTMLVideoElement>("video"));
         for (const v of videos) {
           const source = v.querySelector("source");
