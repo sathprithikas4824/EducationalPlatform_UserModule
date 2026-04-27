@@ -1144,6 +1144,37 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTopic?.topic_id, selectedTopic?.title, selectedTopic?.description, selectedTopic?.content]);
 
+  // Offline mode: convert pre-cached video URLs to blob: so they play without network.
+  // Large videos (>30 MB) are stored in the SW media cache during the Download action via
+  // cacheMediaForSW(). The SW itself cannot serve them for cross-origin Range requests
+  // (opaque no-cors responses break Chrome/Android), so we pull them from the Cache API
+  // on the client and replace <source src> with a blob: URL before calling load().
+  useEffect(() => {
+    if (typeof window === "undefined" || navigator.onLine || !("caches" in window)) return;
+    const el = contentWrapperRef.current;
+    if (!el) return;
+
+    (async () => {
+      try {
+        const cache = await caches.open("edu-media-v9");
+        const videos = Array.from(el.querySelectorAll<HTMLVideoElement>("video"));
+        for (const v of videos) {
+          const source = v.querySelector("source");
+          const src = source?.getAttribute("src") || v.getAttribute("src") || "";
+          if (!src || src.startsWith("data:") || src.startsWith("blob:")) continue;
+          const cached = await cache.match(src);
+          if (!cached || cached.status !== 200) continue;
+          const blob = await cached.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          if (source) source.setAttribute("src", blobUrl);
+          else v.setAttribute("src", blobUrl);
+          v.load();
+        }
+      } catch { /* cache unavailable — videos stay at original URL */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTopic?.topic_id, selectedTopic?.content]);
+
   // Fetch topics for a specific submodule (with cache + live refresh)
   const fetchTopicsForSubmodule = useCallback(async (subId: number): Promise<Topic[]> => {
     try {

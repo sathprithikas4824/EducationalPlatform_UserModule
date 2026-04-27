@@ -7,7 +7,12 @@ const ALL_CACHES   = [STATIC_CACHE, PAGE_CACHE, MEDIA_CACHE];
 const OFFLINE_PAGE  = "/offline.html";
 const PRECACHE_URLS = [OFFLINE_PAGE];
 
+// True when a previously active SW exists — used in activate to signal clients to reload.
+let isUpdate = false;
+
 self.addEventListener("install", (event) => {
+  // If there is already an active SW controlling clients, this is an update.
+  isUpdate = !!self.registration.active;
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => cache.addAll(PRECACHE_URLS))
@@ -22,6 +27,14 @@ self.addEventListener("activate", (event) => {
         Promise.all(names.filter((n) => !ALL_CACHES.includes(n)).map((n) => caches.delete(n)))
       )
       .then(() => self.clients.claim())
+      .then(async () => {
+        // On updates (not first install): tell every open tab to reload so the
+        // new JS bundle — which has the video playback fixes — is picked up
+        // immediately without the user having to manually refresh.
+        if (!isUpdate) return;
+        const allClients = await self.clients.matchAll({ type: "window" });
+        allClients.forEach((c) => c.postMessage({ type: "SW_ACTIVATED" }));
+      })
   );
 });
 
@@ -108,34 +121,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── Pre-cached cross-origin media (Render backend videos + large videos cached during Download) ──
-  // cacheMediaForSW() pre-caches large videos in MEDIA_CACHE so they work offline.
-  // Without this block the SW skips cross-origin requests and the cache is never used.
-  // Only intercept URLs that look like video files or come from known media backends to
-  // avoid proxying unrelated cross-origin requests (fonts, analytics, etc.).
-  const RENDER_BACKEND = "educationalplatform-usermodule-2.onrender.com";
-  const VIDEO_EXT = /\.(mp4|m4v|webm|ogg|mov|avi|mkv)(\?.*)?$/i;
-  if (url.origin !== self.location.origin) {
-    if (url.hostname === RENDER_BACKEND || VIDEO_EXT.test(url.pathname)) {
-      event.respondWith(
-        (async () => {
-          try {
-            const cache = await caches.open(MEDIA_CACHE);
-            const cachedFull = await cache.match(url.href);
-            if (cachedFull && cachedFull.status === 200) {
-              const rangeHeader = request.headers.get("Range");
-              return rangeHeader ? synthesizeRangeResponse(cachedFull) : cachedFull;
-            }
-          } catch { /* cache unavailable */ }
-          try { return await fetch(request); } catch { return Response.error(); }
-        })()
-      );
-      return;
-    }
-    return; // other cross-origin requests — let browser handle directly
-  }
-
   // ── Same-origin only beyond this point ────────────────────────────────────
+  // Cross-origin video requests (Render backend etc.) are NOT intercepted here.
+  // Opaque (no-cors) SW responses break Chrome/Android Range-based video streaming,
+  // so those requests bypass the SW and go directly to the network.
+  // Large videos pre-cached during the Download action are served via client-side
+  // Cache API lookup in Contents.tsx (see the offline video effect there).
+  if (url.origin !== self.location.origin) return;
 
   // Real connectivity checks — bypass SW entirely
   if (url.searchParams.has("_swbypass")) {
