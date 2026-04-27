@@ -38,13 +38,7 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Returns true only for Supabase course-images.
-// Videos (Cloudinary) are intentionally NOT intercepted — the SW was synthesising
-// a 200 response for Range requests, but iOS Safari requires 206 Partial Content
-// for video Range requests and hard-fails when it receives 200 instead. Letting
-// the browser talk to Cloudinary directly gives it native 206 support and fixes
-// playback on iOS Safari and Android Chrome. Offline video is handled by the
-// explicit Download feature (client-side caches.open), which is unaffected here.
+// Returns true for Supabase course-images (thumbnails, cover art).
 function isMediaRequest(url) {
   return (
     url.hostname.includes("supabase.co") &&
@@ -52,24 +46,52 @@ function isMediaRequest(url) {
   );
 }
 
-// Serve a cached full response for a Range request.
-// Returning the full 200 response is safe — all modern browsers accept a 200
-// in place of the expected 206 and simply download the complete file from
-// the local cache (fast) before playing. This avoids loading the entire
-// video into a RAM ArrayBuffer, which crashes the SW for large files (>50 MB).
+// Returns true for Cloudinary-hosted videos.
+function isCloudinaryVideo(url) {
+  return url.hostname.endsWith("cloudinary.com");
+}
+
+// Serve a cached full Supabase image response for a Range request.
+// Returning 200 is safe for images — browsers don't hard-require 206 for images.
 function synthesizeRangeResponse(cachedFull) {
-  const contentType = cachedFull.headers.get("Content-Type") || "video/mp4";
+  const contentType = cachedFull.headers.get("Content-Type") || "image/jpeg";
   const contentLength = cachedFull.headers.get("Content-Length") || "";
   const headers = { "Content-Type": contentType, "Accept-Ranges": "bytes" };
   if (contentLength) headers["Content-Length"] = contentLength;
-  // Preserve CORS headers from the original response. Without this, a crossorigin="anonymous"
-  // video request to the SW gets a synthesized response with no Access-Control-Allow-Origin,
-  // and the browser blocks it even though the original server supported CORS.
   const acao = cachedFull.headers.get("Access-Control-Allow-Origin");
   const acam = cachedFull.headers.get("Access-Control-Allow-Methods");
   if (acao) headers["Access-Control-Allow-Origin"] = acao;
   if (acam) headers["Access-Control-Allow-Methods"] = acam;
   return new Response(cachedFull.clone().body, { status: 200, headers });
+}
+
+// Serve a proper 206 Partial Content response from a full cached video blob.
+// iOS Safari hard-fails on 200 responses to Range requests for video — it requires 206.
+// blob.slice() creates a lightweight view without copying the entire buffer.
+async function serve206FromCache(cachedFull, rangeHeader) {
+  const m = /bytes=(\d+)-(\d*)/.exec(rangeHeader);
+  const blob = await cachedFull.clone().blob();
+  const total = blob.size;
+  const contentType = cachedFull.headers.get("Content-Type") || "video/mp4";
+  if (!m) {
+    // Malformed Range — return full response as 200
+    return new Response(blob, {
+      status: 200,
+      headers: { "Content-Type": contentType, "Content-Length": String(total), "Accept-Ranges": "bytes" },
+    });
+  }
+  const start = parseInt(m[1], 10);
+  const end = m[2] ? Math.min(parseInt(m[2], 10), total - 1) : total - 1;
+  const chunk = blob.slice(start, end + 1);
+  return new Response(chunk, {
+    status: 206,
+    headers: {
+      "Content-Type": contentType,
+      "Content-Range": `bytes ${start}-${end}/${total}`,
+      "Content-Length": String(end - start + 1),
+      "Accept-Ranges": "bytes",
+    },
+  });
 }
 
 self.addEventListener("fetch", (event) => {
@@ -130,12 +152,30 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // ── Cloudinary video (explicit offline cache only) ───────────────────────
+  // Only intercept when the video is already in MEDIA_CACHE (put there by the
+  // client-side Download action via cacheMediaForSW). Serving from cache means
+  // we must return 206 Partial Content — iOS Safari hard-fails on 200 for Range
+  // requests. If the video is NOT cached, pass the request straight through so
+  // Cloudinary serves its native 206 and online playback is unaffected.
+  if (isCloudinaryVideo(url)) {
+    event.respondWith((async () => {
+      const cacheKey = url.href;
+      const rangeHeader = request.headers.get("Range");
+      const cache = await caches.open(MEDIA_CACHE);
+      const cachedFull = await cache.match(cacheKey);
+      if (cachedFull) {
+        return rangeHeader
+          ? serve206FromCache(cachedFull, rangeHeader)
+          : cachedFull.clone();
+      }
+      // Not in cache — network pass-through (Cloudinary returns real 206)
+      try { return await fetch(request); } catch { return Response.error(); }
+    })());
+    return;
+  }
+
   // ── Same-origin only beyond this point ────────────────────────────────────
-  // Cross-origin video requests (Render backend etc.) are NOT intercepted here.
-  // Opaque (no-cors) SW responses break Chrome/Android Range-based video streaming,
-  // so those requests bypass the SW and go directly to the network.
-  // Large videos pre-cached during the Download action are served via client-side
-  // Cache API lookup in Contents.tsx (see the offline video effect there).
   if (url.origin !== self.location.origin) return;
 
   // Real connectivity checks — bypass SW entirely
