@@ -276,7 +276,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const cacheMediaForSW = async (src: string, res: Response) => {
       try {
         if ("caches" in window) {
-          const cache = await caches.open("edu-media-v11");
+          const cache = await caches.open("edu-media-v12");
           await cache.put(src, res);
         }
       } catch {}
@@ -1155,11 +1155,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
             }
           };
 
-          // Only call load() when the browser has not yet started a network request
-          // (networkState 0 = NETWORK_EMPTY). Calling load() while a request is already
-          // in progress (networkState 2 = NETWORK_LOADING) aborts it, which puts iOS
-          // Safari / Android Chrome into an error state and shows the fallback link.
-          if (v.networkState === 0) {
+          // Call load() only when no data has been buffered yet (readyState=0) AND
+          // no active fetch is in progress (networkState<2).
+          // - networkState 0 (EMPTY): browser never ran resource selection
+          // - networkState 1 (IDLE): resource selection ran but iOS Safari silently ignored
+          //   preload="metadata", leaving readyState=0 with no data — need load() to kick it
+          // - networkState 2 (LOADING): active request — calling load() would abort it,
+          //   causing an error on iOS Safari / Android Chrome
+          if (v.readyState === 0 && v.networkState < 2) {
             v.load();
           }
         });
@@ -1181,7 +1184,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
     (async () => {
       try {
-        const cache = await caches.open("edu-media-v11");
+        const cache = await caches.open("edu-media-v12");
         const videos = Array.from(el.querySelectorAll<HTMLVideoElement>("video"));
         for (const v of videos) {
           const source = v.querySelector("source");

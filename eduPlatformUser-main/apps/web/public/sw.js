@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v11";
+const CACHE_VERSION = "v12";
 const STATIC_CACHE = `edu-static-${CACHE_VERSION}`;
 const PAGE_CACHE   = `edu-pages-${CACHE_VERSION}`;
 const MEDIA_CACHE  = `edu-media-${CACHE_VERSION}`;
