@@ -287,8 +287,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         if (isVideo) {
           const cl = Number(res.headers.get("content-length") ?? 0);
           if (cl > MAX_VIDEO_BYTES) {
-            // Too large to embed — cache it so the SW serves it offline instead
-            await cacheMediaForSW(src, res);
+            // Too large to embed as base64. Download the FULL body into a blob before
+            // caching — passing the raw streaming `res` to cache.put() can resolve the
+            // Promise before the network body finishes, leaving a truncated entry that
+            // causes the video to stop mid-playback when served offline.
+            const videoBlob = await res.blob();
+            await cacheMediaForSW(src, new Response(videoBlob, {
+              headers: { "Content-Type": videoBlob.type || "video/mp4" },
+            }));
             return null;
           }
         }
