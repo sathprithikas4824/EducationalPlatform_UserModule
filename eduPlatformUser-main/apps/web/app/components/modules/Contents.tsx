@@ -240,7 +240,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       vid.setAttribute("controls", "");
       vid.setAttribute("preload", "auto");        // buffer immediately so click-to-play is instant
       vid.setAttribute("playsinline", "");        // required for inline play on iOS
-      vid.setAttribute("crossorigin", "anonymous"); // CORS mode so SW can cache & serve properly
+      // Only apply crossorigin for CDN origins that return CORS headers (Cloudinary, Supabase).
+      // Render backend videos do NOT return Access-Control-Allow-Origin, so setting
+      // crossorigin="anonymous" on those forces the browser into CORS mode, gets a blocked
+      // response, and the video refuses to play on iOS Safari / Android Chrome entirely.
+      if (src.includes("cloudinary.com") || src.includes("supabase.co")) {
+        vid.setAttribute("crossorigin", "anonymous");
+      } else {
+        vid.removeAttribute("crossorigin");
+      }
       vid.removeAttribute("autoplay");            // never autoplay (respect user intent)
       vid.removeAttribute("src");                 // src goes on <source> so the type attr works
       vid.style.cssText = "max-width:100%;width:100%;border-radius:8px;margin:8px 0;display:block;";
@@ -268,7 +276,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const cacheMediaForSW = async (src: string, res: Response) => {
       try {
         if ("caches" in window) {
-          const cache = await caches.open("edu-media-v9");
+          const cache = await caches.open("edu-media-v10");
           await cache.put(src, res);
         }
       } catch {}
@@ -1121,7 +1129,16 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
           v.controls = true;
           v.preload = "auto";
-          v.crossOrigin = "anonymous"; // CORS mode — required for SW to serve non-opaque responses
+          // Only apply crossorigin for CDN origins that genuinely support CORS.
+          // Setting it on Render backend videos forces CORS mode — the server does not
+          // return Access-Control-Allow-Origin, so iOS Safari / Android Chrome block the
+          // response and the video never plays. Remove it for all other origins.
+          const vsrc = v.querySelector("source")?.getAttribute("src") || v.getAttribute("src") || "";
+          if (vsrc.includes("cloudinary.com") || vsrc.includes("supabase.co")) {
+            v.crossOrigin = "anonymous";
+          } else {
+            v.removeAttribute("crossorigin");
+          }
           v.setAttribute("playsinline", "");
 
           // Show a fallback link if the video cannot load on this device
@@ -1158,7 +1175,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
     (async () => {
       try {
-        const cache = await caches.open("edu-media-v9");
+        const cache = await caches.open("edu-media-v10");
         const videos = Array.from(el.querySelectorAll<HTMLVideoElement>("video"));
         for (const v of videos) {
           const source = v.querySelector("source");

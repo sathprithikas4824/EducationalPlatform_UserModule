@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v9";
+const CACHE_VERSION = "v10";
 const STATIC_CACHE = `edu-static-${CACHE_VERSION}`;
 const PAGE_CACHE   = `edu-pages-${CACHE_VERSION}`;
 const MEDIA_CACHE  = `edu-media-${CACHE_VERSION}`;
@@ -60,6 +60,13 @@ function synthesizeRangeResponse(cachedFull) {
   const contentLength = cachedFull.headers.get("Content-Length") || "";
   const headers = { "Content-Type": contentType, "Accept-Ranges": "bytes" };
   if (contentLength) headers["Content-Length"] = contentLength;
+  // Preserve CORS headers from the original response. Without this, a crossorigin="anonymous"
+  // video request to the SW gets a synthesized response with no Access-Control-Allow-Origin,
+  // and the browser blocks it even though the original server supported CORS.
+  const acao = cachedFull.headers.get("Access-Control-Allow-Origin");
+  const acam = cachedFull.headers.get("Access-Control-Allow-Methods");
+  if (acao) headers["Access-Control-Allow-Origin"] = acao;
+  if (acam) headers["Access-Control-Allow-Methods"] = acam;
   return new Response(cachedFull.clone().body, { status: 200, headers });
 }
 
