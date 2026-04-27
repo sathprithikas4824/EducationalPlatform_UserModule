@@ -238,10 +238,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const mime = MIME[ext] ?? "video/mp4";
 
       vid.setAttribute("controls", "");
-      vid.setAttribute("preload", "auto");   // buffer immediately so click-to-play is instant
-      vid.setAttribute("playsinline", "");   // required for inline play on iOS
-      vid.removeAttribute("autoplay");       // never autoplay (respect user intent)
-      vid.removeAttribute("src");            // src goes on <source> so the type attr works
+      vid.setAttribute("preload", "auto");        // buffer immediately so click-to-play is instant
+      vid.setAttribute("playsinline", "");        // required for inline play on iOS
+      vid.setAttribute("crossorigin", "anonymous"); // CORS mode so SW can cache & serve properly
+      vid.removeAttribute("autoplay");            // never autoplay (respect user intent)
+      vid.removeAttribute("src");                 // src goes on <source> so the type attr works
       vid.style.cssText = "max-width:100%;width:100%;border-radius:8px;margin:8px 0;display:block;";
 
       // Build <source> via DOM API (safe for any src value, no HTML-escaping needed)
@@ -1120,6 +1121,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
           v.controls = true;
           v.preload = "auto";
+          v.crossOrigin = "anonymous"; // CORS mode — required for SW to serve non-opaque responses
           v.setAttribute("playsinline", "");
 
           // Show a fallback link if the video cannot load on this device
