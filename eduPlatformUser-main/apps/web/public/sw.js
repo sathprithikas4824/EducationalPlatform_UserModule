@@ -108,8 +108,34 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // ── Pre-cached cross-origin media (Render backend videos + large videos cached during Download) ──
+  // cacheMediaForSW() pre-caches large videos in MEDIA_CACHE so they work offline.
+  // Without this block the SW skips cross-origin requests and the cache is never used.
+  // Only intercept URLs that look like video files or come from known media backends to
+  // avoid proxying unrelated cross-origin requests (fonts, analytics, etc.).
+  const RENDER_BACKEND = "educationalplatform-usermodule-2.onrender.com";
+  const VIDEO_EXT = /\.(mp4|m4v|webm|ogg|mov|avi|mkv)(\?.*)?$/i;
+  if (url.origin !== self.location.origin) {
+    if (url.hostname === RENDER_BACKEND || VIDEO_EXT.test(url.pathname)) {
+      event.respondWith(
+        (async () => {
+          try {
+            const cache = await caches.open(MEDIA_CACHE);
+            const cachedFull = await cache.match(url.href);
+            if (cachedFull && cachedFull.status === 200) {
+              const rangeHeader = request.headers.get("Range");
+              return rangeHeader ? synthesizeRangeResponse(cachedFull) : cachedFull;
+            }
+          } catch { /* cache unavailable */ }
+          try { return await fetch(request); } catch { return Response.error(); }
+        })()
+      );
+      return;
+    }
+    return; // other cross-origin requests — let browser handle directly
+  }
+
   // ── Same-origin only beyond this point ────────────────────────────────────
-  if (url.origin !== self.location.origin) return;
 
   // Real connectivity checks — bypass SW entirely
   if (url.searchParams.has("_swbypass")) {

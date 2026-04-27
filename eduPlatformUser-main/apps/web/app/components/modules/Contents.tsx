@@ -213,14 +213,19 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   };
 
   // Fix <video> elements for immediate online playback.
-  // TipTap's VideoNode serialises controls="true" (JS boolean) which browsers treat as
-  // the string "true" and may ignore — replace with the bare boolean attribute.
-  // Keep src directly on the <video> element (not inside a <source> child) for the
-  // widest browser compatibility — moving it to <source> confuses some mobile browsers
-  // and causes them to show "0:00" with no metadata loaded.
-  // preload="auto" starts buffering immediately so playback begins within 1-2 s on click.
+  // Uses <source type="..."> inside <video> — iOS Safari requires the type attribute to
+  // commit to fetching an external video source. Without it, iOS refuses to load the video
+  // entirely (shows broken icon). preload="auto" starts buffering immediately so playback
+  // begins within 1-2 s on click. playsinline is required for inline play on iOS.
   const fixVideoForOnline = useCallback((html: string): string => {
     if (!html || typeof document === "undefined") return html;
+
+    const MIME: Record<string, string> = {
+      mp4: "video/mp4", m4v: "video/mp4", mov: "video/mp4",
+      webm: "video/webm", ogg: "video/ogg",
+      avi: "video/x-msvideo", mkv: "video/x-matroska",
+    };
+
     const container = document.createElement("div");
     container.innerHTML = html;
     container.querySelectorAll("video").forEach((vid) => {
@@ -228,15 +233,23 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const src = vid.getAttribute("src") || vid.querySelector("source")?.getAttribute("src") || "";
       if (!src) return;
 
-      // Remove any <source> children — we put src directly on the element
-      Array.from(vid.querySelectorAll("source")).forEach((s) => s.remove());
+      // Infer MIME type from URL extension (default video/mp4 — widest mobile support)
+      const ext = src.split("?")[0].split(".").pop()?.toLowerCase() ?? "";
+      const mime = MIME[ext] ?? "video/mp4";
 
-      vid.setAttribute("src", src);
       vid.setAttribute("controls", "");
-      vid.setAttribute("preload", "auto"); // buffer immediately so click-to-play is instant
-      vid.setAttribute("playsinline", ""); // required for inline play on iOS
-      vid.removeAttribute("autoplay");     // never autoplay (respect user intent)
+      vid.setAttribute("preload", "auto");   // buffer immediately so click-to-play is instant
+      vid.setAttribute("playsinline", "");   // required for inline play on iOS
+      vid.removeAttribute("autoplay");       // never autoplay (respect user intent)
+      vid.removeAttribute("src");            // src goes on <source> so the type attr works
       vid.style.cssText = "max-width:100%;width:100%;border-radius:8px;margin:8px 0;display:block;";
+
+      // Build <source> via DOM API (safe for any src value, no HTML-escaping needed)
+      const source = document.createElement("source");
+      source.setAttribute("src", src);
+      source.setAttribute("type", mime);
+      vid.innerHTML = "";
+      vid.appendChild(source);
     });
     return container.innerHTML;
   }, []);
@@ -1094,12 +1107,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   }, [selectedTopic?.topic_id, user]);
 
   // After topic content renders (or after background refresh changes the HTML), call video.load()
-  // on every <video> element that hasn't started loading yet.
-  // iOS Safari often ignores preload="auto" and keeps readyState=0 until load() is called
-  // explicitly. Double-RAF ensures we're past iOS's internal rendering phase before we trigger
-  // the resource-selection algorithm. Including content fields in deps means newly added videos
-  // (from admin background refresh) also get load() called while already-playing videos are
-  // protected by the readyState===0 guard.
+  // on every <video> element. iOS Safari often ignores preload="auto" and keeps readyState=0
+  // until load() is called explicitly. Double-RAF ensures we're past iOS's rendering phase.
+  // onerror shows a fallback "open in browser" link when the video fails to play on the device.
   useEffect(() => {
     if (!selectedTopic) return;
     const el = contentWrapperRef.current;
@@ -1108,16 +1118,24 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
-          // Set via JS IDL attributes — required because browsers sometimes don't
-          // trigger the resource-selection algorithm for <video> elements created
-          // via innerHTML (dangerouslySetInnerHTML). Setting the IDL property directly
-          // guarantees the browser re-runs resource selection for this element.
           v.controls = true;
           v.preload = "auto";
           v.setAttribute("playsinline", "");
-          // Always call load() — this is the most reliable way to make a video element
-          // start fetching its source after being injected via innerHTML.
-          // Safe because this effect only re-runs when the content string changes.
+
+          // Show a fallback link if the video cannot load on this device
+          v.onerror = () => {
+            if (v.parentNode && !v.parentElement?.querySelector(".video-fallback")) {
+              const src = v.querySelector("source")?.getAttribute("src") || v.getAttribute("src") || "";
+              const p = document.createElement("p");
+              p.className = "video-fallback";
+              p.style.cssText = "margin:8px 0;font-size:0.9rem;color:#6b7280;";
+              p.innerHTML = src
+                ? `Video couldn't play — <a href="${src}" target="_blank" rel="noopener" style="color:#4f46e5;text-decoration:underline;">open in browser</a>`
+                : "Video couldn't play on this device.";
+              v.parentNode.insertBefore(p, v.nextSibling);
+            }
+          };
+
           v.load();
         });
       });
