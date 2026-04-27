@@ -490,59 +490,46 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   <div class="doc-body">${bodyHtml}</div>
   <div class="doc-footer">Downloaded from EduPlatform</div>
   <script>
-  // Resolve video src to a playable blob: URL, handling three cases:
-  //   1. data:video base64 URI  — chunked atob (iOS Safari iframe compatible)
-  //   2. https:// remote URL    — Cache API lookup first (offline app context),
-  //                               then network fetch (online fallback)
-  //   3. anything else          — skip (already a blob: or no src)
+  // Convert embedded base64 video data URIs to blob: URLs.
+  // iOS Safari in sandboxed iframes cannot fetch() data: URIs and cannot play them directly.
+  // Strategy: try fetch() first (Chrome/Firefox/Android), then fall back to chunked atob()
+  // which works in iOS Safari by building a Blob from raw bytes without a large contiguous array.
   (async function(){
     async function dataUriToBlobUrl(dataUri){
       try{
-        var r=await fetch(dataUri);var b=await r.blob();return URL.createObjectURL(b);
+        var r=await fetch(dataUri);
+        var b=await r.blob();
+        return URL.createObjectURL(b);
       }catch(e){
-        var comma=dataUri.indexOf(',');var meta=dataUri.substring(0,comma);
-        var mime=meta.match(/:(.*?);/)[1];var raw=atob(dataUri.substring(comma+1));
-        var chunkSize=512*1024;var chunks=[];
+        // iOS Safari sandboxed iframe fallback: chunked atob to avoid memory spike
+        var comma=dataUri.indexOf(',');
+        var meta=dataUri.substring(0,comma);
+        var mime=meta.match(/:(.*?);/)[1];
+        var raw=atob(dataUri.substring(comma+1));
+        var chunkSize=512*1024;
+        var chunks=[];
         for(var i=0;i<raw.length;i+=chunkSize){
-          var slice=raw.slice(i,i+chunkSize);var bytes=new Uint8Array(slice.length);
-          for(var j=0;j<slice.length;j++) bytes[j]=slice.charCodeAt(j);chunks.push(bytes);
+          var slice=raw.slice(i,i+chunkSize);
+          var bytes=new Uint8Array(slice.length);
+          for(var j=0;j<slice.length;j++) bytes[j]=slice.charCodeAt(j);
+          chunks.push(bytes);
         }
         return URL.createObjectURL(new Blob(chunks,{type:mime}));
       }
     }
-    async function remoteToBlobUrl(src){
-      // Try Cache Storage first (works when page runs inside the app — https origin)
-      if('caches' in window){
-        try{
-          var names=await caches.keys();
-          var media=names.filter(function(n){return n.indexOf('edu-media-')===0;}).sort();
-          for(var ci=media.length-1;ci>=0;ci--){
-            var c=await caches.open(media[ci]);var hit=await c.match(src);
-            if(hit){var b=await hit.blob();return URL.createObjectURL(b);}
-          }
-        }catch(e){}
-      }
-      // Cache miss — try fetching from network (works when online)
-      try{
-        var res=await fetch(src,{mode:'cors',credentials:'omit'});
-        if(res.ok){return URL.createObjectURL(await res.blob());}
-      }catch(e){}
-      return null;
-    }
     var videos=Array.from(document.querySelectorAll('video'));
     for(var i=0;i<videos.length;i++){
-      var vid=videos[i];var source=vid.querySelector('source');
-      var src=source?source.getAttribute('src'):vid.getAttribute('src');
-      if(!src||src.indexOf('blob:')===0) continue;
-      var blobUrl=null;
+      var vid=videos[i];
+      var source=vid.querySelector('source');
+      var dataUri=source?source.getAttribute('src'):vid.getAttribute('src');
+      if(!dataUri||dataUri.indexOf('data:video')!==0) continue;
       try{
-        if(src.indexOf('data:video')===0){blobUrl=await dataUriToBlobUrl(src);}
-        else if(src.indexOf('https://')===0){blobUrl=await remoteToBlobUrl(src);}
-      }catch(e){}
-      if(blobUrl){
+        var blobUrl=await dataUriToBlobUrl(dataUri);
         while(vid.firstChild) vid.removeChild(vid.firstChild);
-        vid.removeAttribute('src');vid.src=blobUrl;vid.load();
-      }
+        vid.removeAttribute('src');
+        vid.src=blobUrl;
+        vid.load();
+      }catch(e){}
     }
   })();
   </script>
@@ -1169,25 +1156,18 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   }, [selectedTopic?.topic_id, selectedTopic?.title, selectedTopic?.description, selectedTopic?.content]);
 
   // Offline mode: convert pre-cached video URLs to blob: so they play without network.
-  // Large videos (>30 MB) are stored in MEDIA_CACHE during the Download action via
-  // cacheMediaForSW(). We also restore SW Cloudinary interception (sw.js) with proper
-  // 206 responses so that cached videos serve correctly. This effect handles the
-  // client-side blob: URL swap as a belt-and-suspenders approach and also runs when
-  // the device goes offline mid-session (navigator.onLine is not always accurate, so
-  // we listen for the 'offline' event rather than relying solely on the initial check).
+  // Large videos (>30 MB) are stored in the SW media cache during the Download action via
+  // cacheMediaForSW(). The SW itself cannot serve them for cross-origin Range requests
+  // (opaque no-cors responses break Chrome/Android), so we pull them from the Cache API
+  // on the client and replace <source src> with a blob: URL before calling load().
   useEffect(() => {
-    if (typeof window === "undefined" || !("caches" in window)) return;
+    if (typeof window === "undefined" || navigator.onLine || !("caches" in window)) return;
     const el = contentWrapperRef.current;
     if (!el) return;
 
-    const swapVideosToCache = async () => {
-      if (navigator.onLine) return; // Cloudinary serves natively when online
+    (async () => {
       try {
-        // Version-agnostic: find the most recent edu-media-* cache
-        const cacheNames = await caches.keys();
-        const mediaName = cacheNames.filter((n) => n.startsWith("edu-media-")).sort().pop();
-        if (!mediaName) return;
-        const cache = await caches.open(mediaName);
+        const cache = await caches.open("edu-media-v13");
         const videos = Array.from(el.querySelectorAll<HTMLVideoElement>("video"));
         for (const v of videos) {
           const source = v.querySelector("source");
@@ -1202,11 +1182,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           v.load();
         }
       } catch { /* cache unavailable — videos stay at original URL */ }
-    };
-
-    swapVideosToCache(); // run immediately in case we're already offline
-    window.addEventListener("offline", swapVideosToCache);
-    return () => window.removeEventListener("offline", swapVideosToCache);
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTopic?.topic_id, selectedTopic?.content]);
 
