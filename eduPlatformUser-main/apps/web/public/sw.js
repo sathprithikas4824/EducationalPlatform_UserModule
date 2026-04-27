@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v12";
+const CACHE_VERSION = "v13";
 const STATIC_CACHE = `edu-static-${CACHE_VERSION}`;
 const PAGE_CACHE   = `edu-pages-${CACHE_VERSION}`;
 const MEDIA_CACHE  = `edu-media-${CACHE_VERSION}`;
@@ -38,15 +38,17 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Returns true for Cloudinary or Supabase media (images + videos).
-// Render backend requests are NOT intercepted — the browser fetches them directly.
-// Opaque (no-cors) SW responses cannot be used for video byte-range streaming in Chrome,
-// so intercepting them breaks playback. Render backend videos bypass the SW entirely.
+// Returns true only for Supabase course-images.
+// Videos (Cloudinary) are intentionally NOT intercepted — the SW was synthesising
+// a 200 response for Range requests, but iOS Safari requires 206 Partial Content
+// for video Range requests and hard-fails when it receives 200 instead. Letting
+// the browser talk to Cloudinary directly gives it native 206 support and fixes
+// playback on iOS Safari and Android Chrome. Offline video is handled by the
+// explicit Download feature (client-side caches.open), which is unaffected here.
 function isMediaRequest(url) {
   return (
-    url.hostname.includes("res.cloudinary.com") ||
-    (url.hostname.includes("supabase.co") &&
-      (url.pathname.includes("course-images") || url.pathname.includes("course-videos")))
+    url.hostname.includes("supabase.co") &&
+    url.pathname.includes("course-images")
   );
 }
 
