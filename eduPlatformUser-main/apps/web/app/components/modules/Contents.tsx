@@ -1116,57 +1116,73 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   // After topic content renders (or after background refresh changes the HTML), call video.load()
   // on every <video> element. iOS Safari often ignores preload="auto" and keeps readyState=0
   // until load() is called explicitly. Double-RAF ensures we're past iOS's rendering phase.
-  // onerror shows a fallback "open in browser" link when the video fails to play on the device.
   useEffect(() => {
     if (!selectedTopic) return;
     const el = contentWrapperRef.current;
     if (!el) return;
+
+    // Try to serve a video from the offline Cache API (edu-media-* written by cacheMediaForSW).
+    // Returns true if the swap succeeded (caller should skip the error fallback link).
+    const tryServeFromCache = async (v: HTMLVideoElement): Promise<boolean> => {
+      if (!("caches" in window)) return false;
+      const source = v.querySelector("source");
+      const src = source?.getAttribute("src") || v.getAttribute("src") || "";
+      if (!src || src.startsWith("blob:") || src.startsWith("data:")) return false;
+      try {
+        const allNames = await caches.keys();
+        const mediaName = allNames.filter((n) => n.startsWith("edu-media-")).sort().pop();
+        if (!mediaName) return false;
+        const cache = await caches.open(mediaName);
+        const cached = await cache.match(src);
+        if (!cached || cached.status !== 200) return false;
+        const blob = await cached.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        v.onerror = null; // prevent retry loop after the swap
+        if (source) source.setAttribute("src", blobUrl);
+        else v.setAttribute("src", blobUrl);
+        v.load();
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    // Attach onerror IMMEDIATELY — before the double-RAF — so we never miss a fast
+    // offline error. On mobile (Android/iOS), ERR_INTERNET_DISCONNECTED fires in
+    // under 10 ms; the double-RAF fires ~32 ms later, which is too late.
+    el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
+      v.onerror = async () => {
+        const served = await tryServeFromCache(v);
+        if (served) return;
+        // Cache miss — show fallback link
+        if (v.parentNode && !v.parentElement?.querySelector(".video-fallback")) {
+          const source = v.querySelector("source");
+          const src = source?.getAttribute("src") || v.getAttribute("src") || "";
+          const p = document.createElement("p");
+          p.className = "video-fallback";
+          p.style.cssText = "margin:8px 0;font-size:0.9rem;color:#6b7280;";
+          p.innerHTML = src
+            ? `Video couldn't play — <a href="${src}" target="_blank" rel="noopener" style="color:#4f46e5;text-decoration:underline;">open in browser</a>`
+            : "Video couldn't play on this device.";
+          v.parentNode.insertBefore(p, v.nextSibling);
+        }
+      };
+
+      // If already offline when the topic renders, proactively swap to blob URL now
+      // so the RAF's v.load() call below loads from cache instead of hitting Cloudinary.
+      if (!navigator.onLine) {
+        tryServeFromCache(v); // async — completes before RAF fires (~32 ms)
+      }
+    });
+
     let raf1: number, raf2: number;
     raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         el.querySelectorAll<HTMLVideoElement>("video").forEach((v) => {
           v.controls = true;
           v.preload = "metadata";
-          v.removeAttribute("crossorigin"); // SW no longer intercepts videos; crossorigin not needed and causes iOS 200-vs-206 failure
+          v.removeAttribute("crossorigin"); // SW no longer intercepts videos; crossorigin not needed
           v.setAttribute("playsinline", "");
-
-          // When video fails to load, try the offline cache first (most reliable mobile
-          // trigger — the 'offline' event can be delayed or suppressed on Android/iOS).
-          // Only show the error fallback link if the cache also has nothing.
-          v.onerror = async () => {
-            const source = v.querySelector("source");
-            const src = source?.getAttribute("src") || v.getAttribute("src") || "";
-            // Attempt cache lookup when the src is a remote URL (not already blob/data)
-            if (src && !src.startsWith("blob:") && !src.startsWith("data:") && "caches" in window) {
-              try {
-                const allNames = await caches.keys();
-                const mediaName = allNames.filter((n) => n.startsWith("edu-media-")).sort().pop();
-                if (mediaName) {
-                  const cache = await caches.open(mediaName);
-                  const cached = await cache.match(src);
-                  if (cached && cached.status === 200) {
-                    const blob = await cached.blob();
-                    const blobUrl = URL.createObjectURL(blob);
-                    v.onerror = null; // clear to prevent retry loop
-                    if (source) source.setAttribute("src", blobUrl);
-                    else v.setAttribute("src", blobUrl);
-                    v.load();
-                    return; // served from cache — no fallback link needed
-                  }
-                }
-              } catch { /* cache unavailable — fall through to error link */ }
-            }
-            // Cache miss or online error — show fallback link
-            if (v.parentNode && !v.parentElement?.querySelector(".video-fallback")) {
-              const p = document.createElement("p");
-              p.className = "video-fallback";
-              p.style.cssText = "margin:8px 0;font-size:0.9rem;color:#6b7280;";
-              p.innerHTML = src
-                ? `Video couldn't play — <a href="${src}" target="_blank" rel="noopener" style="color:#4f46e5;text-decoration:underline;">open in browser</a>`
-                : "Video couldn't play on this device.";
-              v.parentNode.insertBefore(p, v.nextSibling);
-            }
-          };
 
           // Call load() only when no data has been buffered yet (readyState=0) AND
           // no active fetch is in progress (networkState<2).
