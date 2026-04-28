@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { loadDownloads, type DownloadRecord } from "../../lib/downloads";
 import { getLastUserId } from "../../lib/supabase";
@@ -119,11 +119,115 @@ function parseTxtContent(content: string): { title: string; body: string } {
 }
 
 // ── Offline Reader ─────────────────────────────────────────────────────────────
+
+// Pre-process downloaded HTML before passing to the iframe:
+// - data:video URIs  → blob: URLs  (iOS Safari cannot play data: URIs in sandboxed iframes)
+// - HTTP video URLs  → blob: URLs  (retrieved from the Cache API where they were stored during download)
+// This runs in the main window context where Cache API access is unrestricted.
+async function prepareOfflineHtml(html: string, blobTracker: string[]): Promise<string> {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const videos = Array.from(doc.querySelectorAll("video"));
+  if (!videos.length) return html;
+
+  let cache: Cache | null = null;
+  if ("caches" in window) {
+    try {
+      const keys = await caches.keys();
+      const name = keys.filter((n) => n.startsWith("edu-media-")).sort().pop();
+      if (name) cache = await caches.open(name);
+    } catch {}
+  }
+
+  for (const vid of videos) {
+    const source = vid.querySelector("source");
+    const src = (source ?? vid).getAttribute("src") ?? "";
+    if (!src) continue;
+
+    let blobUrl: string | null = null;
+
+    if (src.startsWith("data:video")) {
+      // Small video embedded as base64 — convert to blob: for iOS Safari
+      try {
+        const blob = await fetch(src).then((r) => r.blob());
+        blobUrl = URL.createObjectURL(blob);
+      } catch {
+        // fetch() of data: URI fails in some environments — decode manually
+        try {
+          const comma = src.indexOf(",");
+          const mime = src.substring(0, comma).match(/:(.*?);/)?.[1] ?? "video/mp4";
+          const raw = atob(src.substring(comma + 1));
+          const chunkSize = 512 * 1024;
+          const chunks: Uint8Array[] = [];
+          for (let i = 0; i < raw.length; i += chunkSize) {
+            const slice = raw.slice(i, i + chunkSize);
+            const bytes = new Uint8Array(slice.length);
+            for (let j = 0; j < slice.length; j++) bytes[j] = slice.charCodeAt(j);
+            chunks.push(bytes);
+          }
+          blobUrl = URL.createObjectURL(new Blob(chunks, { type: mime }));
+        } catch {}
+      }
+    } else if (src.startsWith("http") && cache) {
+      // Large video (>30 MB) — stored in Cache API by cacheMediaForSW() during download
+      try {
+        const resp = await cache.match(src);
+        if (resp && resp.status === 200) {
+          const blob = await resp.blob();
+          blobUrl = URL.createObjectURL(blob);
+        }
+      } catch {}
+    }
+
+    if (blobUrl) {
+      blobTracker.push(blobUrl);
+      // Clear children (removes <source> and the inline fallback text)
+      while (vid.firstChild) vid.removeChild(vid.firstChild);
+      vid.removeAttribute("src");
+      vid.setAttribute("src", blobUrl);
+      vid.setAttribute("controls", "");
+      vid.setAttribute("playsinline", "");
+      vid.setAttribute("preload", "auto");
+      vid.removeAttribute("crossorigin");
+      // Remove the "Video too large to embed" paragraph that follows the video
+      const next = vid.nextElementSibling;
+      if (next?.textContent?.includes("Video too large")) {
+        next.parentElement?.removeChild(next);
+      }
+    }
+  }
+
+  return "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
+}
+
 function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => void }) {
   const topics = buildReaderTopics(group.topics);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [processedContent, setProcessedContent] = useState<string | null>(null);
+  const blobUrlsRef = useRef<string[]>([]);
   const selected = topics[selectedIndex];
+
+  // Pre-process HTML whenever the selected topic changes.
+  // This runs in the React component (main window) so Cache API access is unrestricted.
+  useEffect(() => {
+    if (!selected?.content || selected.fileType !== "html") return;
+    setProcessedContent(null);
+
+    // Revoke any blob: URLs created for the previous topic
+    const prevBlobs = blobUrlsRef.current;
+    blobUrlsRef.current = [];
+
+    const newBlobs: string[] = [];
+    prepareOfflineHtml(selected.content, newBlobs).then((processed) => {
+      blobUrlsRef.current = newBlobs;
+      setProcessedContent(processed);
+    });
+
+    return () => {
+      prevBlobs.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [selected?.topicId]);
 
   const pillStyle = {
     backgroundColor: "var(--pill-bg)",
@@ -239,66 +343,38 @@ function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => vo
                   );
                 })()
               ) : (
-                // HTML content — render in iframe so scripts execute (blob video conversion)
-                // and images/videos embedded as base64 display correctly in all browsers
+                // HTML content rendered in an iframe.
+                // prepareOfflineHtml() has already converted all video sources to blob: URLs
+                // in the React component (main window) before this reaches srcDoc — so the
+                // iframe never needs to touch the Cache API itself (iOS Safari blocks that).
                 <div className="w-full">
                   {selected.content ? (
-                    <iframe
-                      key={selected.topicId}
-                      srcDoc={selected.content}
-                      title={selected.topicName}
-                      sandbox="allow-scripts allow-same-origin"
-                      allow="autoplay; fullscreen; picture-in-picture"
-                      style={{ width: "100%", border: "none", minHeight: "70vh", display: "block" }}
-                      onLoad={(e) => {
-                        const iframe = e.currentTarget;
-                        try {
-                          const h = iframe.contentDocument?.documentElement?.scrollHeight ?? 0;
-                          if (h > 0) iframe.style.height = h + "px";
-                        } catch {}
-                        // Fix large videos in existing downloaded content (old HTML lacks the
-                        // cache-lookup script). Inject it here so users don't need to re-download.
-                        try {
-                          const doc = iframe.contentDocument;
-                          if (!doc) return;
-                          const script = doc.createElement("script");
-                          script.textContent = `(async function(){
-  async function urlFromCache(src){
-    if(!('caches' in window)) return null;
-    try{
-      var keys=await caches.keys();
-      var name=keys.filter(function(n){return n.indexOf('edu-media-')===0;}).sort().pop();
-      if(!name) return null;
-      var cache=await caches.open(name);
-      var resp=await cache.match(src);
-      if(!resp||resp.status!==200) return null;
-      var blob=await resp.blob();
-      return URL.createObjectURL(blob);
-    }catch(e){return null;}
-  }
-  var videos=Array.from(document.querySelectorAll('video'));
-  for(var i=0;i<videos.length;i++){
-    var vid=videos[i];
-    var source=vid.querySelector('source');
-    var src=source?source.getAttribute('src'):vid.getAttribute('src');
-    if(!src||src.indexOf('http')!==0) continue;
-    var blobUrl=await urlFromCache(src);
-    if(blobUrl){
-      var fallback=vid.nextElementSibling;
-      while(vid.firstChild) vid.removeChild(vid.firstChild);
-      vid.removeAttribute('src');
-      vid.src=blobUrl;
-      vid.load();
-      if(fallback&&fallback.textContent&&fallback.textContent.indexOf('Video too large')!==-1){
-        fallback.parentNode&&fallback.parentNode.removeChild(fallback);
-      }
-    }
-  }
-})();`;
-                          doc.body?.appendChild(script);
-                        } catch {}
-                      }}
-                    />
+                    processedContent === null ? (
+                      // Brief loading state while blob: URLs are being created
+                      <div style={{ minHeight: "70vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div style={{ textAlign: "center", color: "#9ca3af" }}>
+                          <div style={{ width: 36, height: 36, border: "3px solid #e5e7eb", borderTop: "3px solid #7c3aed", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+                          <p style={{ fontSize: "0.85rem" }}>Loading content…</p>
+                          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                        </div>
+                      </div>
+                    ) : (
+                      <iframe
+                        key={selected.topicId}
+                        srcDoc={processedContent}
+                        title={selected.topicName}
+                        sandbox="allow-scripts allow-same-origin"
+                        allow="autoplay; fullscreen; picture-in-picture"
+                        style={{ width: "100%", border: "none", minHeight: "70vh", display: "block" }}
+                        onLoad={(e) => {
+                          const iframe = e.currentTarget;
+                          try {
+                            const h = iframe.contentDocument?.documentElement?.scrollHeight ?? 0;
+                            if (h > 0) iframe.style.height = h + "px";
+                          } catch {}
+                        }}
+                      />
+                    )
                   ) : (
                     <p className="text-gray-400 italic text-sm">No content available for this topic.</p>
                   )}
