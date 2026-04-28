@@ -256,6 +256,47 @@ function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => vo
                           const h = iframe.contentDocument?.documentElement?.scrollHeight ?? 0;
                           if (h > 0) iframe.style.height = h + "px";
                         } catch {}
+                        // Fix large videos in existing downloaded content (old HTML lacks the
+                        // cache-lookup script). Inject it here so users don't need to re-download.
+                        try {
+                          const doc = iframe.contentDocument;
+                          if (!doc) return;
+                          const script = doc.createElement("script");
+                          script.textContent = `(async function(){
+  async function urlFromCache(src){
+    if(!('caches' in window)) return null;
+    try{
+      var keys=await caches.keys();
+      var name=keys.filter(function(n){return n.indexOf('edu-media-')===0;}).sort().pop();
+      if(!name) return null;
+      var cache=await caches.open(name);
+      var resp=await cache.match(src);
+      if(!resp||resp.status!==200) return null;
+      var blob=await resp.blob();
+      return URL.createObjectURL(blob);
+    }catch(e){return null;}
+  }
+  var videos=Array.from(document.querySelectorAll('video'));
+  for(var i=0;i<videos.length;i++){
+    var vid=videos[i];
+    var source=vid.querySelector('source');
+    var src=source?source.getAttribute('src'):vid.getAttribute('src');
+    if(!src||src.indexOf('http')!==0) continue;
+    var blobUrl=await urlFromCache(src);
+    if(blobUrl){
+      var fallback=vid.nextElementSibling;
+      while(vid.firstChild) vid.removeChild(vid.firstChild);
+      vid.removeAttribute('src');
+      vid.src=blobUrl;
+      vid.load();
+      if(fallback&&fallback.textContent&&fallback.textContent.indexOf('Video too large')!==-1){
+        fallback.parentNode&&fallback.parentNode.removeChild(fallback);
+      }
+    }
+  }
+})();`;
+                          doc.body?.appendChild(script);
+                        } catch {}
                       }}
                     />
                   ) : (

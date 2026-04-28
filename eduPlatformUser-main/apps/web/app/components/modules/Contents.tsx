@@ -496,10 +496,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   <div class="doc-body">${bodyHtml}</div>
   <div class="doc-footer">Downloaded from EduPlatform</div>
   <script>
-  // Convert embedded base64 video data URIs to blob: URLs.
-  // iOS Safari in sandboxed iframes cannot fetch() data: URIs and cannot play them directly.
-  // Strategy: try fetch() first (Chrome/Firefox/Android), then fall back to chunked atob()
-  // which works in iOS Safari by building a Blob from raw bytes without a large contiguous array.
+  // Serve every video from local storage so it plays offline without network:
+  //   • Small videos (<30 MB): embedded as base64 data: URIs → converted to blob: URLs
+  //     (iOS Safari cannot play data: URIs directly in sandboxed iframes)
+  //   • Large videos (>30 MB): kept as the original HTTP URL in the HTML but pre-cached
+  //     in the Cache API by cacheMediaForSW() during download → retrieved here and
+  //     converted to blob: URLs so they play offline
   (async function(){
     async function dataUriToBlobUrl(dataUri){
       try{
@@ -507,7 +509,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         var b=await r.blob();
         return URL.createObjectURL(b);
       }catch(e){
-        // iOS Safari sandboxed iframe fallback: chunked atob to avoid memory spike
+        // iOS Safari sandboxed iframe: chunked atob avoids large contiguous ArrayBuffer
         var comma=dataUri.indexOf(',');
         var meta=dataUri.substring(0,comma);
         var mime=meta.match(/:(.*?);/)[1];
@@ -523,19 +525,44 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         return URL.createObjectURL(new Blob(chunks,{type:mime}));
       }
     }
+    async function urlFromCache(src){
+      if(!('caches' in window)) return null;
+      try{
+        var keys=await caches.keys();
+        var name=keys.filter(function(n){return n.indexOf('edu-media-')===0;}).sort().pop();
+        if(!name) return null;
+        var cache=await caches.open(name);
+        var resp=await cache.match(src);
+        if(!resp||resp.status!==200) return null;
+        var blob=await resp.blob();
+        return URL.createObjectURL(blob);
+      }catch(e){return null;}
+    }
     var videos=Array.from(document.querySelectorAll('video'));
     for(var i=0;i<videos.length;i++){
       var vid=videos[i];
       var source=vid.querySelector('source');
-      var dataUri=source?source.getAttribute('src'):vid.getAttribute('src');
-      if(!dataUri||dataUri.indexOf('data:video')!==0) continue;
-      try{
-        var blobUrl=await dataUriToBlobUrl(dataUri);
+      var src=source?source.getAttribute('src'):vid.getAttribute('src');
+      if(!src) continue;
+      var blobUrl=null;
+      if(src.indexOf('data:video')===0){
+        try{ blobUrl=await dataUriToBlobUrl(src); }catch(e){}
+      } else if(src.indexOf('http')===0){
+        // Large video: retrieve from Cache API where cacheMediaForSW() stored it
+        blobUrl=await urlFromCache(src);
+      }
+      if(blobUrl){
+        // Read nextElementSibling BEFORE modifying vid so the reference stays valid
+        var fallback=vid.nextElementSibling;
         while(vid.firstChild) vid.removeChild(vid.firstChild);
         vid.removeAttribute('src');
         vid.src=blobUrl;
         vid.load();
-      }catch(e){}
+        // Remove the "Video too large to embed" paragraph added by embedMediaAsBase64
+        if(fallback&&fallback.textContent&&fallback.textContent.indexOf('Video too large')!==-1){
+          fallback.parentNode&&fallback.parentNode.removeChild(fallback);
+        }
+      }
     }
   })();
   </script>
