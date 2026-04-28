@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v13";
+const CACHE_VERSION = "v14";
 const STATIC_CACHE = `edu-static-${CACHE_VERSION}`;
 const PAGE_CACHE   = `edu-pages-${CACHE_VERSION}`;
 const MEDIA_CACHE  = `edu-media-${CACHE_VERSION}`;
@@ -7,11 +7,9 @@ const ALL_CACHES   = [STATIC_CACHE, PAGE_CACHE, MEDIA_CACHE];
 const OFFLINE_PAGE  = "/offline.html";
 const PRECACHE_URLS = [OFFLINE_PAGE];
 
-// True when a previously active SW exists — used in activate to signal clients to reload.
 let isUpdate = false;
 
 self.addEventListener("install", (event) => {
-  // If there is already an active SW controlling clients, this is an update.
   isUpdate = !!self.registration.active;
   event.waitUntil(
     caches.open(STATIC_CACHE)
@@ -28,9 +26,6 @@ self.addEventListener("activate", (event) => {
       )
       .then(() => self.clients.claim())
       .then(async () => {
-        // On updates (not first install): tell every open tab to reload so the
-        // new JS bundle — which has the video playback fixes — is picked up
-        // immediately without the user having to manually refresh.
         if (!isUpdate) return;
         const allClients = await self.clients.matchAll({ type: "window" });
         allClients.forEach((c) => c.postMessage({ type: "SW_ACTIVATED" }));
@@ -38,38 +33,32 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Returns true only for Supabase course-images.
-// Videos (Cloudinary) are intentionally NOT intercepted — the SW was synthesising
-// a 200 response for Range requests, but iOS Safari requires 206 Partial Content
-// for video Range requests and hard-fails when it receives 200 instead. Letting
-// the browser talk to Cloudinary directly gives it native 206 support and fixes
-// playback on iOS Safari and Android Chrome. Offline video is handled by the
-// explicit Download feature (client-side caches.open), which is unaffected here.
-function isMediaRequest(url) {
-  return (
-    url.hostname.includes("supabase.co") &&
-    url.pathname.includes("course-images")
-  );
-}
+// Build a proper 206 Partial Content response by slicing a cached full response.
+// The body is read into an ArrayBuffer once and sliced — only called for the
+// same-origin /api/stream proxy where the browser controls the Range header.
+async function synthesize206(cachedFull, rangeHeader) {
+  try {
+    const match = rangeHeader && rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (!match) return null;
 
-// Serve a cached full response for a Range request.
-// Returning the full 200 response is safe — all modern browsers accept a 200
-// in place of the expected 206 and simply download the complete file from
-// the local cache (fast) before playing. This avoids loading the entire
-// video into a RAM ArrayBuffer, which crashes the SW for large files (>50 MB).
-function synthesizeRangeResponse(cachedFull) {
-  const contentType = cachedFull.headers.get("Content-Type") || "video/mp4";
-  const contentLength = cachedFull.headers.get("Content-Length") || "";
-  const headers = { "Content-Type": contentType, "Accept-Ranges": "bytes" };
-  if (contentLength) headers["Content-Length"] = contentLength;
-  // Preserve CORS headers from the original response. Without this, a crossorigin="anonymous"
-  // video request to the SW gets a synthesized response with no Access-Control-Allow-Origin,
-  // and the browser blocks it even though the original server supported CORS.
-  const acao = cachedFull.headers.get("Access-Control-Allow-Origin");
-  const acam = cachedFull.headers.get("Access-Control-Allow-Methods");
-  if (acao) headers["Access-Control-Allow-Origin"] = acao;
-  if (acam) headers["Access-Control-Allow-Methods"] = acam;
-  return new Response(cachedFull.clone().body, { status: 200, headers });
+    const ab = await cachedFull.clone().arrayBuffer();
+    const total = ab.byteLength;
+    const start = parseInt(match[1], 10);
+    const end   = match[2] ? parseInt(match[2], 10) : total - 1;
+    const chunk = ab.slice(start, end + 1);
+
+    return new Response(chunk, {
+      status: 206,
+      headers: {
+        "Content-Type":  cachedFull.headers.get("Content-Type") || "video/mp4",
+        "Content-Range": `bytes ${start}-${end}/${total}`,
+        "Content-Length": String(chunk.byteLength),
+        "Accept-Ranges": "bytes",
+      },
+    });
+  } catch {
+    return null;
+  }
 }
 
 self.addEventListener("fetch", (event) => {
@@ -78,49 +67,64 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  // ── Cross-origin media (Cloudinary / Supabase storage) ──────────────────────
-  // Cache full responses under a URL-only key so any Range request can be served
-  // offline by synthesizing a byte-range slice from the cached complete file.
-  // This makes video offline seeking work after the video has been viewed online.
-  if (isMediaRequest(url)) {
+  // ── /api/stream — same-origin video proxy ────────────────────────────────────
+  // Videos are fetched through this endpoint so they are same-origin and the SW
+  // can cache and serve them offline. The original video URL is the cache key so
+  // prepareOfflineHtml() can find the blob by the URL stored in the downloaded HTML.
+  if (url.pathname === "/api/stream") {
     event.respondWith(
       (async () => {
-        const cacheKey = url.href; // canonical key: URL only, no Range header
+        const originalUrl = url.searchParams.get("url") || "";
         const rangeHeader = request.headers.get("Range");
-
-        // Check if we already have the full response cached
         const cache = await caches.open(MEDIA_CACHE);
-        const cachedFull = await cache.match(cacheKey);
 
-        if (cachedFull && cachedFull.status === 200) {
-          // Serve full response (or wrap it to satisfy a Range request)
-          return rangeHeader
-            ? synthesizeRangeResponse(cachedFull)
-            : cachedFull;
+        // Cache key = original (Cloudinary) URL so offline lookup matches
+        const cached = await cache.match(originalUrl);
+        if (cached && cached.status === 200) {
+          if (rangeHeader) {
+            const partial = await synthesize206(cached, rangeHeader);
+            if (partial) return partial;
+          }
+          return cached.clone();
         }
 
-        // Not cached — fetch from network
+        // Not cached — fetch through the proxy (network)
         try {
           const res = await fetch(request);
-
-          if (res.status === 200 && res.ok) {
-            // Full response — cache it directly
-            cache.put(cacheKey, res.clone());
-          } else if (res.status === 206 || res.ok) {
-            // Partial (Range) response — background-fetch the full file so future
-            // offline requests (including seeks) can be served from cache
+          if (res.ok && res.status === 200) {
+            // Store under the ORIGINAL URL so prepareOfflineHtml() can look it up
+            cache.put(originalUrl, res.clone());
+          } else if (res.status === 206) {
+            // Range response — background-fetch the full file for offline use
             (async () => {
               try {
-                const fullRes = await fetch(
-                  new Request(cacheKey, { mode: "cors", credentials: "omit" })
-                );
-                if (fullRes.status === 200) {
-                  cache.put(cacheKey, fullRes);
-                }
-              } catch { /* network unavailable — skip background cache */ }
+                const full = await fetch(`/api/stream?url=${encodeURIComponent(originalUrl)}`);
+                if (full.ok) cache.put(originalUrl, full);
+              } catch {}
             })();
           }
+          return res;
+        } catch {
+          return Response.error();
+        }
+      })()
+    );
+    return;
+  }
 
+  // ── Supabase course-images ─────────────────────────────────────────────────
+  if (
+    url.hostname.includes("supabase.co") &&
+    url.pathname.includes("course-images")
+  ) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(MEDIA_CACHE);
+        const cached = await cache.match(url.href);
+        if (cached) return cached;
+        try {
+          const res = await fetch(request);
+          if (res.ok) cache.put(url.href, res.clone());
           return res;
         } catch {
           return Response.error();
@@ -131,14 +135,9 @@ self.addEventListener("fetch", (event) => {
   }
 
   // ── Same-origin only beyond this point ────────────────────────────────────
-  // Cross-origin video requests (Render backend etc.) are NOT intercepted here.
-  // Opaque (no-cors) SW responses break Chrome/Android Range-based video streaming,
-  // so those requests bypass the SW and go directly to the network.
-  // Large videos pre-cached during the Download action are served via client-side
-  // Cache API lookup in Contents.tsx (see the offline video effect there).
   if (url.origin !== self.location.origin) return;
 
-  // Real connectivity checks — bypass SW entirely
+  // Real connectivity checks — bypass SW
   if (url.searchParams.has("_swbypass")) {
     event.respondWith(fetch(request));
     return;
@@ -147,7 +146,7 @@ self.addEventListener("fetch", (event) => {
   // Skip HMR and auth
   if (url.pathname.startsWith("/_next/webpack-hmr") || url.pathname.startsWith("/api/auth")) return;
 
-  // API: network-only
+  // Other API routes: network-only
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
       fetch(request).catch(() => Response.json({ error: "offline" }, { status: 503 }))

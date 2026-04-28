@@ -280,7 +280,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         const controller = new AbortController();
         // Timeout: 10 s for images, 120 s for videos
         const timer = setTimeout(() => controller.abort(), isVideo ? 120000 : 10000);
-        const res = await fetch(src, { cache: "no-store", signal: controller.signal });
+        // Route video fetches through the same-origin /api/stream proxy so:
+        //   1. CORS is guaranteed (Cloudinary may restrict cross-origin fetches)
+        //   2. The SW intercepts and caches the response under the original URL
+        //   3. The original URL stays in the HTML so prepareOfflineHtml() can find it
+        const fetchUrl = isVideo && (src.startsWith("https://res.cloudinary.com") || src.includes("cloudinary"))
+          ? `/api/stream?url=${encodeURIComponent(src)}`
+          : src;
+        const res = await fetch(fetchUrl, { cache: "no-store", signal: controller.signal });
         clearTimeout(timer);
         if (!res.ok) return null;
 
