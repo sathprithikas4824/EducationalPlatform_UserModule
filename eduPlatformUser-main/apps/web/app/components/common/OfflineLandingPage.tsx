@@ -158,12 +158,12 @@ async function prepareOfflineHtml(html: string, blobTracker: string[]): Promise<
           const mime = src.substring(0, comma).match(/:(.*?);/)?.[1] ?? "video/mp4";
           const raw = atob(src.substring(comma + 1));
           const chunkSize = 512 * 1024;
-          const chunks: Uint8Array[] = [];
+          const chunks: ArrayBuffer[] = [];
           for (let i = 0; i < raw.length; i += chunkSize) {
             const slice = raw.slice(i, i + chunkSize);
             const bytes = new Uint8Array(slice.length);
             for (let j = 0; j < slice.length; j++) bytes[j] = slice.charCodeAt(j);
-            chunks.push(bytes);
+            chunks.push(bytes.buffer as ArrayBuffer);
           }
           blobUrl = URL.createObjectURL(new Blob(chunks, { type: mime }));
         } catch {}
