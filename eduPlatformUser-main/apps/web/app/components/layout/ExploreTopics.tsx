@@ -322,6 +322,8 @@ const ExploreTopics = () => {
                               src={topic.image}
                               alt={topic.title}
                               className="w-full h-full object-cover transition-transform duration-500"
+                              loading="lazy"
+                              decoding="async"
                             />
                           </div>
                         </div>
@@ -394,6 +396,8 @@ const ExploreTopics = () => {
         <img
           src="/images/Pencil-Shadow.png"
           alt=""
+          loading="lazy"
+          decoding="async"
           style={{
             display: "block",
             width: "100%",

@@ -1,5 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  compress: true,
+  poweredByHeader: false,
+  images: {
+    formats: ["image/avif", "image/webp"],
+    deviceSizes: [390, 430, 768, 1024, 1280, 1920],
+    minimumCacheTTL: 60 * 60 * 24 * 30,
+  },
   turbopack: {
     root: "../../",
   },

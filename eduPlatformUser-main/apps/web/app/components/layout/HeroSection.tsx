@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 
 // Import the fonts
@@ -81,6 +81,11 @@ const fuzzyBubblesBoldFont = localFont({
 
 export default function HeroSection() {
   const [searchQuery, setSearchQuery] = useState("");
+  // Only render heavy GIFs on desktop — prevents 4+ MB download on iPhones
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    setIsDesktop(window.innerWidth >= 1024);
+  }, []);
 
   const categories = [
     {
@@ -298,7 +303,8 @@ export default function HeroSection() {
         }
       `}</style>
 
-      {/* Floating GIF - Top Left */}
+      {/* Floating GIF - Top Left (desktop only — skipped on mobile to avoid 4+ MB download) */}
+      {isDesktop && (
       <div
         className="floating-gif-left absolute top-4 left-5 hidden lg:block"
         style={{ zIndex: 1 }}
@@ -325,8 +331,10 @@ export default function HeroSection() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Floating GIF - Bottom Right */}
+      {/* Floating GIF - Bottom Right (desktop only) */}
+      {isDesktop && (
       <div
         className="floating-gif-right absolute bottom-32 right-10 hidden lg:block"
         style={{ zIndex: 1 }}
@@ -353,6 +361,7 @@ export default function HeroSection() {
           </div>
         </div>
       </div>
+      )}
 
       <div
         className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
