@@ -908,3 +908,73 @@ export function subscribeToHighlights(
     supabase.removeChannel(channel);
   };
 }
+
+// =============================================
+// TOPIC LIKES
+// =============================================
+// Run this SQL once in Supabase SQL editor:
+//
+//   create table if not exists topic_likes (
+//     id uuid default gen_random_uuid() primary key,
+//     user_id uuid not null references auth.users(id) on delete cascade,
+//     topic_id integer not null,
+//     created_at timestamptz default now(),
+//     unique(user_id, topic_id)
+//   );
+//   alter table topic_likes enable row level security;
+//   create policy "Users can view all likes" on topic_likes for select using (true);
+//   create policy "Users can like" on topic_likes for insert with check (auth.uid() = user_id);
+//   create policy "Users can unlike" on topic_likes for delete using (auth.uid() = user_id);
+
+export async function getTopicLikeStatus(
+  topicId: number,
+  userId: string
+): Promise<{ liked: boolean; count: number }> {
+  if (!supabase) return { liked: false, count: 0 };
+
+  const [countResult, userResult] = await Promise.all([
+    supabase
+      .from("topic_likes")
+      .select("id", { count: "exact", head: true })
+      .eq("topic_id", topicId),
+    supabase
+      .from("topic_likes")
+      .select("id")
+      .eq("topic_id", topicId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+
+  return {
+    liked: !!userResult.data,
+    count: countResult.count ?? 0,
+  };
+}
+
+export async function toggleTopicLike(
+  topicId: number,
+  userId: string
+): Promise<{ liked: boolean; count: number }> {
+  if (!supabase) return { liked: false, count: 0 };
+
+  const { data: existing } = await supabase
+    .from("topic_likes")
+    .select("id")
+    .eq("topic_id", topicId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("topic_likes")
+      .delete()
+      .eq("topic_id", topicId)
+      .eq("user_id", userId);
+  } else {
+    await supabase
+      .from("topic_likes")
+      .insert({ topic_id: topicId, user_id: userId });
+  }
+
+  return getTopicLikeStatus(topicId, userId);
+}

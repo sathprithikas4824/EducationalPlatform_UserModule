@@ -6,7 +6,7 @@ import localFont from "next/font/local";
 import { ArrowRight, ArrowDown } from "../common/icons";
 import { Highlightable } from "../common/Highlightable";
 import { useAnnotation } from "../common/AnnotationProvider";
-import { supabase, markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions, getLastUserId, getDeviceId } from "../../lib/supabase";
+import { supabase, markTopicCompleted, getCompletedTopics, resetModuleProgress, resetTopicProgress, saveTopicScrollPosition, getTopicScrollPosition, clearModuleScrollPositions, getLastUserId, getDeviceId, getTopicLikeStatus, toggleTopicLike } from "../../lib/supabase";
 import { cachedFetch } from "../../lib/apiCache";
 import { saveDownload } from "../../lib/downloads";
 import { loadBookmarks, toggleBookmark } from "../../lib/bookmarks";
@@ -132,6 +132,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [resetTopicId, setResetTopicId] = useState<number | null>(null);
   const [downloadedSet, setDownloadedSet] = useState<Set<string>>(new Set());
   const [bookmarkedTopicIds, setBookmarkedTopicIds] = useState<Set<number>>(new Set());
+  const [likedTopicIds, setLikedTopicIds] = useState<Set<number>>(new Set());
+  const [topicLikeCounts, setTopicLikeCounts] = useState<Record<number, number>>({});
+  const [likeLoading, setLikeLoading] = useState(false);
   const [moduleDownloadState, setModuleDownloadState] = useState<"idle" | "downloading" | "done" | "needs-login">("idle");
   const [moduleDownloadProgress, setModuleDownloadProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
 
@@ -143,6 +146,19 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       setBookmarkedTopicIds(new Set(topicRecords.map((b) => b.topicId as number)));
     });
   }, [user?.id]);
+
+  // Load like status whenever selected topic changes
+  useEffect(() => {
+    if (!user?.id || !selectedTopic) return;
+    getTopicLikeStatus(selectedTopic.topic_id, user.id).then(({ liked, count }) => {
+      setLikedTopicIds((prev) => {
+        const next = new Set(prev);
+        liked ? next.add(selectedTopic.topic_id) : next.delete(selectedTopic.topic_id);
+        return next;
+      });
+      setTopicLikeCounts((prev) => ({ ...prev, [selectedTopic.topic_id]: count }));
+    });
+  }, [selectedTopic?.topic_id, user?.id]);
 
   const handleTopicBookmark = useCallback(async (
     topicId: number,
@@ -165,6 +181,33 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       return next;
     });
   }, [user?.id]);
+
+  const handleTopicLike = useCallback(async (topicId: number) => {
+    if (!user?.id || likeLoading) return;
+    const wasLiked = likedTopicIds.has(topicId);
+    // Optimistic update
+    setLikedTopicIds((prev) => {
+      const next = new Set(prev);
+      wasLiked ? next.delete(topicId) : next.add(topicId);
+      return next;
+    });
+    setTopicLikeCounts((prev) => ({
+      ...prev,
+      [topicId]: Math.max(0, (prev[topicId] ?? 0) + (wasLiked ? -1 : 1)),
+    }));
+    setLikeLoading(true);
+    try {
+      const { liked, count } = await toggleTopicLike(topicId, user.id);
+      setLikedTopicIds((prev) => {
+        const next = new Set(prev);
+        liked ? next.add(topicId) : next.delete(topicId);
+        return next;
+      });
+      setTopicLikeCounts((prev) => ({ ...prev, [topicId]: count }));
+    } finally {
+      setLikeLoading(false);
+    }
+  }, [user?.id, likedTopicIds, likeLoading]);
 
   // Strip HTML tags AND decode entities, preserving paragraph/block-level whitespace
   const stripHtml = (html: string): string => {
@@ -1947,27 +1990,53 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
             <Highlightable pageId={selectedTopic ? `topic-${selectedTopic.topic_id}` : "default"}>
               {selectedTopic ? (
                 <div ref={contentWrapperRef} className="ai-content-wrapper">
-                  {/* Topic name row with bookmark button */}
+                  {/* Topic name row with like + bookmark buttons */}
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide truncate pr-2">
                       {selectedTopic.name}
                     </span>
-                    {user && (
-                      <button
-                        onClick={() =>
-                          handleTopicBookmark(
-                            selectedTopic.topic_id,
-                            selectedTopic.name,
-                            selectedTopic.submodule_id,
-                            currentSubmodule?.name || ""
-                          )
-                        }
-                        className="flex-shrink-0 p-1 rounded-full hover:bg-purple-50 transition-colors"
-                        title={bookmarkedTopicIds.has(selectedTopic.topic_id) ? "Remove bookmark" : "Bookmark this topic"}
-                      >
-                        <BookmarkHeart filled={bookmarkedTopicIds.has(selectedTopic.topic_id)} size={18} />
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {/* Like button */}
+                      {user && (
+                        <button
+                          onClick={() => handleTopicLike(selectedTopic.topic_id)}
+                          disabled={likeLoading}
+                          className="flex items-center gap-1 px-2 py-1 rounded-full hover:bg-red-50 transition-colors disabled:opacity-60"
+                          title={likedTopicIds.has(selectedTopic.topic_id) ? "Unlike this topic" : "Like this topic"}
+                        >
+                          <svg
+                            className={`w-4 h-4 transition-colors ${likedTopicIds.has(selectedTopic.topic_id) ? "fill-red-500 stroke-red-500" : "fill-none stroke-gray-400"}`}
+                            strokeWidth={2}
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                          </svg>
+                          {(topicLikeCounts[selectedTopic.topic_id] ?? 0) > 0 && (
+                            <span className={`text-xs font-semibold ${likedTopicIds.has(selectedTopic.topic_id) ? "text-red-500" : "text-gray-400"}`}>
+                              {topicLikeCounts[selectedTopic.topic_id]}
+                            </span>
+                          )}
+                        </button>
+                      )}
+                      {/* Bookmark button */}
+                      {user && (
+                        <button
+                          onClick={() =>
+                            handleTopicBookmark(
+                              selectedTopic.topic_id,
+                              selectedTopic.name,
+                              selectedTopic.submodule_id,
+                              currentSubmodule?.name || ""
+                            )
+                          }
+                          className="p-1 rounded-full hover:bg-purple-50 transition-colors"
+                          title={bookmarkedTopicIds.has(selectedTopic.topic_id) ? "Remove bookmark" : "Bookmark this topic"}
+                        >
+                          <BookmarkHeart filled={bookmarkedTopicIds.has(selectedTopic.topic_id)} size={18} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <section className="mb-6 sm:mb-8">
                     {/* Topic Title from backend */}
