@@ -160,6 +160,41 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     });
   }, [selectedTopic?.topic_id, user?.id]);
 
+  // Realtime subscription — keep like count in sync for all viewers of this topic
+  useEffect(() => {
+    if (!supabase || !selectedTopic) return;
+    const topicId = selectedTopic.topic_id;
+    const userId = user?.id ?? "";
+
+    const refresh = () =>
+      getTopicLikeStatus(topicId, userId).then(({ liked, count }) => {
+        setTopicLikeCounts((prev) => ({ ...prev, [topicId]: count }));
+        setLikedTopicIds((prev) => {
+          const next = new Set(prev);
+          liked ? next.add(topicId) : next.delete(topicId);
+          return next;
+        });
+      });
+
+    const channel = supabase
+      .channel(`topic-likes-${topicId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "topic_likes", filter: `topic_id=eq.${topicId}` },
+        refresh
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "topic_likes", filter: `topic_id=eq.${topicId}` },
+        refresh
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedTopic?.topic_id, user?.id]);
+
   const handleTopicBookmark = useCallback(async (
     topicId: number,
     topicName: string,
