@@ -147,10 +147,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     });
   }, [user?.id]);
 
-  // Load like status whenever selected topic changes
+  // Load like status whenever selected topic changes — works for all users (logged in or not)
   useEffect(() => {
-    if (!user?.id || !selectedTopic) return;
-    getTopicLikeStatus(selectedTopic.topic_id, user.id).then(({ liked, count }) => {
+    if (!selectedTopic) return;
+    getTopicLikeStatus(selectedTopic.topic_id, user?.id ?? "").then(({ liked, count }) => {
       setLikedTopicIds((prev) => {
         const next = new Set(prev);
         liked ? next.add(selectedTopic.topic_id) : next.delete(selectedTopic.topic_id);
@@ -2031,29 +2031,27 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                       {selectedTopic.name}
                     </span>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {/* Like button */}
-                      {user && (
-                        <button
-                          onClick={() => handleTopicLike(selectedTopic.topic_id)}
-                          disabled={likeLoading}
-                          className="flex items-center gap-1 px-2 py-1 rounded-full hover:bg-red-50 transition-colors disabled:opacity-60"
-                          title={likedTopicIds.has(selectedTopic.topic_id) ? "Unlike this topic" : "Like this topic"}
+                      {/* Like button — count visible to everyone, interactive only when logged in */}
+                      <button
+                        onClick={() => user && handleTopicLike(selectedTopic.topic_id)}
+                        disabled={!user || likeLoading}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors disabled:opacity-100 ${user ? "hover:bg-red-50 cursor-pointer" : "cursor-default"}`}
+                        title={!user ? "Login to like this topic" : likedTopicIds.has(selectedTopic.topic_id) ? "Unlike this topic" : "Like this topic"}
+                      >
+                        <svg
+                          className={`w-4 h-4 transition-colors ${likedTopicIds.has(selectedTopic.topic_id) ? "fill-red-500 stroke-red-500" : "fill-none stroke-gray-400"}`}
+                          strokeWidth={2}
+                          viewBox="0 0 24 24"
+                          xmlns="http://www.w3.org/2000/svg"
                         >
-                          <svg
-                            className={`w-4 h-4 transition-colors ${likedTopicIds.has(selectedTopic.topic_id) ? "fill-red-500 stroke-red-500" : "fill-none stroke-gray-400"}`}
-                            strokeWidth={2}
-                            viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                          </svg>
-                          {(topicLikeCounts[selectedTopic.topic_id] ?? 0) > 0 && (
-                            <span className={`text-xs font-semibold ${likedTopicIds.has(selectedTopic.topic_id) ? "text-red-500" : "text-gray-400"}`}>
-                              {topicLikeCounts[selectedTopic.topic_id]}
-                            </span>
-                          )}
-                        </button>
-                      )}
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                        {(topicLikeCounts[selectedTopic.topic_id] ?? 0) > 0 && (
+                          <span className={`text-xs font-semibold ${likedTopicIds.has(selectedTopic.topic_id) ? "text-red-500" : "text-gray-400"}`}>
+                            {topicLikeCounts[selectedTopic.topic_id]}
+                          </span>
+                        )}
+                      </button>
                       {/* Bookmark button */}
                       {user && (
                         <button
