@@ -6,83 +6,104 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Primary free model — fallback if primary fails
-const PRIMARY_MODEL = "meta-llama/llama-3.1-8b-instruct:free";
-const FALLBACK_MODEL = "mistralai/mistral-7b-instruct:free";
+// Ordered list — tries each model until one succeeds
+const MODELS = [
+  "meta-llama/llama-3.1-8b-instruct:free",
+  "mistralai/mistral-7b-instruct:free",
+  "qwen/qwen-2.5-7b-instruct:free",
+];
 
-async function callOpenRouter(model: string, topicName: string, truncated: string) {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      "HTTP-Referer": "https://eduplatform.app",
-      "X-Title": "EduPlatform",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 400,
-      messages: [
-        {
-          role: "user",
-          content: `You are an educational content summarizer. Summarize the topic "${topicName}" in 4-5 clear bullet points using simple language. Only output the bullet points, nothing else.\n\n${truncated}`,
-        },
-      ],
-    }),
-  });
+async function callOpenRouter(model: string, topicName: string, text: string): Promise<string | null> {
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://eduplatform.app",
+        "X-Title": "EduPlatform",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 400,
+        temperature: 0.5,
+        messages: [
+          {
+            role: "user",
+            content: `Summarize the educational topic "${topicName}" in exactly 4-5 bullet points. Each bullet point should start with "- ". Be concise and use simple language.\n\nContent:\n${text}`,
+          },
+        ],
+      }),
+    });
 
-  const data = await response.json();
+    const data = await res.json();
 
-  if (!response.ok) {
-    console.error(`OpenRouter [${model}] error:`, JSON.stringify(data));
+    if (!res.ok) {
+      console.error(`[summarize] model=${model} status=${res.status}`, JSON.stringify(data));
+      return null;
+    }
+
+    const summary = data.choices?.[0]?.message?.content?.trim();
+    if (!summary) {
+      console.error(`[summarize] model=${model} empty response`, JSON.stringify(data));
+      return null;
+    }
+
+    return summary;
+  } catch (err) {
+    console.error(`[summarize] model=${model} threw:`, err);
     return null;
   }
-
-  const summary: string = data.choices?.[0]?.message?.content?.trim() ?? "";
-  return summary || null;
 }
 
 export async function POST(req: NextRequest) {
-  const { topicId, topicName, content } = await req.json();
+  try {
+    const { topicId, topicName, content } = await req.json();
 
-  if (!topicId || !content?.trim()) {
-    return NextResponse.json({ error: "Missing topicId or content" }, { status: 400 });
+    if (!topicId) {
+      return NextResponse.json({ error: "Missing topicId" }, { status: 400 });
+    }
+
+    // Check Supabase cache first — same topic is never summarized twice
+    const { data: cached } = await supabaseAdmin
+      .from("topic_summaries")
+      .select("summary")
+      .eq("topic_id", topicId)
+      .maybeSingle();
+
+    if (cached?.summary) {
+      return NextResponse.json({ summary: cached.summary, cached: true });
+    }
+
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.error("[summarize] OPENROUTER_API_KEY is not set");
+      return NextResponse.json({ error: "AI summarization is not configured on the server." }, { status: 503 });
+    }
+
+    // If no content, generate a generic summary request
+    const text = content?.trim()
+      ? content.trim().slice(0, 4000)
+      : `This is an educational topic called "${topicName}". Please provide a general summary.`;
+
+    // Try each model in order until one succeeds
+    let summary: string | null = null;
+    for (const model of MODELS) {
+      summary = await callOpenRouter(model, topicName, text);
+      if (summary) break;
+    }
+
+    if (!summary) {
+      return NextResponse.json({ error: "All AI models failed. Please try again." }, { status: 500 });
+    }
+
+    // Save to Supabase cache
+    await supabaseAdmin
+      .from("topic_summaries")
+      .upsert({ topic_id: topicId, summary }, { onConflict: "topic_id", ignoreDuplicates: true });
+
+    return NextResponse.json({ summary, cached: false });
+  } catch (err) {
+    console.error("[summarize] Unexpected error:", err);
+    return NextResponse.json({ error: "Unexpected server error." }, { status: 500 });
   }
-
-  // Check Supabase cache first — same topic is never summarized twice
-  const { data: cached } = await supabaseAdmin
-    .from("topic_summaries")
-    .select("summary")
-    .eq("topic_id", topicId)
-    .maybeSingle();
-
-  if (cached?.summary) {
-    return NextResponse.json({ summary: cached.summary, cached: true });
-  }
-
-  if (!process.env.OPENROUTER_API_KEY) {
-    return NextResponse.json({ error: "AI summarization is not configured." }, { status: 503 });
-  }
-
-  // Truncate to 4000 chars to control cost and latency
-  const truncated = content.trim().slice(0, 4000);
-
-  // Try primary model first, fall back to secondary if it fails
-  let summary = await callOpenRouter(PRIMARY_MODEL, topicName, truncated);
-
-  if (!summary) {
-    console.warn("Primary model failed, trying fallback model...");
-    summary = await callOpenRouter(FALLBACK_MODEL, topicName, truncated);
-  }
-
-  if (!summary) {
-    return NextResponse.json({ error: "Failed to generate summary. Please try again." }, { status: 500 });
-  }
-
-  // Save to Supabase cache — same topic never hits the API twice
-  await supabaseAdmin
-    .from("topic_summaries")
-    .upsert({ topic_id: topicId, summary }, { onConflict: "topic_id", ignoreDuplicates: true });
-
-  return NextResponse.json({ summary, cached: false });
 }
