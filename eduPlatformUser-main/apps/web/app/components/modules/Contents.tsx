@@ -287,10 +287,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       if (data.summary) {
         setSummaries((prev) => ({ ...prev, [id]: data.summary }));
       } else {
-        setSummaries((prev) => ({ ...prev, [id]: "Could not generate summary. Please try again." }));
+        const errMsg = data.error || "Could not generate summary. Please try again.";
+        setSummaries((prev) => ({ ...prev, [id]: `⚠ ${errMsg}` }));
       }
     } catch {
-      setSummaries((prev) => ({ ...prev, [id]: "Network error. Please try again." }));
+      setSummaries((prev) => ({ ...prev, [id]: "⚠ Network error. Please try again." }));
     } finally {
       setSummaryLoading(false);
     }
