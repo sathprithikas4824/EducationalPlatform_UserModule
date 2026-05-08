@@ -8,37 +8,30 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const MODELS = [
-  "meta-llama/llama-3.1-8b-instruct:free",
-  "mistralai/mistral-7b-instruct:free",
-  "google/gemini-2.0-flash-exp:free",
-];
-
-async function callOpenRouter(
-  model: string,
-  topicName: string,
-  text: string
-): Promise<string | null> {
+async function callGroq(topicName: string, text: string): Promise<string | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
 
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://eduplatform.app",
-        "X-Title": "EduPlatform",
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model,
-        max_tokens: 350,
+        model: "llama-3.1-8b-instant",
+        max_tokens: 400,
         temperature: 0.3,
         messages: [
           {
+            role: "system",
+            content:
+              "You are an educational content summarizer. Summarize the given topic in exactly 4-5 bullet points starting with '- '. Use simple, clear language. Only output the bullet points, nothing else.",
+          },
+          {
             role: "user",
-            content: `Summarize the educational topic "${topicName}" in 4-5 bullet points starting with "- ". Use simple, clear language. Only output the bullet points.\n\nContent:\n${text}`,
+            content: `Topic: "${topicName}"\n\n${text}`,
           },
         ],
       }),
@@ -48,22 +41,22 @@ async function callOpenRouter(
     const data = await res.json();
 
     if (!res.ok) {
-      console.error(`[summarize] ${model} HTTP ${res.status}:`, JSON.stringify(data));
+      console.error("[summarize] Groq error:", JSON.stringify(data));
       return null;
     }
 
     const summary = data.choices?.[0]?.message?.content?.trim();
     if (!summary) {
-      console.error(`[summarize] ${model} empty content:`, JSON.stringify(data));
+      console.error("[summarize] Groq empty response:", JSON.stringify(data));
       return null;
     }
 
     return summary;
   } catch (err: unknown) {
     if (err instanceof Error && err.name === "AbortError") {
-      console.error(`[summarize] ${model} timed out after 20s`);
+      console.error("[summarize] Groq timed out after 20s");
     } else {
-      console.error(`[summarize] ${model} threw:`, err);
+      console.error("[summarize] Groq threw:", err);
     }
     return null;
   } finally {
@@ -90,10 +83,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ summary: cached.summary, cached: true });
     }
 
-    if (!process.env.OPENROUTER_API_KEY) {
-      console.error("[summarize] OPENROUTER_API_KEY missing in environment");
+    if (!process.env.GROQ_API_KEY) {
+      console.error("[summarize] GROQ_API_KEY missing in environment");
       return NextResponse.json(
-        { error: "Server configuration error: API key not set." },
+        { error: "Server configuration error: GROQ_API_KEY not set." },
         { status: 503 }
       );
     }
@@ -102,23 +95,16 @@ export async function POST(req: NextRequest) {
       ? content.trim().slice(0, 3000)
       : `Topic: ${topicName}. Provide a general educational summary.`;
 
-    let summary: string | null = null;
-    for (const model of MODELS) {
-      console.log(`[summarize] trying model: ${model}`);
-      summary = await callOpenRouter(model, topicName, text);
-      if (summary) {
-        console.log(`[summarize] success with model: ${model}`);
-        break;
-      }
-    }
+    const summary = await callGroq(topicName, text);
 
     if (!summary) {
       return NextResponse.json(
-        { error: "All AI models failed. Please try again in a few seconds." },
+        { error: "Failed to generate summary. Please try again." },
         { status: 500 }
       );
     }
 
+    // Save to Supabase cache — never summarized again
     await supabaseAdmin
       .from("topic_summaries")
       .upsert(
