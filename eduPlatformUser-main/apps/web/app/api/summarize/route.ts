@@ -8,7 +8,16 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-async function callGroq(topicName: string, text: string): Promise<string | null> {
+const SYSTEM_PROMPTS: Record<string, string> = {
+  professional:
+    "You are an educational content summarizer. Summarize the given topic in exactly 4-5 bullet points starting with '- '. Use formal, professional language with precise technical terminology. Only output the bullet points, nothing else.",
+  simple:
+    "You are an educational content summarizer. Summarize the given topic in exactly 4-5 bullet points starting with '- '. Use simple, everyday language that a high school student can easily understand. Avoid technical jargon. Only output the bullet points, nothing else.",
+  basic:
+    "You are an educational content summarizer. Summarize the given topic in exactly 4-5 bullet points starting with '- '. Use very basic language as if explaining to a 12-year-old. Use very short sentences and only common everyday words. Only output the bullet points, nothing else.",
+};
+
+async function callGroq(topicName: string, text: string, level: string): Promise<string | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
 
@@ -26,8 +35,7 @@ async function callGroq(topicName: string, text: string): Promise<string | null>
         messages: [
           {
             role: "system",
-            content:
-              "You are an educational content summarizer. Summarize the given topic in exactly 4-5 bullet points starting with '- '. Use simple, clear language. Only output the bullet points, nothing else.",
+            content: SYSTEM_PROMPTS[level] ?? SYSTEM_PROMPTS.professional,
           },
           {
             role: "user",
@@ -66,17 +74,19 @@ async function callGroq(topicName: string, text: string): Promise<string | null>
 
 export async function POST(req: NextRequest) {
   try {
-    const { topicId, topicName, content } = await req.json();
+    const { topicId, topicName, content, level = "professional" } = await req.json();
 
     if (!topicId) {
       return NextResponse.json({ error: "Missing topicId" }, { status: 400 });
     }
 
-    // Check Supabase cache — same topic never hits API twice
+    // Cache key includes level — each version is cached separately
+    const cacheKey = `${topicId}_${level}`;
+
     const { data: cached } = await supabaseAdmin
       .from("topic_summaries")
       .select("summary")
-      .eq("topic_id", topicId)
+      .eq("topic_id", cacheKey)
       .maybeSingle();
 
     if (cached?.summary) {
@@ -95,7 +105,7 @@ export async function POST(req: NextRequest) {
       ? content.trim().slice(0, 3000)
       : `Topic: ${topicName}. Provide a general educational summary.`;
 
-    const summary = await callGroq(topicName, text);
+    const summary = await callGroq(topicName, text, level);
 
     if (!summary) {
       return NextResponse.json(
@@ -104,11 +114,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Save to Supabase cache — never summarized again
+    // Save with level-specific cache key
     await supabaseAdmin
       .from("topic_summaries")
       .upsert(
-        { topic_id: topicId, summary },
+        { topic_id: cacheKey, summary },
         { onConflict: "topic_id", ignoreDuplicates: true }
       );
 

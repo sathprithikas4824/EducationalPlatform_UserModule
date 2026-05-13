@@ -136,10 +136,16 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [topicLikeCounts, setTopicLikeCounts] = useState<Record<number, number>>({});
   const [likeLoading, setLikeLoading] = useState(false);
   const [summaries, setSummaries] = useState<Record<number, string>>({});
+  const [summaryAllVersions, setSummaryAllVersions] = useState<Record<number, string[]>>({});
+  const [summaryCurrentLevel, setSummaryCurrentLevel] = useState<Record<number, number>>({});
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryFormat, setSummaryFormat] = useState<"bullets" | "paragraph">("bullets");
   const [summaryFeedback, setSummaryFeedback] = useState<Record<number, "helpful" | "not_helpful">>({});
+
+  const SUMMARY_LEVELS = ["professional", "simple", "basic"] as const;
+  const SUMMARY_LEVEL_NAMES = ["Professional English", "Simple English", "Basic English"];
+  const SUMMARY_LEVEL_COLORS = ["text-blue-600 bg-blue-50 border-blue-200", "text-green-600 bg-green-50 border-green-200", "text-orange-600 bg-orange-50 border-orange-200"];
   const [moduleDownloadState, setModuleDownloadState] = useState<"idle" | "downloading" | "done" | "needs-login">("idle");
   const [moduleDownloadProgress, setModuleDownloadProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
 
@@ -252,10 +258,16 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     }
   }, [user?.id, likedTopicIds, likeLoading]);
 
-  const handleGetSummary = useCallback(async (topic: Topic) => {
+  const handleGetSummary = useCallback(async (topic: Topic, requestedLevel: number = 0) => {
     const id = topic.topic_id;
-    // Return cached summary from this session immediately
-    if (summaries[id]) { setSummaryOpen(true); return; }
+
+    // If we already have this version cached in session, show it instantly
+    if (summaryAllVersions[id]?.[requestedLevel]) {
+      setSummaries((prev) => ({ ...prev, [id]: summaryAllVersions[id][requestedLevel] }));
+      setSummaryCurrentLevel((prev) => ({ ...prev, [id]: requestedLevel }));
+      setSummaryOpen(true);
+      return;
+    }
 
     setSummaryLoading(true);
     setSummaryOpen(true);
@@ -283,21 +295,31 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const res = await fetch("/api/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicId: id, topicName: topic.name, content: rawText }),
+        body: JSON.stringify({
+          topicId: id,
+          topicName: topic.name,
+          content: rawText,
+          level: SUMMARY_LEVELS[requestedLevel],
+        }),
       });
       const data = await res.json();
-      if (data.summary) {
-        setSummaries((prev) => ({ ...prev, [id]: data.summary }));
-      } else {
-        const errMsg = data.error || "Could not generate summary. Please try again.";
-        setSummaries((prev) => ({ ...prev, [id]: `⚠ ${errMsg}` }));
-      }
+      const text = data.summary
+        ? data.summary
+        : `⚠ ${data.error || "Could not generate summary. Please try again."}`;
+
+      setSummaryAllVersions((prev) => {
+        const versions = [...(prev[id] ?? [])];
+        versions[requestedLevel] = text;
+        return { ...prev, [id]: versions };
+      });
+      setSummaries((prev) => ({ ...prev, [id]: text }));
+      setSummaryCurrentLevel((prev) => ({ ...prev, [id]: requestedLevel }));
     } catch {
       setSummaries((prev) => ({ ...prev, [id]: "⚠ Network error. Please try again." }));
     } finally {
       setSummaryLoading(false);
     }
-  }, [summaries]);
+  }, [summaryAllVersions, SUMMARY_LEVELS]);
 
   // Strip HTML tags AND decode entities, preserving paragraph/block-level whitespace
   const stripHtml = (html: string): string => {
@@ -2128,16 +2150,43 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                   </div>
                   {/* AI Summary Button + Panel */}
                   <div className="mb-5">
-                    <button
-                      onClick={() => handleGetSummary(selectedTopic)}
-                      disabled={summaryLoading}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors disabled:opacity-60"
-                    >
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.091z" />
-                      </svg>
-                      {summaryLoading ? "Generating..." : summaryOpen && summaries[selectedTopic.topic_id] ? "Hide Summary" : "AI Summary"}
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Main AI Summary / Hide button */}
+                      <button
+                        onClick={() => {
+                          if (summaryOpen && summaries[selectedTopic.topic_id]) {
+                            setSummaryOpen(false);
+                          } else {
+                            handleGetSummary(selectedTopic, summaryCurrentLevel[selectedTopic.topic_id] ?? 0);
+                          }
+                        }}
+                        disabled={summaryLoading}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors disabled:opacity-60"
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.091z" />
+                        </svg>
+                        {summaryLoading ? "Generating..." : summaryOpen && summaries[selectedTopic.topic_id] ? "Hide Summary" : "AI Summary"}
+                      </button>
+
+                      {/* Regenerate button — appears after first generation, hidden at max level */}
+                      {summaries[selectedTopic.topic_id] && !summaryLoading && (summaryCurrentLevel[selectedTopic.topic_id] ?? 0) < SUMMARY_LEVELS.length - 1 && (
+                        <button
+                          onClick={() => handleGetSummary(selectedTopic, (summaryCurrentLevel[selectedTopic.topic_id] ?? 0) + 1)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 transition-colors"
+                        >
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                          </svg>
+                          Regenerate → {SUMMARY_LEVEL_NAMES[(summaryCurrentLevel[selectedTopic.topic_id] ?? 0) + 1]}
+                        </button>
+                      )}
+
+                      {/* Max reached label */}
+                      {summaries[selectedTopic.topic_id] && !summaryLoading && (summaryCurrentLevel[selectedTopic.topic_id] ?? 0) >= SUMMARY_LEVELS.length - 1 && (
+                        <span className="text-[10px] text-gray-400 italic">All versions generated</span>
+                      )}
+                    </div>
 
                     {summaryOpen && (
                       <div className="mt-3 rounded-xl border border-purple-200 bg-purple-50 dark:bg-purple-950/20 dark:border-purple-800 overflow-hidden">
@@ -2149,7 +2198,19 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.091z" />
                               </svg>
                               <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">AI Summary</span>
+                              {/* Level badge */}
+                              {!summaryLoading && summaries[selectedTopic.topic_id] && (
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${SUMMARY_LEVEL_COLORS[summaryCurrentLevel[selectedTopic.topic_id] ?? 0]}`}>
+                                  {SUMMARY_LEVEL_NAMES[summaryCurrentLevel[selectedTopic.topic_id] ?? 0]}
+                                </span>
+                              )}
                               <span className="text-[10px] text-purple-400 dark:text-purple-500">· Based on this topic&apos;s content</span>
+                              {/* Version counter */}
+                              {!summaryLoading && summaries[selectedTopic.topic_id] && (
+                                <span className="text-[10px] text-purple-400">
+                                  ({(summaryCurrentLevel[selectedTopic.topic_id] ?? 0) + 1} of {SUMMARY_LEVELS.length})
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               {/* Format toggle */}
