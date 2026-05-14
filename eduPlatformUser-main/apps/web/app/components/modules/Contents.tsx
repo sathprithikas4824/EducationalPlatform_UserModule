@@ -137,8 +137,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [likeLoading, setLikeLoading] = useState(false);
   const [summaries, setSummaries] = useState<Record<number, string>>({});
   const [summaryAllVersions, setSummaryAllVersions] = useState<Record<number, string[]>>({});
+  const [summaryParagraphVersions, setSummaryParagraphVersions] = useState<Record<number, string[]>>({});
   const [summaryCurrentLevel, setSummaryCurrentLevel] = useState<Record<number, number>>({});
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryParagraphLoading, setSummaryParagraphLoading] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryFormat, setSummaryFormat] = useState<"bullets" | "paragraph">("bullets");
   const [summaryFeedback, setSummaryFeedback] = useState<Record<number, "helpful" | "not_helpful">>({});
@@ -320,6 +322,70 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       setSummaryLoading(false);
     }
   }, [summaryAllVersions, SUMMARY_LEVELS]);
+
+  const handleGetParagraphSummary = useCallback(async (topic: Topic) => {
+    const id = topic.topic_id;
+    const level = summaryCurrentLevel[id] ?? 0;
+
+    // Already cached in session — show instantly
+    if (summaryParagraphVersions[id]?.[level]) {
+      setSummaryFormat("paragraph");
+      return;
+    }
+
+    setSummaryParagraphLoading(true);
+    setSummaryFormat("paragraph");
+
+    const rawText = [topic.title, topic.description, topic.content]
+      .filter(Boolean)
+      .map((html) => {
+        try {
+          const prep = (html as string)
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<\/(p|div|h[1-6]|li|blockquote|pre)>/gi, "\n\n")
+            .replace(/<[^>]*>/g, "");
+          return new DOMParser()
+            .parseFromString(prep, "text/html")
+            .body.textContent?.replace(/\s+/g, " ")
+            .trim() ?? "";
+        } catch {
+          return (html as string).replace(/<[^>]*>/g, " ").trim();
+        }
+      })
+      .join("\n\n");
+
+    try {
+      const res = await fetch("/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topicId: id,
+          topicName: topic.name,
+          content: rawText,
+          level: SUMMARY_LEVELS[level],
+          format: "paragraph",
+        }),
+      });
+      const data = await res.json();
+      const text = data.summary
+        ? data.summary
+        : `⚠ ${data.error || "Could not generate paragraph. Please try again."}`;
+
+      setSummaryParagraphVersions((prev) => {
+        const versions = [...(prev[id] ?? [])];
+        versions[level] = text;
+        return { ...prev, [id]: versions };
+      });
+    } catch {
+      setSummaryParagraphVersions((prev) => {
+        const versions = [...(prev[id] ?? [])];
+        versions[level] = "⚠ Network error. Please try again.";
+        return { ...prev, [id]: versions };
+      });
+    } finally {
+      setSummaryParagraphLoading(false);
+    }
+  }, [summaryCurrentLevel, summaryParagraphVersions, SUMMARY_LEVELS]);
 
   // Strip HTML tags AND decode entities, preserving paragraph/block-level whitespace
   const stripHtml = (html: string): string => {
@@ -2172,7 +2238,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                       {/* Regenerate button — appears after first generation, hidden at max level */}
                       {summaries[selectedTopic.topic_id] && !summaryLoading && (summaryCurrentLevel[selectedTopic.topic_id] ?? 0) < SUMMARY_LEVELS.length - 1 && (
                         <button
-                          onClick={() => handleGetSummary(selectedTopic, (summaryCurrentLevel[selectedTopic.topic_id] ?? 0) + 1)}
+                          onClick={() => { setSummaryFormat("bullets"); handleGetSummary(selectedTopic, (summaryCurrentLevel[selectedTopic.topic_id] ?? 0) + 1); }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 transition-colors"
                         >
                           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -2223,10 +2289,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                                     Bullets
                                   </button>
                                   <button
-                                    onClick={() => setSummaryFormat("paragraph")}
-                                    className={`text-[10px] px-2 py-0.5 rounded transition-colors ${summaryFormat === "paragraph" ? "bg-white dark:bg-purple-600 text-purple-700 dark:text-white shadow-sm font-semibold" : "text-purple-500 dark:text-purple-300 hover:text-purple-700"}`}
+                                    onClick={() => handleGetParagraphSummary(selectedTopic)}
+                                    disabled={summaryParagraphLoading}
+                                    className={`text-[10px] px-2 py-0.5 rounded transition-colors disabled:opacity-50 ${summaryFormat === "paragraph" ? "bg-white dark:bg-purple-600 text-purple-700 dark:text-white shadow-sm font-semibold" : "text-purple-500 dark:text-purple-300 hover:text-purple-700"}`}
                                   >
-                                    Paragraph
+                                    {summaryParagraphLoading ? "..." : "Paragraph"}
                                   </button>
                                 </div>
                               )}
@@ -2247,14 +2314,17 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                               ))}
                             </div>
                           ) : summaryFormat === "paragraph" ? (
-                            <p className="leading-relaxed">
-                              {(summaries[selectedTopic.topic_id] ?? "")
-                                .split("\n")
-                                .filter(Boolean)
-                                .map((line) => line.replace(/^[-•*]\s*/, "").trim())
-                                .filter(Boolean)
-                                .join(" ")}
-                            </p>
+                            summaryParagraphLoading ? (
+                              <div className="space-y-2 animate-pulse">
+                                {[95, 80, 70].map((w, i) => (
+                                  <div key={i} className="h-3 bg-purple-200 rounded" style={{ width: `${w}%` }} />
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="leading-relaxed text-sm text-gray-700 dark:text-gray-300">
+                                {summaryParagraphVersions[selectedTopic.topic_id]?.[summaryCurrentLevel[selectedTopic.topic_id] ?? 0] ?? ""}
+                              </p>
+                            )
                           ) : (
                             <div className="space-y-2">
                               {(summaries[selectedTopic.topic_id] ?? "").split("\n").filter(Boolean).map((line, i) => (
