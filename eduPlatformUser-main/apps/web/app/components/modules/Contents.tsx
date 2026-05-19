@@ -10,6 +10,7 @@ import { supabase, markTopicCompleted, getCompletedTopics, resetModuleProgress, 
 import { cachedFetch } from "../../lib/apiCache";
 import { saveDownload } from "../../lib/downloads";
 import { loadBookmarks, toggleBookmark } from "../../lib/bookmarks";
+import { getNoteForTopic, upsertNote } from "../../lib/notes";
 import { BookmarkHeart } from "../common/icons/BookmarkHeart";
 import TopicComments from "./TopicComments";
 
@@ -145,6 +146,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [summaryFormat, setSummaryFormat] = useState<"bullets" | "paragraph">("bullets");
   const [summaryFeedback, setSummaryFeedback] = useState<Record<number, "helpful" | "not_helpful">>({});
 
+  // Notes state
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesContent, setNotesContent] = useState<Record<number, string>>({});
+  const [notesSaveStatus, setNotesSaveStatus] = useState<Record<number, "idle" | "saving" | "saved" | "error">>({});
+  const [summaryNotionStatus, setSummaryNotionStatus] = useState<Record<number, "idle" | "syncing" | "synced" | "error">>({});
+  const [notesNotionStatus, setNotesNotionStatus] = useState<Record<number, "idle" | "syncing" | "synced" | "error">>({});
+  const notesDebounceRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
   const SUMMARY_LEVELS = ["professional", "simple", "basic"] as const;
   const SUMMARY_LEVEL_NAMES = ["Professional English", "Simple English", "Basic English"];
   const SUMMARY_LEVEL_COLORS = ["text-blue-600 bg-blue-50 border-blue-200", "text-green-600 bg-green-50 border-green-200", "text-orange-600 bg-orange-50 border-orange-200"];
@@ -162,6 +171,21 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
   // Close summary panel when topic changes
   useEffect(() => { setSummaryOpen(false); }, [selectedTopic?.topic_id]);
+
+  // Close notes panel when topic changes; load saved note if user is logged in
+  useEffect(() => {
+    setNotesOpen(false);
+    if (!selectedTopic || !user?.id) return;
+    const id = selectedTopic.topic_id;
+    getNoteForTopic(user.id, id).then((record) => {
+      if (record?.content) {
+        setNotesContent((prev) => ({ ...prev, [id]: record.content }));
+        if (record.syncedToNotion) {
+          setNotesNotionStatus((prev) => ({ ...prev, [id]: "synced" }));
+        }
+      }
+    });
+  }, [selectedTopic?.topic_id, user?.id]);
 
   // Load like status whenever selected topic changes — works for all users (logged in or not)
   useEffect(() => {
@@ -259,6 +283,92 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       setLikeLoading(false);
     }
   }, [user?.id, likedTopicIds, likeLoading]);
+
+  // ── Notes handlers ──────────────────────────────────────────────────────────
+
+  const handleNoteChange = useCallback((topicId: number, content: string) => {
+    setNotesContent((prev) => ({ ...prev, [topicId]: content }));
+    setNotesSaveStatus((prev) => ({ ...prev, [topicId]: "saving" }));
+    setNotesNotionStatus((prev) => ({ ...prev, [topicId]: "idle" }));
+
+    if (notesDebounceRef.current[topicId]) clearTimeout(notesDebounceRef.current[topicId]);
+
+    notesDebounceRef.current[topicId] = setTimeout(async () => {
+      if (!user?.id || !selectedTopic) return;
+      try {
+        await upsertNote(user.id, topicId, selectedTopic.name, content, {
+          moduleId:   currentSubmodule?.module_id,
+          moduleName: currentSubmodule?.name,
+        });
+        setNotesSaveStatus((prev) => ({ ...prev, [topicId]: "saved" }));
+      } catch {
+        setNotesSaveStatus((prev) => ({ ...prev, [topicId]: "error" }));
+      }
+    }, 1000);
+  }, [user?.id, selectedTopic, currentSubmodule]);
+
+  const handleNoteSyncToNotion = useCallback(async (topicId: number) => {
+    const content = notesContent[topicId];
+    if (!content?.trim() || !selectedTopic) return;
+
+    setNotesNotionStatus((prev) => ({ ...prev, [topicId]: "syncing" }));
+    try {
+      const res = await fetch("/api/notion/push-note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topicName:  selectedTopic.name,
+          moduleName: currentSubmodule?.name,
+          userEmail:  (user as { email?: string } | null)?.email,
+          content,
+        }),
+      });
+      const data = await res.json() as { pageId?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Notion sync failed");
+
+      setNotesNotionStatus((prev) => ({ ...prev, [topicId]: "synced" }));
+      if (user?.id && data.pageId) {
+        await upsertNote(user.id, topicId, selectedTopic.name, content, {
+          notionPageId: data.pageId,
+          syncedToNotion: true,
+        });
+      }
+    } catch (err) {
+      console.error("Notion note sync failed:", err);
+      setNotesNotionStatus((prev) => ({ ...prev, [topicId]: "error" }));
+    }
+  }, [notesContent, selectedTopic, currentSubmodule, user]);
+
+  const handleSummarySyncToNotion = useCallback(async (topicId: number) => {
+    if (!selectedTopic) return;
+    const level  = summaryCurrentLevel[topicId] ?? 0;
+    const content = summaryFormat === "paragraph"
+      ? summaryParagraphVersions[topicId]?.[level]
+      : summaries[topicId];
+    if (!content?.trim()) return;
+
+    setSummaryNotionStatus((prev) => ({ ...prev, [topicId]: "syncing" }));
+    try {
+      const res = await fetch("/api/notion/push-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topicName:  selectedTopic.name,
+          moduleName: currentSubmodule?.name,
+          userEmail:  (user as { email?: string } | null)?.email,
+          content,
+          level:   SUMMARY_LEVEL_NAMES[level],
+          format:  summaryFormat,
+        }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Notion sync failed");
+      setSummaryNotionStatus((prev) => ({ ...prev, [topicId]: "synced" }));
+    } catch (err) {
+      console.error("Notion summary sync failed:", err);
+      setSummaryNotionStatus((prev) => ({ ...prev, [topicId]: "error" }));
+    }
+  }, [selectedTopic, currentSubmodule, user, summaryFormat, summaries, summaryParagraphVersions, summaryCurrentLevel, SUMMARY_LEVEL_NAMES]);
 
   const handleGetSummary = useCallback(async (topic: Topic, requestedLevel: number = 0) => {
     const id = topic.topic_id;
@@ -2252,6 +2362,21 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                       {summaries[selectedTopic.topic_id] && !summaryLoading && (summaryCurrentLevel[selectedTopic.topic_id] ?? 0) >= SUMMARY_LEVELS.length - 1 && (
                         <span className="text-[10px] text-gray-400 italic">All versions generated</span>
                       )}
+
+                      {/* Notes button */}
+                      <button
+                        onClick={() => setNotesOpen((prev) => !prev)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                          notesOpen
+                            ? "bg-amber-100 text-amber-700 border-amber-300"
+                            : "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200"
+                        }`}
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        {notesOpen ? "Hide Notes" : notesContent[selectedTopic.topic_id] ? "Edit Notes" : "Take Notes"}
+                      </button>
                     </div>
 
                     {summaryOpen && (
@@ -2337,38 +2462,149 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                           )}
                         </div>
 
-                        {/* Footer: accuracy note + thumbs up/down feedback */}
+                        {/* Footer: accuracy note + feedback + Save to Notion */}
                         <div className="px-4 py-2.5 border-t border-purple-200 dark:border-purple-800 flex items-center justify-between flex-wrap gap-2">
                           <span className="text-[10px] text-purple-400">Generated by AI · may not be 100% accurate</span>
                           {!summaryLoading && summaries[selectedTopic.topic_id] && (
-                            <div className="flex items-center gap-1.5">
-                              {summaryFeedback[selectedTopic.topic_id] ? (
-                                <span className="text-[10px] text-purple-500">Thanks for your feedback!</span>
-                              ) : (
-                                <>
-                                  <span className="text-[10px] text-purple-400">Helpful?</span>
-                                  <button
-                                    onClick={() => setSummaryFeedback((prev) => ({ ...prev, [selectedTopic.topic_id]: "helpful" }))}
-                                    className="text-sm text-purple-300 hover:text-green-500 transition-colors"
-                                    title="Yes, helpful"
-                                  >
-                                    👍
-                                  </button>
-                                  <button
-                                    onClick={() => setSummaryFeedback((prev) => ({ ...prev, [selectedTopic.topic_id]: "not_helpful" }))}
-                                    className="text-sm text-purple-300 hover:text-red-400 transition-colors"
-                                    title="Not helpful"
-                                  >
-                                    👎
-                                  </button>
-                                </>
-                              )}
+                            <div className="flex items-center gap-3 flex-wrap">
+                              {/* Thumbs feedback */}
+                              <div className="flex items-center gap-1.5">
+                                {summaryFeedback[selectedTopic.topic_id] ? (
+                                  <span className="text-[10px] text-purple-500">Thanks for your feedback!</span>
+                                ) : (
+                                  <>
+                                    <span className="text-[10px] text-purple-400">Helpful?</span>
+                                    <button
+                                      onClick={() => setSummaryFeedback((prev) => ({ ...prev, [selectedTopic.topic_id]: "helpful" }))}
+                                      className="text-sm text-purple-300 hover:text-green-500 transition-colors"
+                                      title="Yes, helpful"
+                                    >
+                                      👍
+                                    </button>
+                                    <button
+                                      onClick={() => setSummaryFeedback((prev) => ({ ...prev, [selectedTopic.topic_id]: "not_helpful" }))}
+                                      className="text-sm text-purple-300 hover:text-red-400 transition-colors"
+                                      title="Not helpful"
+                                    >
+                                      👎
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                              {/* Save to Notion */}
+                              <button
+                                onClick={() => handleSummarySyncToNotion(selectedTopic.topic_id)}
+                                disabled={summaryNotionStatus[selectedTopic.topic_id] === "syncing"}
+                                className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border transition-colors disabled:opacity-50 ${
+                                  summaryNotionStatus[selectedTopic.topic_id] === "synced"
+                                    ? "border-green-300 text-green-600 bg-green-50"
+                                    : summaryNotionStatus[selectedTopic.topic_id] === "error"
+                                    ? "border-red-300 text-red-500 bg-red-50"
+                                    : "border-purple-200 text-purple-500 hover:bg-purple-100"
+                                }`}
+                                title="Save this summary to your Notion workspace"
+                              >
+                                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952L12.21 19s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.139c-.093-.514.28-.887.747-.933zM1.936 1.035l13.31-.98c1.634-.14 2.055-.047 3.08.7l4.249 2.986c.7.513.934.653.934 1.213v16.378c0 1.026-.373 1.634-1.68 1.726l-15.458.934c-.98.047-1.448-.093-1.962-.747l-3.129-4.06c-.56-.747-.793-1.306-.793-1.96V2.667c0-.839.374-1.54 1.449-1.632z"/>
+                                </svg>
+                                {summaryNotionStatus[selectedTopic.topic_id] === "syncing"
+                                  ? "Saving..."
+                                  : summaryNotionStatus[selectedTopic.topic_id] === "synced"
+                                  ? "Saved to Notion"
+                                  : summaryNotionStatus[selectedTopic.topic_id] === "error"
+                                  ? "Retry Notion"
+                                  : "Save to Notion"}
+                              </button>
                             </div>
                           )}
                         </div>
                       </div>
                     )}
                   </div>
+
+                  {/* ── Notes Panel ── */}
+                  {notesOpen && (
+                    <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 overflow-hidden">
+                      {/* Header */}
+                      <div className="px-4 py-2.5 bg-amber-100 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">My Notes</span>
+                          <span className="text-[10px] text-amber-400">· {selectedTopic.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {/* Auto-save status */}
+                          <span className={`text-[10px] ${
+                            notesSaveStatus[selectedTopic.topic_id] === "saving"
+                              ? "text-amber-400"
+                              : notesSaveStatus[selectedTopic.topic_id] === "saved"
+                              ? "text-green-500"
+                              : notesSaveStatus[selectedTopic.topic_id] === "error"
+                              ? "text-red-400"
+                              : "text-amber-300"
+                          }`}>
+                            {notesSaveStatus[selectedTopic.topic_id] === "saving"
+                              ? "Saving..."
+                              : notesSaveStatus[selectedTopic.topic_id] === "saved"
+                              ? "Saved"
+                              : notesSaveStatus[selectedTopic.topic_id] === "error"
+                              ? "Save failed"
+                              : notesContent[selectedTopic.topic_id]
+                              ? "Saved"
+                              : ""}
+                          </span>
+                          <button onClick={() => setNotesOpen(false)} className="text-amber-400 hover:text-amber-600 text-xs">✕</button>
+                        </div>
+                      </div>
+
+                      {/* Textarea — Notion-friendly formatting hint */}
+                      <div className="px-4 py-3">
+                        <p className="text-[10px] text-amber-400 mb-1.5">
+                          Tip: Use <code className="bg-amber-100 px-0.5 rounded"># Heading</code> and <code className="bg-amber-100 px-0.5 rounded">- bullet</code> for Notion-formatted blocks
+                        </p>
+                        <textarea
+                          value={notesContent[selectedTopic.topic_id] ?? ""}
+                          onChange={(e) => handleNoteChange(selectedTopic.topic_id, e.target.value)}
+                          placeholder={`Take notes on "${selectedTopic.name}"...\n\n# Key Concepts\n- Point one\n- Point two\n\n# My Questions\n- `}
+                          rows={8}
+                          className="w-full text-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-1 focus:ring-amber-300 placeholder:text-gray-300 font-mono leading-relaxed"
+                        />
+                      </div>
+
+                      {/* Footer: Notion sync */}
+                      <div className="px-4 py-2.5 border-t border-amber-200 dark:border-amber-800 flex items-center justify-between flex-wrap gap-2">
+                        <span className="text-[10px] text-amber-400">Notes are saved automatically to your account</span>
+                        <button
+                          onClick={() => handleNoteSyncToNotion(selectedTopic.topic_id)}
+                          disabled={
+                            !notesContent[selectedTopic.topic_id]?.trim() ||
+                            notesNotionStatus[selectedTopic.topic_id] === "syncing"
+                          }
+                          className={`flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded border font-semibold transition-colors disabled:opacity-40 ${
+                            notesNotionStatus[selectedTopic.topic_id] === "synced"
+                              ? "border-green-300 text-green-600 bg-green-50"
+                              : notesNotionStatus[selectedTopic.topic_id] === "error"
+                              ? "border-red-300 text-red-500 bg-red-50"
+                              : "border-amber-300 text-amber-700 hover:bg-amber-100"
+                          }`}
+                          title="Sync this note to your Notion workspace"
+                        >
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952L12.21 19s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.139c-.093-.514.28-.887.747-.933zM1.936 1.035l13.31-.98c1.634-.14 2.055-.047 3.08.7l4.249 2.986c.7.513.934.653.934 1.213v16.378c0 1.026-.373 1.634-1.68 1.726l-15.458.934c-.98.047-1.448-.093-1.962-.747l-3.129-4.06c-.56-.747-.793-1.306-.793-1.96V2.667c0-.839.374-1.54 1.449-1.632z"/>
+                          </svg>
+                          {notesNotionStatus[selectedTopic.topic_id] === "syncing"
+                            ? "Syncing to Notion..."
+                            : notesNotionStatus[selectedTopic.topic_id] === "synced"
+                            ? "Synced to Notion ✓"
+                            : notesNotionStatus[selectedTopic.topic_id] === "error"
+                            ? "Retry Notion Sync"
+                            : "Sync to Notion"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <section className="mb-6 sm:mb-8">
                     {/* Topic Title from backend */}
