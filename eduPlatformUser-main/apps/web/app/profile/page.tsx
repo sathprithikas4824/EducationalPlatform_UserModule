@@ -7,12 +7,13 @@ import { useAnnotation } from "../components/common/AnnotationProvider";
 import { supabase, getAllModulesProgress, getUserSurvey, type TopicProgress, type SurveyRow } from "../lib/supabase";
 import { loadDownloads, removeDownload, removeModuleDownloads, type DownloadRecord } from "../lib/downloads";
 import { loadBookmarks, removeBookmark, type BookmarkRecord } from "../lib/bookmarks";
+import { getAllNotes, deleteNote, type NoteRecord } from "../lib/notes";
 import { BookmarkHeart } from "../components/common/icons/BookmarkHeart";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 
-type Tab = "account" | "highlights" | "progress" | "projects" | "downloads" | "survey" | "bookmarks";
+type Tab = "account" | "highlights" | "progress" | "projects" | "downloads" | "survey" | "bookmarks" | "notes";
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   {
@@ -64,6 +65,15 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     id: "bookmarks",
     label: "My Bookmarks",
     icon: <BookmarkHeart size={20} />,
+  },
+  {
+    id: "notes",
+    label: "My Notes",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    ),
   },
 ];
 
@@ -1135,6 +1145,138 @@ function MyBookmarks({ userId }: { userId: string | undefined }) {
   );
 }
 
+// ── My Notes ──────────────────────────────────────────────────────────────────
+function MyNotes({ userId }: { userId: string | undefined }) {
+  const router = useRouter();
+  const [notes, setNotes] = useState<NoteRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!userId) { setNotes([]); setLoading(false); return; }
+    getAllNotes(userId).then((records) => { setNotes(records); setLoading(false); });
+  }, [userId]);
+
+  const handleDelete = async (topicId: number) => {
+    if (!userId) return;
+    setDeletingId(topicId);
+    await deleteNote(userId, topicId);
+    setNotes((prev) => prev.filter((n) => n.topicId !== topicId));
+    setDeletingId(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Notes</h2>
+        <div className="flex items-center gap-2 text-gray-400 text-sm py-20 justify-center">
+          <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+          Loading notes…
+        </div>
+      </div>
+    );
+  }
+
+  if (notes.length === 0) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Notes</h2>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          <p className="text-gray-500 font-medium">No notes yet</p>
+          <p className="text-gray-400 text-sm mt-1">Click &quot;Take Notes&quot; on any topic to start writing.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Notes</h2>
+        <span className="px-3 py-1 bg-amber-100 text-amber-700 text-sm font-semibold rounded-full">
+          {notes.length} note{notes.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        {notes.map((note) => (
+          <div key={note.topicId} className="rounded-xl border border-amber-100 bg-amber-50/40 overflow-hidden hover:border-amber-200 transition-colors">
+            {/* Header */}
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border-b border-amber-100">
+              <svg className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <span className="text-xs font-semibold text-amber-700 truncate">{note.topicName}</span>
+              {note.moduleName && (
+                <>
+                  <span className="text-amber-300 text-xs">·</span>
+                  <span className="text-xs text-amber-500 truncate">{note.moduleName}</span>
+                </>
+              )}
+              <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+                {/* Notion sync badge */}
+                {note.syncedToNotion ? (
+                  <span className="flex items-center gap-1 text-[10px] text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
+                    <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L17.86 1.968c-.42-.326-.981-.7-2.055-.607L3.01 2.295c-.466.046-.56.28-.374.466zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.935-.56.935-1.167V6.354c0-.606-.233-.933-.748-.887l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.748 0-.935-.234-1.495-.933l-4.577-7.186v6.952L12.21 19s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.139c-.093-.514.28-.887.747-.933z"/>
+                    </svg>
+                    Synced
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-gray-400">Not synced</span>
+                )}
+                <span className="text-[10px] text-gray-400">{timeAgo(note.updatedAt)}</span>
+              </div>
+            </div>
+
+            {/* Note content preview */}
+            <div className="px-4 py-3">
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line line-clamp-3 font-mono">
+                {note.content || <span className="text-gray-400 italic">Empty note</span>}
+              </p>
+            </div>
+
+            {/* Footer actions */}
+            <div className="px-4 py-2 border-t border-amber-100 flex items-center justify-between gap-2">
+              <span className="text-[10px] text-gray-400">
+                {note.content.length} characters · Auto-saved
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => note.moduleId && router.push(`/modules/${note.moduleId}`)}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-200 hover:bg-amber-200 rounded-lg transition-colors"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDelete(note.topicId)}
+                  disabled={deletingId === note.topicId}
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  title="Delete note"
+                >
+                  {deletingId === note.topicId ? (
+                    <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Profile Page Inner ─────────────────────────────────────────────────────────
 function ProfilePageInner() {
   const { user, isLoggedIn, logout } = useAnnotation();
@@ -1169,6 +1311,7 @@ function ProfilePageInner() {
       case "downloads":  return <MyDownloads />;
       case "survey":     return <MySurvey />;
       case "bookmarks":  return <MyBookmarks userId={user?.id} />;
+      case "notes":      return <MyNotes userId={user?.id} />;
       default:           return <AccountDetails />;
     }
   };

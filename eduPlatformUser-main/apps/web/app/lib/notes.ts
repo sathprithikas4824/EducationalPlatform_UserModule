@@ -145,6 +145,27 @@ export async function upsertNote(
   return record;
 }
 
+export async function getAllNotes(userId: string): Promise<NoteRecord[]> {
+  if (typeof window === "undefined") return [];
+
+  if (supabase && isSupabaseUserId(userId)) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false });
+      if (!error) return (data || []).map((r) => rowToRecord(r as Record<string, unknown>));
+      console.warn("Supabase getAllNotes failed, using localStorage:", error.message);
+    }
+  }
+
+  return localLoad(userId).sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+}
+
 export async function deleteNote(userId: string, topicId: number): Promise<void> {
   if (supabase && isSupabaseUserId(userId)) {
     const { data: { session } } = await supabase.auth.getSession();
