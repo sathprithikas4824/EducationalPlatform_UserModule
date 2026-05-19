@@ -11,6 +11,7 @@ import { cachedFetch } from "../../lib/apiCache";
 import { saveDownload } from "../../lib/downloads";
 import { loadBookmarks, toggleBookmark } from "../../lib/bookmarks";
 import { getNoteForTopic, upsertNote } from "../../lib/notes";
+import { upsertSummary, markSummaryNotion } from "../../lib/summaries";
 import { BookmarkHeart } from "../common/icons/BookmarkHeart";
 import TopicComments from "./TopicComments";
 
@@ -364,6 +365,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const data = await res.json() as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Notion sync failed");
       setSummaryNotionStatus((prev) => ({ ...prev, [topicId]: "synced" }));
+      if (user?.id) {
+        markSummaryNotion(user.id, topicId, SUMMARY_LEVEL_NAMES[level], true);
+      }
     } catch (err) {
       console.error("Notion summary sync failed:", err);
       setSummaryNotionStatus((prev) => ({ ...prev, [topicId]: "error" }));
@@ -426,12 +430,18 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       });
       setSummaries((prev) => ({ ...prev, [id]: text }));
       setSummaryCurrentLevel((prev) => ({ ...prev, [id]: requestedLevel }));
+      if (user?.id && !text.startsWith("⚠")) {
+        upsertSummary(user.id, id, topic.name, text, SUMMARY_LEVEL_NAMES[requestedLevel], "bullets", {
+          moduleId:   currentSubmodule?.submodule_id ?? undefined,
+          moduleName: currentSubmodule?.name,
+        });
+      }
     } catch {
       setSummaries((prev) => ({ ...prev, [id]: "⚠ Network error. Please try again." }));
     } finally {
       setSummaryLoading(false);
     }
-  }, [summaryAllVersions, SUMMARY_LEVELS]);
+  }, [summaryAllVersions, SUMMARY_LEVELS, user, currentSubmodule, SUMMARY_LEVEL_NAMES]);
 
   const handleGetParagraphSummary = useCallback(async (topic: Topic) => {
     const id = topic.topic_id;
@@ -486,6 +496,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         versions[level] = text;
         return { ...prev, [id]: versions };
       });
+      if (user?.id && !text.startsWith("⚠")) {
+        upsertSummary(user.id, id, topic.name, text, SUMMARY_LEVEL_NAMES[level], "paragraph", {
+          moduleId:   currentSubmodule?.submodule_id ?? undefined,
+          moduleName: currentSubmodule?.name,
+        });
+      }
     } catch {
       setSummaryParagraphVersions((prev) => {
         const versions = [...(prev[id] ?? [])];
@@ -495,7 +511,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     } finally {
       setSummaryParagraphLoading(false);
     }
-  }, [summaryCurrentLevel, summaryParagraphVersions, SUMMARY_LEVELS]);
+  }, [summaryCurrentLevel, summaryParagraphVersions, SUMMARY_LEVELS, user, currentSubmodule, SUMMARY_LEVEL_NAMES]);
 
   // Strip HTML tags AND decode entities, preserving paragraph/block-level whitespace
   const stripHtml = (html: string): string => {
