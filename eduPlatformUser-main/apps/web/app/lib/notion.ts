@@ -98,7 +98,7 @@ export async function createNotionPage(p: NotionPagePayload): Promise<string> {
   return data.id;
 }
 
-// ── Per-user Notion (OAuth) ────────────────────────────────────────────────────
+// ── Per-user Notion (OAuth) — pages, not a database ──────────────────────────
 
 async function notionFetch(path: string, method: string, token: string, body?: unknown) {
   const res = await fetch(`${NOTION_API}${path}`, {
@@ -109,18 +109,22 @@ async function notionFetch(path: string, method: string, token: string, body?: u
   return res.json();
 }
 
-// Find the user's "EduPlatform Notes" database, or create one from scratch.
+// Find or create the "EduPlatform Notes" parent page in user's workspace.
+// The id is stored in user_notion_tokens.notion_database_id (reusing the column).
 export async function findOrCreateUserDatabase(accessToken: string): Promise<string | null> {
   try {
-    // Search for existing EduPlatform database
+    // Search for existing parent page
     const search = await notionFetch("/search", "POST", accessToken, {
       query: "EduPlatform Notes",
-      filter: { value: "database", property: "object" },
-    }) as { results?: { id: string }[] };
+      filter: { value: "page", property: "object" },
+    }) as { results?: { id: string; properties?: { title?: { title?: { plain_text?: string }[] } } }[] };
 
-    if (search.results?.length) return search.results[0].id;
+    const existing = search.results?.find(
+      (r) => r.properties?.title?.title?.[0]?.plain_text === "EduPlatform Notes"
+    );
+    if (existing) return existing.id;
 
-    // Create a workspace-level page first
+    // Create a workspace-level page
     const page = await notionFetch("/pages", "POST", accessToken, {
       parent: { type: "workspace", workspace: true },
       icon:   { type: "emoji", emoji: "📚" },
@@ -129,25 +133,7 @@ export async function findOrCreateUserDatabase(accessToken: string): Promise<str
       },
     }) as { id?: string };
 
-    if (!page.id) return null;
-
-    // Create a database inside that page
-    const db = await notionFetch("/databases", "POST", accessToken, {
-      parent: { type: "page_id", page_id: page.id },
-      icon:   { type: "emoji", emoji: "🗒️" },
-      title:  [{ type: "text", text: { content: "My Notes & Summaries" } }],
-      properties: {
-        Name:   { title: {} },
-        Type:   { select: { options: [{ name: "Note", color: "yellow" }, { name: "AI Summary", color: "purple" }] } },
-        Topic:  { rich_text: {} },
-        Module: { rich_text: {} },
-        Level:  { select: {} },
-        Format: { select: {} },
-        Date:   { date: {} },
-      },
-    }) as { id?: string };
-
-    return db.id ?? null;
+    return page.id ?? null;
   } catch (err) {
     console.error("findOrCreateUserDatabase error:", err);
     return null;
@@ -156,7 +142,7 @@ export async function findOrCreateUserDatabase(accessToken: string): Promise<str
 
 export interface UserNotionPagePayload {
   accessToken:  string;
-  databaseId:   string;
+  databaseId:   string; // actually the parent page id
   topicName:    string;
   moduleName?:  string;
   content:      string;
@@ -166,29 +152,42 @@ export interface UserNotionPagePayload {
 }
 
 export async function createUserNotionPage(p: UserNotionPagePayload): Promise<string> {
-  const title = p.type === "AI Summary"
-    ? `Summary: ${p.topicName}${p.level ? ` (${p.level})` : ""}`
-    : `Note: ${p.topicName}`;
+  const isNote = p.type === "Note";
+  const title  = isNote
+    ? `📝 ${p.topicName}`
+    : `✨ Summary: ${p.topicName}${p.level ? ` (${p.level})` : ""}`;
 
-  const properties: Record<string, unknown> = {
-    Name:  { title:     [{ text: { content: title } }] },
-    Type:  { select:    { name: p.type } },
-    Topic: { rich_text: [{ text: { content: p.topicName } }] },
-    Date:  { date: { start: new Date().toISOString().split("T")[0] } },
+  // Meta info block shown at the top of the page
+  const metaLines = [
+    p.moduleName ? `📁 Module: ${p.moduleName}` : null,
+    `📖 Topic: ${p.topicName}`,
+    !isNote && p.level  ? `🎯 Level: ${p.level}`  : null,
+    !isNote && p.format ? `📄 Format: ${p.format === "bullets" ? "Bullet points" : "Paragraph"}` : null,
+    `🗓️ Saved: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`,
+  ].filter(Boolean).join("\n");
+
+  const metaBlock = {
+    object: "block",
+    type: "callout",
+    callout: {
+      rich_text: [{ type: "text", text: { content: metaLines } }],
+      icon: { type: "emoji", emoji: isNote ? "📌" : "🤖" },
+      color: isNote ? "yellow_background" : "purple_background",
+    },
   };
-  if (p.moduleName) properties.Module = { rich_text: [{ text: { content: p.moduleName } }] };
-  if (p.type === "AI Summary") {
-    if (p.level)  properties.Level  = { select: { name: p.level } };
-    if (p.format) properties.Format = { select: { name: p.format === "bullets" ? "Bullets" : "Paragraph" } };
-  }
+
+  const divider = { object: "block", type: "divider", divider: {} };
 
   const res = await fetch(`${NOTION_API}/pages`, {
     method: "POST",
     headers: headers(p.accessToken),
     body: JSON.stringify({
-      parent:   { database_id: p.databaseId },
-      properties,
-      children: textToBlocks(p.content),
+      parent:   { page_id: p.databaseId },
+      icon:     { type: "emoji", emoji: isNote ? "📝" : "✨" },
+      properties: {
+        title: { title: [{ text: { content: title } }] },
+      },
+      children: [metaBlock, divider, ...textToBlocks(p.content)],
     }),
   });
 
