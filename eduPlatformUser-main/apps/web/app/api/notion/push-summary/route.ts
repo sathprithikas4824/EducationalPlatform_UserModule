@@ -1,42 +1,73 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createNotionPage } from "../../../lib/notion";
+import { createClient } from "@supabase/supabase-js";
+import { createNotionPage, findOrCreateUserDatabase, createUserNotionPage } from "../../../lib/notion";
 
 export async function POST(req: NextRequest) {
-  const apiKey     = process.env.NOTION_API_KEY;
-  const databaseId = process.env.NOTION_DATABASE_ID;
+  let body: { topicName?: string; moduleName?: string; userEmail?: string; content?: string; level?: string; format?: string; userId?: string };
+  try { body = await req.json(); }
+  catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  if (!apiKey || !databaseId) {
-    return NextResponse.json(
-      { error: "Notion integration not configured. Add NOTION_API_KEY and NOTION_DATABASE_ID to your environment." },
-      { status: 503 }
-    );
-  }
-
-  let body: { topicName?: string; moduleName?: string; userEmail?: string; content?: string; level?: string; format?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const { topicName, moduleName, userEmail, content, level, format } = body;
+  const { topicName, moduleName, userEmail, content, level, format, userId } = body;
   if (!topicName || !content?.trim()) {
     return NextResponse.json({ error: "topicName and content are required" }, { status: 400 });
   }
 
+  // ── Try per-user Notion first ────────────────────────────────────────────────
+  if (userId) {
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { data: tokenRow } = await supabaseAdmin
+      .from("user_notion_tokens")
+      .select("access_token, notion_database_id")
+      .eq("user_id", userId)
+      .maybeSingle() as { data: { access_token: string; notion_database_id: string | null } | null };
+
+    if (tokenRow?.access_token) {
+      try {
+        let dbId = tokenRow.notion_database_id;
+        if (!dbId) {
+          dbId = await findOrCreateUserDatabase(tokenRow.access_token);
+          if (dbId) {
+            await supabaseAdmin
+              .from("user_notion_tokens")
+              .update({ notion_database_id: dbId })
+              .eq("user_id", userId);
+          }
+        }
+        if (dbId) {
+          const pageId = await createUserNotionPage({
+            accessToken: tokenRow.access_token,
+            databaseId:  dbId,
+            topicName:   topicName!,
+            moduleName,
+            content:     content!,
+            type:        "AI Summary",
+            level,
+            format,
+          });
+          return NextResponse.json({ pageId, source: "user" });
+        }
+      } catch (err) {
+        console.warn("User Notion push failed, falling back to admin:", err instanceof Error ? err.message : err);
+      }
+    }
+  }
+
+  // ── Fall back to admin shared database ───────────────────────────────────────
+  const apiKey     = process.env.NOTION_API_KEY;
+  const databaseId = process.env.NOTION_DATABASE_ID;
+  if (!apiKey || !databaseId) {
+    return NextResponse.json(
+      { error: "Notion not configured. Connect your Notion account in your profile." },
+      { status: 503 }
+    );
+  }
+
   try {
-    const pageId = await createNotionPage({
-      databaseId,
-      apiKey,
-      topicName,
-      moduleName,
-      userEmail,
-      content,
-      type: "AI Summary",
-      level,
-      format,
-    });
-    return NextResponse.json({ pageId });
+    const pageId = await createNotionPage({ databaseId, apiKey, topicName: topicName!, moduleName, userEmail, content: content!, type: "AI Summary", level, format });
+    return NextResponse.json({ pageId, source: "admin" });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 502 });

@@ -321,6 +321,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           topicName:  selectedTopic.name,
           moduleName: currentSubmodule?.name,
           userEmail:  (user as { email?: string } | null)?.email,
+          userId:     user?.id,
           content,
         }),
       });
@@ -357,6 +358,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           topicName:  selectedTopic.name,
           moduleName: currentSubmodule?.name,
           userEmail:  (user as { email?: string } | null)?.email,
+          userId:     user?.id,
           content,
           level:   SUMMARY_LEVEL_NAMES[level],
           format:  summaryFormat,
