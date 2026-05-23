@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createNotionPage, findOrCreateUserDatabase, createUserNotionPage } from "../../../lib/notion";
+import { createNotionPage, findOrCreateUserDatabase, createUserNotionPage, updateUserNotionPage } from "../../../lib/notion";
 
 export async function POST(req: NextRequest) {
-  let body: { topicName?: string; moduleName?: string; userEmail?: string; content?: string; userId?: string };
+  let body: {
+    topicName?: string; moduleName?: string; userEmail?: string;
+    content?: string; userId?: string; notionPageId?: string;
+  };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  const { topicName, moduleName, userEmail, content, userId } = body;
+  const { topicName, moduleName, userEmail, content, userId, notionPageId } = body;
   if (!topicName || !content?.trim()) {
     return NextResponse.json({ error: "topicName and content are required" }, { status: 400 });
   }
 
-  // ── Try per-user Notion first ────────────────────────────────────────────────
+  // ── Try per-user Notion first ─────────────────────────────────────────────────
   if (userId) {
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,6 +29,15 @@ export async function POST(req: NextRequest) {
 
     if (tokenRow?.access_token) {
       try {
+        // UPDATE existing page if we already have a page ID
+        if (notionPageId) {
+          await updateUserNotionPage(tokenRow.access_token, notionPageId, content!, {
+            topicName: topicName!, moduleName, type: "Note",
+          });
+          return NextResponse.json({ pageId: notionPageId, source: "user", updated: true });
+        }
+
+        // CREATE new page
         let dbId = tokenRow.notion_database_id;
         if (!dbId) {
           dbId = await findOrCreateUserDatabase(tokenRow.access_token);
@@ -45,7 +57,7 @@ export async function POST(req: NextRequest) {
             content:     content!,
             type:        "Note",
           });
-          return NextResponse.json({ pageId, source: "user" });
+          return NextResponse.json({ pageId, source: "user", updated: false });
         }
       } catch (err) {
         console.warn("User Notion push failed, falling back to admin:", err instanceof Error ? err.message : err);
@@ -53,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Fall back to admin shared database ───────────────────────────────────────
+  // ── Fall back to admin shared database ────────────────────────────────────────
   const apiKey     = process.env.NOTION_API_KEY;
   const databaseId = process.env.NOTION_DATABASE_ID;
   if (!apiKey || !databaseId) {

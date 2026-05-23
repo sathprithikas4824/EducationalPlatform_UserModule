@@ -153,6 +153,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const [notesSaveStatus, setNotesSaveStatus] = useState<Record<number, "idle" | "saving" | "saved" | "error">>({});
   const [summaryNotionStatus, setSummaryNotionStatus] = useState<Record<number, "idle" | "syncing" | "synced" | "error">>({});
   const [notesNotionStatus, setNotesNotionStatus] = useState<Record<number, "idle" | "syncing" | "synced" | "error">>({});
+  const [notesNotionPageId, setNotesNotionPageId] = useState<Record<number, string>>({});
   const notesDebounceRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   const SUMMARY_LEVELS = ["professional", "simple", "basic"] as const;
@@ -183,6 +184,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         setNotesContent((prev) => ({ ...prev, [id]: record.content }));
         if (record.syncedToNotion) {
           setNotesNotionStatus((prev) => ({ ...prev, [id]: "synced" }));
+        }
+        if (record.notionPageId) {
+          setNotesNotionPageId((prev) => ({ ...prev, [id]: record.notionPageId! }));
         }
       }
     });
@@ -312,16 +316,19 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     const content = notesContent[topicId];
     if (!content?.trim() || !selectedTopic) return;
 
+    const existingPageId = notesNotionPageId[topicId];
+
     setNotesNotionStatus((prev) => ({ ...prev, [topicId]: "syncing" }));
     try {
       const res = await fetch("/api/notion/push-note", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          topicName:  selectedTopic.name,
-          moduleName: currentSubmodule?.name,
-          userEmail:  (user as { email?: string } | null)?.email,
-          userId:     user?.id,
+          topicName:    selectedTopic.name,
+          moduleName:   currentSubmodule?.name,
+          userEmail:    (user as { email?: string } | null)?.email,
+          userId:       user?.id,
+          notionPageId: existingPageId,
           content,
         }),
       });
@@ -330,8 +337,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
       setNotesNotionStatus((prev) => ({ ...prev, [topicId]: "synced" }));
       if (user?.id && data.pageId) {
+        setNotesNotionPageId((prev) => ({ ...prev, [topicId]: data.pageId! }));
         await upsertNote(user.id, topicId, selectedTopic.name, content, {
-          notionPageId: data.pageId,
+          notionPageId:   data.pageId,
           syncedToNotion: true,
         });
       }
@@ -339,7 +347,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       console.error("Notion note sync failed:", err);
       setNotesNotionStatus((prev) => ({ ...prev, [topicId]: "error" }));
     }
-  }, [notesContent, selectedTopic, currentSubmodule, user]);
+  }, [notesContent, notesNotionPageId, selectedTopic, currentSubmodule, user]);
 
   const handleSummarySyncToNotion = useCallback(async (topicId: number) => {
     if (!selectedTopic) return;

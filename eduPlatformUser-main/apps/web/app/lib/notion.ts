@@ -199,3 +199,43 @@ export async function createUserNotionPage(p: UserNotionPagePayload): Promise<st
   const data = await res.json() as { id: string };
   return data.id;
 }
+
+// Update the content of an existing Notion page (delete all blocks, re-append).
+export async function updateUserNotionPage(
+  accessToken: string,
+  pageId: string,
+  content: string,
+  props: { topicName: string; moduleName?: string; type: "Note" | "AI Summary"; level?: string; format?: string }
+): Promise<void> {
+  // 1. Fetch existing child blocks
+  const existing = await notionFetch(`/blocks/${pageId}/children`, "GET", accessToken) as {
+    results?: { id: string }[];
+  };
+
+  // 2. Delete (archive) every existing block
+  if (existing.results?.length) {
+    await Promise.all(existing.results.map((b) => notionFetch(`/blocks/${b.id}`, "DELETE", accessToken)));
+  }
+
+  // 3. Build fresh content
+  const isNote = props.type === "Note";
+  const metaLines = [
+    props.moduleName ? `📁 Module: ${props.moduleName}` : null,
+    `📖 Topic: ${props.topicName}`,
+    `🗓️ Last updated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`,
+  ].filter(Boolean).join("\n");
+
+  const metaBlock = {
+    object: "block", type: "callout",
+    callout: {
+      rich_text: [{ type: "text", text: { content: metaLines } }],
+      icon:  { type: "emoji", emoji: "📌" },
+      color: isNote ? "yellow_background" : "purple_background",
+    },
+  };
+
+  // 4. Append new blocks
+  await notionFetch(`/blocks/${pageId}/children`, "PATCH", accessToken, {
+    children: [metaBlock, { object: "block", type: "divider", divider: {} }, ...textToBlocks(content)],
+  });
+}
