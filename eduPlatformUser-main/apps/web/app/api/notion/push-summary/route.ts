@@ -1,15 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createNotionPage, findOrCreateUserDatabase, createUserNotionPage } from "../../../lib/notion";
+import { created, badRequest, validationError, serviceUnavailable, gatewayError } from "../../../lib/apiResponse";
 
 export async function POST(req: NextRequest) {
   let body: { topicName?: string; moduleName?: string; userEmail?: string; content?: string; level?: string; format?: string; userId?: string };
   try { body = await req.json(); }
-  catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+  catch { return badRequest("Invalid JSON in request body"); }
 
   const { topicName, moduleName, userEmail, content, level, format, userId } = body;
   if (!topicName || !content?.trim()) {
-    return NextResponse.json({ error: "topicName and content are required" }, { status: 400 });
+    return validationError("topicName and content are required");
   }
 
   // ── Try per-user Notion first ────────────────────────────────────────────────
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
             level,
             format,
           });
-          return NextResponse.json({ pageId, source: "user" });
+          return created({ pageId, source: "user" }, "Summary synced to Notion");
         }
       } catch (err) {
         console.warn("User Notion push failed, falling back to admin:", err instanceof Error ? err.message : err);
@@ -59,17 +60,14 @@ export async function POST(req: NextRequest) {
   const apiKey     = process.env.NOTION_API_KEY;
   const databaseId = process.env.NOTION_DATABASE_ID;
   if (!apiKey || !databaseId) {
-    return NextResponse.json(
-      { error: "Notion not configured. Connect your Notion account in your profile." },
-      { status: 503 }
-    );
+    return serviceUnavailable("Notion not configured. Connect your account in profile.");
   }
 
   try {
     const pageId = await createNotionPage({ databaseId, apiKey, topicName: topicName!, moduleName, userEmail, content: content!, type: "AI Summary", level, format });
-    return NextResponse.json({ pageId, source: "admin" });
+    return created({ pageId, source: "admin" }, "Summary synced to shared Notion");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return gatewayError(msg);
   }
 }

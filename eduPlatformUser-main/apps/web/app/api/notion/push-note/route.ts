@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createNotionPage, findOrCreateUserDatabase, createUserNotionPage, updateUserNotionPage } from "../../../lib/notion";
+import { ok, created, badRequest, validationError, serviceUnavailable, gatewayError } from "../../../lib/apiResponse";
 
 export async function POST(req: NextRequest) {
   let body: {
@@ -8,11 +9,11 @@ export async function POST(req: NextRequest) {
     content?: string; userId?: string; notionPageId?: string;
   };
   try { body = await req.json(); }
-  catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+  catch { return badRequest("Invalid JSON in request body"); }
 
   const { topicName, moduleName, userEmail, content, userId, notionPageId } = body;
   if (!topicName || !content?.trim()) {
-    return NextResponse.json({ error: "topicName and content are required" }, { status: 400 });
+    return validationError("topicName and content are required");
   }
 
   // ── Try per-user Notion first ─────────────────────────────────────────────────
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
           await updateUserNotionPage(tokenRow.access_token, notionPageId, content!, {
             topicName: topicName!, moduleName, type: "Note",
           });
-          return NextResponse.json({ pageId: notionPageId, source: "user", updated: true });
+          return ok({ pageId: notionPageId, source: "user", updated: true }, "Note updated in Notion");
         }
 
         // CREATE new page
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
             content:     content!,
             type:        "Note",
           });
-          return NextResponse.json({ pageId, source: "user", updated: false });
+          return created({ pageId, source: "user", updated: false }, "Note synced to Notion");
         }
       } catch (err) {
         console.warn("User Notion push failed, falling back to admin:", err instanceof Error ? err.message : err);
@@ -69,17 +70,14 @@ export async function POST(req: NextRequest) {
   const apiKey     = process.env.NOTION_API_KEY;
   const databaseId = process.env.NOTION_DATABASE_ID;
   if (!apiKey || !databaseId) {
-    return NextResponse.json(
-      { error: "Notion not configured. Connect your Notion account in your profile." },
-      { status: 503 }
-    );
+    return serviceUnavailable("Notion not configured. Connect your account in profile.");
   }
 
   try {
     const pageId = await createNotionPage({ databaseId, apiKey, topicName: topicName!, moduleName, userEmail, content: content!, type: "Note" });
-    return NextResponse.json({ pageId, source: "admin" });
+    return created({ pageId, source: "admin", updated: false }, "Note synced to shared Notion");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return gatewayError(msg);
   }
 }

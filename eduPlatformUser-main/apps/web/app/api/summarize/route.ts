@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ok, validationError, serverError, serviceUnavailable } from "../../lib/apiResponse";
 
 export const maxDuration = 30;
 
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
     } = await req.json();
 
     if (!topicId) {
-      return NextResponse.json({ error: "Missing topicId" }, { status: 400 });
+      return validationError("topicId is required");
     }
 
     // Each level + format combination is cached separately
@@ -113,15 +114,12 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (cached?.summary) {
-      return NextResponse.json({ summary: cached.summary, cached: true });
+      return ok({ summary: cached.summary, cached: true }, "Summary ready");
     }
 
     if (!process.env.GROQ_API_KEY) {
       console.error("[summarize] GROQ_API_KEY missing in environment");
-      return NextResponse.json(
-        { error: "Server configuration error: GROQ_API_KEY not set." },
-        { status: 503 }
-      );
+      return serviceUnavailable("AI service is not configured");
     }
 
     const text = content?.trim()
@@ -131,10 +129,7 @@ export async function POST(req: NextRequest) {
     const summary = await callGroq(topicName, text, level, format);
 
     if (!summary) {
-      return NextResponse.json(
-        { error: "Failed to generate summary. Please try again." },
-        { status: 500 }
-      );
+      return serverError("Failed to generate summary. Please try again.");
     }
 
     await supabaseAdmin
@@ -144,9 +139,9 @@ export async function POST(req: NextRequest) {
         { onConflict: "topic_id", ignoreDuplicates: true }
       );
 
-    return NextResponse.json({ summary, cached: false });
+    return ok({ summary, cached: false }, "Summary ready");
   } catch (err) {
     console.error("[summarize] Unexpected error:", err);
-    return NextResponse.json({ error: "Unexpected server error." }, { status: 500 });
+    return serverError("Unexpected server error");
   }
 }

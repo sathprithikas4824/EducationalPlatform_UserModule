@@ -332,14 +332,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           content,
         }),
       });
-      const data = await res.json() as { pageId?: string; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Notion sync failed");
+      const result = await res.json() as { success: boolean; message: string; data: { pageId?: string; source?: string; updated?: boolean } | null };
+      if (!result.success) throw new Error(result.message ?? "Notion sync failed");
 
       setNotesNotionStatus((prev) => ({ ...prev, [topicId]: "synced" }));
-      if (user?.id && data.pageId) {
-        setNotesNotionPageId((prev) => ({ ...prev, [topicId]: data.pageId! }));
+      if (user?.id && result.data?.pageId) {
+        setNotesNotionPageId((prev) => ({ ...prev, [topicId]: result.data!.pageId! }));
         await upsertNote(user.id, topicId, selectedTopic.name, content, {
-          notionPageId:   data.pageId,
+          notionPageId:   result.data.pageId,
           syncedToNotion: true,
         });
       }
@@ -372,8 +372,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           format:  summaryFormat,
         }),
       });
-      const data = await res.json() as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Notion sync failed");
+      const result = await res.json() as { success: boolean; message: string; data: { pageId?: string; source?: string } | null };
+      if (!result.success) throw new Error(result.message ?? "Notion sync failed");
       setSummaryNotionStatus((prev) => ({ ...prev, [topicId]: "synced" }));
       if (user?.id) {
         markSummaryNotion(user.id, topicId, SUMMARY_LEVEL_NAMES[level], true);
@@ -428,10 +428,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           level: SUMMARY_LEVELS[requestedLevel],
         }),
       });
-      const data = await res.json();
-      const text = data.summary
-        ? data.summary
-        : `⚠ ${data.error || "Could not generate summary. Please try again."}`;
+      const result = await res.json() as { success: boolean; message: string; data: { summary?: string; cached?: boolean } | null };
+      const text = result.success && result.data?.summary
+        ? result.data.summary
+        : `⚠ ${result.message || "Could not generate summary. Please try again."}`;
 
       setSummaryAllVersions((prev) => {
         const versions = [...(prev[id] ?? [])];
@@ -496,10 +496,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           format: "paragraph",
         }),
       });
-      const data = await res.json();
-      const text = data.summary
-        ? data.summary
-        : `⚠ ${data.error || "Could not generate paragraph. Please try again."}`;
+      const result = await res.json() as { success: boolean; message: string; data: { summary?: string; cached?: boolean } | null };
+      const text = result.success && result.data?.summary
+        ? result.data.summary
+        : `⚠ ${result.message || "Could not generate paragraph. Please try again."}`;
 
       setSummaryParagraphVersions((prev) => {
         const versions = [...(prev[id] ?? [])];

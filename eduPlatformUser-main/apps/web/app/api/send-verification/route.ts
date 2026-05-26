@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
+import { ok, validationError, serverError, serviceUnavailable } from "../../lib/apiResponse";
 
 export async function POST(req: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -10,13 +11,13 @@ export async function POST(req: NextRequest) {
 
   if (!supabaseUrl || !serviceRoleKey || !gmailUser || !gmailPass) {
     console.error("Missing env vars: SUPABASE_SERVICE_ROLE_KEY / GMAIL_USER / GMAIL_APP_PASSWORD");
-    return NextResponse.json({ error: "Server not configured" }, { status: 500 });
+    return serviceUnavailable("Email service is not configured");
   }
 
   try {
     const { email } = await req.json();
     if (!email) {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+      return validationError("Email is required");
     }
 
     // Use the request origin so the link works in both dev and production
@@ -36,10 +37,7 @@ export async function POST(req: NextRequest) {
 
     if (linkError || !data?.properties?.action_link) {
       console.error("generateLink error:", linkError);
-      return NextResponse.json(
-        { error: linkError?.message || "Could not generate verification link" },
-        { status: 500 }
-      );
+      return serverError(linkError?.message || "Could not generate verification link");
     }
 
     // Send via Gmail SMTP — reliable delivery to any Gmail without domain verification
@@ -82,9 +80,9 @@ export async function POST(req: NextRequest) {
       `,
     });
 
-    return NextResponse.json({ success: true });
+    return ok(null, "Verification email sent");
   } catch (err) {
     console.error("send-verification unexpected error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return serverError("Internal server error");
   }
 }
