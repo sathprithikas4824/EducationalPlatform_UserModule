@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { saveSurveyResponse } from "../lib/supabase";
+import { sanitiseText } from "../lib/sanitise";
 
 const TOPICS = [
   "Programming & Development",
@@ -93,20 +94,20 @@ export default function SurveyPage() {
     setSaving(true);
     try {
       const ok = await saveSurveyResponse(profession, {
-        education_level: educationLevel || undefined,
-        career_goal: careerGoal || undefined,
-        field_of_study: fieldOfStudy || undefined,
-        subject_taught: subjectTaught || undefined,
-        teaching_level: teachingLevel || undefined,
-        experience_years: experienceYears || undefined,
-        industry: industry || undefined,
-        job_role: jobRole || undefined,
-        platform_use: platformUse || undefined,
-        target_role: targetRole || undefined,
-        other_description: otherDescription || undefined,
+        education_level:   educationLevel   ? sanitiseText(educationLevel)   : undefined,
+        career_goal:       careerGoal       ? sanitiseText(careerGoal)       : undefined,
+        field_of_study:    fieldOfStudy     ? sanitiseText(fieldOfStudy)     : undefined,
+        subject_taught:    subjectTaught    ? sanitiseText(subjectTaught)    : undefined,
+        teaching_level:    teachingLevel    ? sanitiseText(teachingLevel)    : undefined,
+        experience_years:  experienceYears  ? sanitiseText(experienceYears)  : undefined,
+        industry:          industry         ? sanitiseText(industry)         : undefined,
+        job_role:          jobRole          ? sanitiseText(jobRole)          : undefined,
+        platform_use:      platformUse      ? sanitiseText(platformUse)      : undefined,
+        target_role:       targetRole       ? sanitiseText(targetRole)       : undefined,
+        other_description: otherDescription ? sanitiseText(otherDescription) : undefined,
         topics_interested: topicsInterested,
-        weekly_hours: weeklyHours,
-        primary_goal: primaryGoal,
+        weekly_hours:      weeklyHours,
+        primary_goal:      primaryGoal      ? sanitiseText(primaryGoal)      : primaryGoal,
       });
       if (ok) {
         router.push("/");

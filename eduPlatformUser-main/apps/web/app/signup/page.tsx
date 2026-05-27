@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signUp, signIn, signInWithOAuth, supabase } from "../lib/supabase";
+import { sanitiseText } from "../lib/sanitise";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
-      const { data, error: signUpError } = await signUp(email, password, fullName);
+      const { data, error: signUpError } = await signUp(email, password, sanitiseText(fullName));
 
       if (signUpError) {
         // "Error sending confirmation email" means user was created in Supabase

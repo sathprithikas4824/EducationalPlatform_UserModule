@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createNotionPage, findOrCreateUserDatabase, createUserNotionPage } from "../../../lib/notion";
 import { created, badRequest, validationError, serviceUnavailable, gatewayError } from "../../../lib/apiResponse";
+import { sanitiseText } from "../../../lib/sanitise";
 
 export async function POST(req: NextRequest) {
   let body: { topicName?: string; moduleName?: string; userEmail?: string; content?: string; level?: string; format?: string; userId?: string };
@@ -9,7 +10,8 @@ export async function POST(req: NextRequest) {
   catch { return badRequest("Invalid JSON in request body"); }
 
   const { topicName, moduleName, userEmail, content, level, format, userId } = body;
-  if (!topicName || !content?.trim()) {
+  const cleanContent = sanitiseText(content ?? "");
+  if (!topicName || !cleanContent) {
     return validationError("topicName and content are required");
   }
 
@@ -43,7 +45,7 @@ export async function POST(req: NextRequest) {
             databaseId:  dbId,
             topicName:   topicName!,
             moduleName,
-            content:     content!,
+            content:     cleanContent,
             type:        "AI Summary",
             level,
             format,
@@ -64,7 +66,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const pageId = await createNotionPage({ databaseId, apiKey, topicName: topicName!, moduleName, userEmail, content: content!, type: "AI Summary", level, format });
+    const pageId = await createNotionPage({ databaseId, apiKey, topicName: topicName!, moduleName, userEmail, content: cleanContent, type: "AI Summary", level, format });
     return created({ pageId, source: "admin" }, "Summary synced to shared Notion");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";

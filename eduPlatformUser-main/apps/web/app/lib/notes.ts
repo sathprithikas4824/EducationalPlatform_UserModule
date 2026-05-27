@@ -1,6 +1,7 @@
 // Notes utility — Supabase-first with localStorage fallback (same pattern as bookmarks.ts)
 
 import { supabase } from "./supabase";
+import { sanitiseText } from "./sanitise";
 
 export interface NoteRecord {
   id: string;
@@ -89,6 +90,7 @@ export async function upsertNote(
   }
 ): Promise<NoteRecord> {
   const now = new Date().toISOString();
+  const cleanContent = sanitiseText(content);
 
   if (supabase && isSupabaseUserId(userId)) {
     const { data: { session } } = await supabase.auth.getSession();
@@ -102,7 +104,7 @@ export async function upsertNote(
             topic_name:       topicName,
             module_id:        opts?.moduleId   ?? null,
             module_name:      opts?.moduleName ?? null,
-            content,
+            content:          cleanContent,
             notion_page_id:   opts?.notionPageId   ?? null,
             synced_to_notion: opts?.syncedToNotion ?? false,
             updated_at:       now,
@@ -122,7 +124,7 @@ export async function upsertNote(
   const record: NoteRecord = existing
     ? {
         ...existing,
-        content,
+        content:   cleanContent,
         updatedAt: now,
         ...(opts?.notionPageId   !== undefined && { notionPageId:   opts.notionPageId }),
         ...(opts?.syncedToNotion !== undefined && { syncedToNotion: opts.syncedToNotion }),
@@ -134,7 +136,7 @@ export async function upsertNote(
         topicName,
         moduleId:        opts?.moduleId,
         moduleName:      opts?.moduleName,
-        content,
+        content:         cleanContent,
         notionPageId:    opts?.notionPageId,
         syncedToNotion:  opts?.syncedToNotion ?? false,
         createdAt:       now,

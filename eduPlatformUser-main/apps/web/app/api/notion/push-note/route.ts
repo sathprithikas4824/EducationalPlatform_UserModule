@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createNotionPage, findOrCreateUserDatabase, createUserNotionPage, updateUserNotionPage } from "../../../lib/notion";
 import { ok, created, badRequest, validationError, serviceUnavailable, gatewayError } from "../../../lib/apiResponse";
+import { sanitiseText } from "../../../lib/sanitise";
 
 export async function POST(req: NextRequest) {
   let body: {
@@ -12,7 +13,8 @@ export async function POST(req: NextRequest) {
   catch { return badRequest("Invalid JSON in request body"); }
 
   const { topicName, moduleName, userEmail, content, userId, notionPageId } = body;
-  if (!topicName || !content?.trim()) {
+  const cleanContent = sanitiseText(content ?? "");
+  if (!topicName || !cleanContent) {
     return validationError("topicName and content are required");
   }
 
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest) {
       try {
         // UPDATE existing page if we already have a page ID
         if (notionPageId) {
-          await updateUserNotionPage(tokenRow.access_token, notionPageId, content!, {
+          await updateUserNotionPage(tokenRow.access_token, notionPageId, cleanContent, {
             topicName: topicName!, moduleName, type: "Note",
           });
           return ok({ pageId: notionPageId, source: "user", updated: true }, "Note updated in Notion");
@@ -55,7 +57,7 @@ export async function POST(req: NextRequest) {
             databaseId:  dbId,
             topicName:   topicName!,
             moduleName,
-            content:     content!,
+            content:     cleanContent,
             type:        "Note",
           });
           return created({ pageId, source: "user", updated: false }, "Note synced to Notion");
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const pageId = await createNotionPage({ databaseId, apiKey, topicName: topicName!, moduleName, userEmail, content: content!, type: "Note" });
+    const pageId = await createNotionPage({ databaseId, apiKey, topicName: topicName!, moduleName, userEmail, content: cleanContent, type: "Note" });
     return created({ pageId, source: "admin", updated: false }, "Note synced to shared Notion");
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";

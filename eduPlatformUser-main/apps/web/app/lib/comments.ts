@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { sanitiseText } from "./sanitise";
 
 export interface Comment {
   id: string;
@@ -43,10 +44,11 @@ export async function postComment(
   content: string
 ): Promise<Comment | null> {
   if (!supabase) return null;
-  if (!content.trim() || content.length > 2000) return null;
+  const cleanContent = sanitiseText(content);
+  if (!cleanContent || cleanContent.length > 2000) return null;
   const { data, error } = await supabase
     .from("topic_comments")
-    .insert({ topic_id: topicId, user_id: userId, user_name: userName, content })
+    .insert({ topic_id: topicId, user_id: userId, user_name: userName, content: cleanContent })
     .select()
     .single();
 
