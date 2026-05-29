@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validationError } from "../../../../lib/apiResponse";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://educational-platform-user-module.vercel.app";
 
 export async function GET(req: NextRequest) {
   const userId = req.nextUrl.searchParams.get("userId");
-  if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  if (!userId) return validationError("userId is required");
 
   const clientId = process.env.NOTION_CLIENT_ID;
   if (!clientId) {
