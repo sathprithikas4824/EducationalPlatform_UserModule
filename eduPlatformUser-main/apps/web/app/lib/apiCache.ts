@@ -89,6 +89,11 @@ async function backgroundRefresh<T>(url: string, cacheKey: string): Promise<T> {
   // If a fetch for this URL is already in-flight, reuse it — don't start a new one.
   if (pendingRequests.has(url)) return pendingRequests.get(url) as Promise<T>;
 
+  // If data was freshly cached within the last 1 second, return it as-is.
+  // This prevents cascade re-fetches triggered by onRefresh callbacks in ModulesSection.
+  const recent = memoryCache.get(cacheKey);
+  if (recent && Date.now() - recent.timestamp < 1000) return recent.data as T;
+
   const TIMEOUT_MS = 25000; // 25s — covers Render cold start on slow mobile networks
   let lastErr: Error | null = null;
 
