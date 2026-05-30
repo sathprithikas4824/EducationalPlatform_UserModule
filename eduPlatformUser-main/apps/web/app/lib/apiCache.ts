@@ -11,6 +11,9 @@ const CACHE_TTL = 0; // Always stale — every visit revalidates from backend
 // In-memory cache for instant access (survives client-side navigation)
 const memoryCache = new Map<string, { data: unknown; timestamp: number }>();
 
+// Tracks in-flight fetch Promises — parallel calls for the same URL share one request.
+const pendingRequests = new Map<string, Promise<unknown>>();
+
 function getLocalCache(key: string): { data: unknown; timestamp: number } | null {
   try {
     const raw = localStorage.getItem(CACHE_PREFIX + key);
@@ -83,74 +86,96 @@ export async function cachedFetch<T>(
 
 /** Background revalidation: up to 2 attempts so mobile networks + Render cold starts are handled */
 async function backgroundRefresh<T>(url: string, cacheKey: string): Promise<T> {
+  // If a fetch for this URL is already in-flight, reuse it — don't start a new one.
+  if (pendingRequests.has(url)) return pendingRequests.get(url) as Promise<T>;
+
   const TIMEOUT_MS = 25000; // 25s — covers Render cold start on slow mobile networks
   let lastErr: Error | null = null;
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    try {
-      // Append _cb timestamp: iOS Safari sometimes ignores cache:"no-store" and serves a
-      // stale HTTP-cached response. A unique query param guarantees a true network round-trip.
-      const bustUrl = url + (url.includes("?") ? "&" : "?") + `_cb=${Date.now()}`;
-      const res = await fetch(bustUrl, {
-        signal: controller.signal,
-        cache: "no-store",
-        headers: { "Pragma": "no-cache" }, // belt-and-suspenders for iOS Safari
-      });
-      clearTimeout(timeoutId);
-      if (!res.ok) throw new Error(`${res.status}`);
-      const data: T = await res.json();
-      setCache(cacheKey, data);
-      return data;
-    } catch (err) {
-      clearTimeout(timeoutId);
-      lastErr = err instanceof Error ? err : new Error(String(err));
-      if (attempt === 0) await new Promise((r) => setTimeout(r, 3000)); // brief pause before retry
+  const fetchPromise = (async () => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      try {
+        // Append _cb timestamp: iOS Safari sometimes ignores cache:"no-store" and serves a
+        // stale HTTP-cached response. A unique query param guarantees a true network round-trip.
+        const bustUrl = url + (url.includes("?") ? "&" : "?") + `_cb=${Date.now()}`;
+        const res = await fetch(bustUrl, {
+          signal: controller.signal,
+          cache: "no-store",
+          headers: { "Pragma": "no-cache" }, // belt-and-suspenders for iOS Safari
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data: T = await res.json();
+        setCache(cacheKey, data);
+        return data;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 3000)); // brief pause before retry
+      }
     }
-  }
+    throw lastErr ?? new Error("Background refresh failed");
+  })();
 
-  throw lastErr ?? new Error("Background refresh failed");
+  pendingRequests.set(url, fetchPromise);
+  try {
+    return await fetchPromise;
+  } finally {
+    pendingRequests.delete(url);
+  }
 }
 
 /** Initial load fetch: retries with back-off to handle Render cold starts */
 async function fetchWithRetry<T>(url: string, cacheKey: string): Promise<T> {
+  // Reuse in-flight request if one exists for this URL.
+  if (pendingRequests.has(url)) return pendingRequests.get(url) as Promise<T>;
+
   const MAX_RETRIES = 6;
   const ATTEMPT_TIMEOUT_MS = 25000;
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      if (attempt > 0) {
-        await new Promise((r) => setTimeout(r, 5000));
-      }
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
-      const res = await fetch(url, {
-        signal: controller.signal,
-        cache: "no-store",
-        headers: { "Pragma": "no-cache" },
-      }).finally(() => clearTimeout(timeoutId));
+  const fetchPromise = (async () => {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 5000));
+        }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
+        const res = await fetch(url, {
+          signal: controller.signal,
+          cache: "no-store",
+          headers: { "Pragma": "no-cache" },
+        }).finally(() => clearTimeout(timeoutId));
 
-      if (res.status === 429) {
-        lastError = new Error(`Fetch failed: 429`);
-        continue;
-      }
-      if (res.status >= 400 && res.status < 500) {
-        throw new Error(`Fetch failed: ${res.status}`);
-      }
-      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+        if (res.status === 429) {
+          lastError = new Error(`Fetch failed: 429`);
+          continue;
+        }
+        if (res.status >= 400 && res.status < 500) {
+          throw new Error(`Fetch failed: ${res.status}`);
+        }
+        if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
 
-      const data: T = await res.json();
-      setCache(cacheKey, data);
-      return data;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (lastError.message.match(/Fetch failed: 4(?!29)\d\d/)) break;
+        const data: T = await res.json();
+        setCache(cacheKey, data);
+        return data;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (lastError.message.match(/Fetch failed: 4(?!29)\d\d/)) break;
+      }
     }
-  }
+    throw lastError ?? new Error("Fetch failed after retries");
+  })();
 
-  throw lastError ?? new Error("Fetch failed after retries");
+  pendingRequests.set(url, fetchPromise);
+  try {
+    return await fetchPromise;
+  } finally {
+    pendingRequests.delete(url);
+  }
 }
 
 /**
