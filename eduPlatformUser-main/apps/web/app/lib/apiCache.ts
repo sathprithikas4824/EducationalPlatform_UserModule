@@ -109,6 +109,7 @@ async function backgroundRefresh<T>(url: string, cacheKey: string): Promise<T> {
           cache: "no-store",
         });
         clearTimeout(timeoutId);
+        if (res.status >= 400 && res.status < 500) throw new Error(`${res.status}`);
         if (!res.ok) throw new Error(`${res.status}`);
         const data: T = await res.json();
         setCache(cacheKey, data);
@@ -116,7 +117,8 @@ async function backgroundRefresh<T>(url: string, cacheKey: string): Promise<T> {
       } catch (err) {
         clearTimeout(timeoutId);
         lastErr = err instanceof Error ? err : new Error(String(err));
-        // "Failed to fetch" = CORS or network error — no point retrying immediately
+        // Stop retrying on 4xx or network errors — more requests won't help.
+        if (/^4\d\d$/.test(lastErr.message)) break;
         if (lastErr.message === "Failed to fetch") break;
         if (attempt === 0) await new Promise((r) => setTimeout(r, 3000));
       }
@@ -154,10 +156,8 @@ async function fetchWithRetry<T>(url: string, cacheKey: string): Promise<T> {
           cache: "no-store",
         }).finally(() => clearTimeout(timeoutId));
 
-        if (res.status === 429) {
-          lastError = new Error(`Fetch failed: 429`);
-          continue;
-        }
+        // All 4xx responses — stop retrying immediately.
+        // 429 (Too Many Requests): retrying makes it worse, not better.
         if (res.status >= 400 && res.status < 500) {
           throw new Error(`Fetch failed: ${res.status}`);
         }
@@ -168,8 +168,8 @@ async function fetchWithRetry<T>(url: string, cacheKey: string): Promise<T> {
         return data;
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
-        if (lastError.message.match(/Fetch failed: 4(?!29)\d\d/)) break;
-        // "Failed to fetch" = CORS or network error — stop retrying, server is unreachable
+        // Stop retrying on any 4xx or network/CORS error — more requests won't help.
+        if (lastError.message.startsWith("Fetch failed: 4")) break;
         if (lastError.message === "Failed to fetch") break;
       }
     }
