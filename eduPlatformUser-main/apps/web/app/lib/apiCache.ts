@@ -6,7 +6,6 @@
  */
 
 const CACHE_PREFIX = "edu_api_";
-const CACHE_TTL = 0; // Always stale — every visit revalidates from backend
 
 // In-memory cache for instant access (survives client-side navigation)
 const memoryCache = new Map<string, { data: unknown; timestamp: number }>();
