@@ -103,7 +103,6 @@ async function backgroundRefresh<T>(url: string, cacheKey: string): Promise<T> {
         const res = await fetch(bustUrl, {
           signal: controller.signal,
           cache: "no-store",
-          headers: { "Pragma": "no-cache" }, // belt-and-suspenders for iOS Safari
         });
         clearTimeout(timeoutId);
         if (!res.ok) throw new Error(`${res.status}`);
@@ -113,7 +112,9 @@ async function backgroundRefresh<T>(url: string, cacheKey: string): Promise<T> {
       } catch (err) {
         clearTimeout(timeoutId);
         lastErr = err instanceof Error ? err : new Error(String(err));
-        if (attempt === 0) await new Promise((r) => setTimeout(r, 3000)); // brief pause before retry
+        // "Failed to fetch" = CORS or network error — no point retrying immediately
+        if (lastErr.message === "Failed to fetch") break;
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 3000));
       }
     }
     throw lastErr ?? new Error("Background refresh failed");
@@ -147,7 +148,6 @@ async function fetchWithRetry<T>(url: string, cacheKey: string): Promise<T> {
         const res = await fetch(url, {
           signal: controller.signal,
           cache: "no-store",
-          headers: { "Pragma": "no-cache" },
         }).finally(() => clearTimeout(timeoutId));
 
         if (res.status === 429) {
@@ -165,6 +165,8 @@ async function fetchWithRetry<T>(url: string, cacheKey: string): Promise<T> {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         if (lastError.message.match(/Fetch failed: 4(?!29)\d\d/)) break;
+        // "Failed to fetch" = CORS or network error — stop retrying, server is unreachable
+        if (lastError.message === "Failed to fetch") break;
       }
     }
     throw lastError ?? new Error("Fetch failed after retries");
