@@ -1,8 +1,6 @@
 /**
  * Lightweight API cache: show cached data instantly, always revalidate in background.
- * CACHE_TTL=0 means every cached entry is immediately stale, so a background
- * refresh fires on every page visit and onRefresh updates the UI with fresh data.
- * The cache still prevents a blank screen on navigation (instant-paint).
+ * The cache prevents a blank screen on navigation (instant-paint).
  */
 
 const CACHE_PREFIX = "edu_api_";
