@@ -5,6 +5,16 @@
 
 const CACHE_PREFIX = "edu_api_";
 
+// TTL in milliseconds for each cache tier
+const TTL_LIST   = 3 * 60 * 1000; // 3 minutes — submodules lists, topics lists
+const TTL_DETAIL = 5 * 60 * 1000; // 5 minutes — single module overview
+
+/** Returns the correct TTL for a given cache key based on its data tier. */
+function getTTL(cacheKey: string): number {
+  if (cacheKey.startsWith("module_single_")) return TTL_DETAIL;
+  return TTL_LIST;
+}
+
 // In-memory cache for instant access (survives client-side navigation)
 const memoryCache = new Map<string, { data: unknown; timestamp: number }>();
 
@@ -89,7 +99,7 @@ async function backgroundRefresh<T>(url: string, cacheKey: string): Promise<T> {
   // If data was freshly cached within the last 1 second, return it as-is.
   // This prevents cascade re-fetches triggered by onRefresh callbacks in ModulesSection.
   const recent = memoryCache.get(cacheKey);
-  if (recent && Date.now() - recent.timestamp < 1000) return recent.data as T;
+  if (recent && Date.now() - recent.timestamp < getTTL(cacheKey)) return recent.data as T;
 
   const TIMEOUT_MS = 25000; // 25s — covers Render cold start on slow mobile networks
   let lastErr: Error | null = null;
