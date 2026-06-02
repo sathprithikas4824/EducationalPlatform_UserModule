@@ -217,9 +217,77 @@ export function setCacheManual<T>(cacheKey: string, data: T): void {
 }
 
 /**
- * Bust the cache for a specific key.
+ * Bust the cache for a specific key — removes data entirely.
+ * Use when you know data is gone (e.g. deleted record).
  */
 export function bustCache(cacheKey: string): void {
   memoryCache.delete(cacheKey);
   try { localStorage.removeItem(CACHE_PREFIX + cacheKey); } catch {}
+}
+
+/**
+ * Expire a specific cache key — keeps old data for instant-paint but forces
+ * a background refresh on the next visit so fresh content loads automatically.
+ * Use when content may have changed (admin update, new topic added).
+ */
+export function expireCache(cacheKey: string): void {
+  const mem = memoryCache.get(cacheKey);
+  if (mem) memoryCache.set(cacheKey, { ...mem, timestamp: 0 });
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + cacheKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      localStorage.setItem(CACHE_PREFIX + cacheKey, JSON.stringify({ ...parsed, timestamp: 0 }));
+    }
+  } catch {}
+}
+
+/**
+ * Expire all cache keys that match a pattern string.
+ * e.g. bustCacheByPattern("topics_") expires topics_18, topics_19, topics_20 etc.
+ */
+export function bustCacheByPattern(pattern: string): void {
+  // Expire matching memory cache entries
+  memoryCache.forEach((entry, key) => {
+    if (key.includes(pattern)) memoryCache.set(key, { ...entry, timestamp: 0 });
+  });
+  // Expire matching localStorage entries
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(CACHE_PREFIX) && k.includes(pattern))
+      .forEach((k) => {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          localStorage.setItem(k, JSON.stringify({ ...parsed, timestamp: 0 }));
+        }
+      });
+  } catch {}
+}
+
+/**
+ * Expire ALL cached API data — forces background refresh on next visit.
+ * Old data is still shown instantly (no blank screen) while fresh data loads.
+ */
+export function expireAllCache(): void {
+  memoryCache.forEach((entry, key) => {
+    memoryCache.set(key, { ...entry, timestamp: 0 });
+  });
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(CACHE_PREFIX))
+      .forEach((k) => {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          localStorage.setItem(k, JSON.stringify({ ...parsed, timestamp: 0 }));
+        }
+      });
+  } catch {}
+}
+
+// When the user returns to the tab (window focus), expire all cache so any
+// content changes made by admin are picked up on the next background refresh.
+if (typeof window !== "undefined") {
+  window.addEventListener("focus", expireAllCache);
 }
