@@ -4,10 +4,10 @@ import React, { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAnnotation } from "../components/common/AnnotationProvider";
-import { supabase, getAllModulesProgress, getUserSurvey, type TopicProgress, type SurveyRow } from "../lib/supabase";
+import { supabase, getAllModulesProgress, getProgressPaginated, getUserSurvey, type TopicProgress, type SurveyRow } from "../lib/supabase";
 import { loadDownloads, removeDownload, removeModuleDownloads, type DownloadRecord } from "../lib/downloads";
 import { loadBookmarks, removeBookmark, type BookmarkRecord } from "../lib/bookmarks";
-import { getAllNotes, deleteNote, type NoteRecord } from "../lib/notes";
+import { getAllNotes, getNotesPaginated, deleteNote, type NoteRecord } from "../lib/notes";
 import { getAllSummaries, deleteSummary, type SummaryRecord } from "../lib/summaries";
 import { BookmarkHeart } from "../components/common/icons/BookmarkHeart";
 
@@ -576,23 +576,36 @@ function MyProgress({
 }) {
   const router = useRouter();
   const [allProgress, setAllProgress] = useState<TopicProgress[]>([]);
+  const [recent, setRecent] = useState<TopicProgress[]>([]);
+  const [progressPage, setProgressPage] = useState(0);
+  const [progressHasMore, setProgressHasMore] = useState(false);
+  const [progressLoadingMore, setProgressLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!userId) { setLoading(false); return; }
-    getAllModulesProgress(userId).then((data) => {
-      setAllProgress(data);
+    Promise.all([
+      getAllModulesProgress(userId),
+      getProgressPaginated(userId, 0, 10),
+    ]).then(([all, { progress, hasMore }]) => {
+      setAllProgress(all);
+      setRecent(progress);
+      setProgressHasMore(hasMore);
+      setProgressPage(0);
       setLoading(false);
     });
   }, [userId]);
 
-  // 10 most-recently completed topics
-  const recent = useMemo(() =>
-    [...allProgress]
-      .sort((a, b) => new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime())
-      .slice(0, 10),
-    [allProgress]
-  );
+  const handleLoadMoreProgress = async () => {
+    if (!userId || progressLoadingMore) return;
+    setProgressLoadingMore(true);
+    const next = progressPage + 1;
+    const { progress: more, hasMore } = await getProgressPaginated(userId, next, 10);
+    setRecent((prev) => [...prev, ...more]);
+    setProgressHasMore(hasMore);
+    setProgressPage(next);
+    setProgressLoadingMore(false);
+  };
 
   // Completed topic count per module (across ALL progress, not just the 10 shown)
   const completedPerModule = useMemo(() => {
@@ -642,7 +655,7 @@ function MyProgress({
       <div className="flex items-center justify-between">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900">My Progress</h2>
         <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm font-semibold rounded-full">
-          Recent {recent.length}
+          {recent.length} completed
         </span>
       </div>
 
@@ -704,6 +717,15 @@ function MyProgress({
             </div>
           );
         })}
+        {progressHasMore && (
+          <button
+            onClick={handleLoadMoreProgress}
+            disabled={progressLoadingMore}
+            className="w-full py-2.5 text-sm font-semibold text-purple-700 border border-purple-200 rounded-xl hover:bg-purple-50 disabled:opacity-50 transition-colors"
+          >
+            {progressLoadingMore ? "Loading…" : "Load More Progress"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1274,17 +1296,50 @@ function NotionBadge({ synced }: { synced: boolean }) {
 function MyNotes({ userId }: { userId: string | undefined }) {
   const router = useRouter();
   const [notes, setNotes] = useState<NoteRecord[]>([]);
+  const [notesPage, setNotesPage] = useState(0);
+  const [notesHasMore, setNotesHasMore] = useState(false);
+  const [notesLoadingMore, setNotesLoadingMore] = useState(false);
   const [summaries, setSummaries] = useState<SummaryRecord[]>([]);
+  const [summariesFull, setSummariesFull] = useState<SummaryRecord[]>([]);
+  const [summariesPage, setSummariesPage] = useState(0);
+  const [summariesHasMore, setSummariesHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
   const [deletingSummaryKey, setDeletingSummaryKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) { setNotes([]); setSummaries([]); setLoading(false); return; }
-    Promise.all([getAllNotes(userId), Promise.resolve(getAllSummaries(userId))]).then(
-      ([n, s]) => { setNotes(n); setSummaries(s); setLoading(false); }
-    );
+    const allSummaries = getAllSummaries(userId);
+    getNotesPaginated(userId, 0, 10).then(({ notes: firstNotes, hasMore }) => {
+      setNotes(firstNotes);
+      setNotesHasMore(hasMore);
+      setNotesPage(0);
+      setSummariesFull(allSummaries);
+      setSummaries(allSummaries.slice(0, 10));
+      setSummariesHasMore(allSummaries.length > 10);
+      setSummariesPage(0);
+      setLoading(false);
+    });
   }, [userId]);
+
+  const handleLoadMoreNotes = async () => {
+    if (!userId || notesLoadingMore) return;
+    setNotesLoadingMore(true);
+    const next = notesPage + 1;
+    const { notes: more, hasMore } = await getNotesPaginated(userId, next, 10);
+    setNotes((prev) => [...prev, ...more]);
+    setNotesHasMore(hasMore);
+    setNotesPage(next);
+    setNotesLoadingMore(false);
+  };
+
+  const handleLoadMoreSummaries = () => {
+    const next = summariesPage + 1;
+    const start = next * 10;
+    setSummaries(summariesFull.slice(0, start + 10));
+    setSummariesHasMore(summariesFull.length > start + 10);
+    setSummariesPage(next);
+  };
 
   const handleDeleteNote = async (topicId: number) => {
     if (!userId) return;
@@ -1403,6 +1458,15 @@ function MyNotes({ userId }: { userId: string | undefined }) {
               </div>
             </div>
           ))}
+          {notesHasMore && (
+            <button
+              onClick={handleLoadMoreNotes}
+              disabled={notesLoadingMore}
+              className="w-full py-2.5 text-sm font-semibold text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-50 disabled:opacity-50 transition-colors"
+            >
+              {notesLoadingMore ? "Loading…" : "Load More Notes"}
+            </button>
+          )}
         </div>
       )}
 
@@ -1482,6 +1546,14 @@ function MyNotes({ userId }: { userId: string | undefined }) {
               </div>
             );
           })}
+          {summariesHasMore && (
+            <button
+              onClick={handleLoadMoreSummaries}
+              className="w-full py-2.5 text-sm font-semibold text-purple-700 border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors"
+            >
+              Load More Summaries
+            </button>
+          )}
         </div>
       )}
     </div>

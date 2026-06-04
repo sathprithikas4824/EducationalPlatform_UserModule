@@ -168,6 +168,43 @@ export async function getAllNotes(userId: string): Promise<NoteRecord[]> {
   );
 }
 
+export async function getNotesPaginated(
+  userId: string,
+  page: number = 0,
+  pageSize: number = 10
+): Promise<{ notes: NoteRecord[]; hasMore: boolean }> {
+  if (typeof window === "undefined") return { notes: [], hasMore: false };
+
+  if (supabase && isSupabaseUserId(userId)) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const from = page * pageSize;
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .range(from, from + pageSize); // fetch one extra to detect hasMore
+      if (!error && data) {
+        return {
+          notes:   data.slice(0, pageSize).map((r) => rowToRecord(r as Record<string, unknown>)),
+          hasMore: data.length > pageSize,
+        };
+      }
+    }
+  }
+
+  // localStorage fallback — paginate in memory
+  const all = localLoad(userId).sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+  const start = page * pageSize;
+  return {
+    notes:   all.slice(start, start + pageSize),
+    hasMore: all.length > start + pageSize,
+  };
+}
+
 export async function deleteNote(userId: string, topicId: number): Promise<void> {
   if (supabase && isSupabaseUserId(userId)) {
     const { data: { session } } = await supabase.auth.getSession();

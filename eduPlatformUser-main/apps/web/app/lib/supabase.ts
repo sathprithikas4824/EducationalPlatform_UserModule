@@ -537,6 +537,44 @@ export async function getAllModulesProgress(userId: string): Promise<TopicProgre
   return cookieMapToProgressList(userId, map);
 }
 
+// Get a page of completed progress entries — fetches only pageSize+1 rows from DB.
+export async function getProgressPaginated(
+  userId: string,
+  page: number = 0,
+  pageSize: number = 10
+): Promise<{ progress: TopicProgress[]; hasMore: boolean }> {
+  if (!userId) return { progress: [], hasMore: false };
+
+  if (supabase && isSupabaseUserId(userId)) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const from = page * pageSize;
+      const { data, error } = await supabase
+        .from("user_topic_progress")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("completed", true)
+        .order("completed_at", { ascending: false })
+        .range(from, from + pageSize); // one extra to detect hasMore
+      if (!error && data) {
+        return {
+          progress: data.slice(0, pageSize),
+          hasMore:  data.length > pageSize,
+        };
+      }
+    }
+  }
+
+  // Cookie fallback — paginate in memory
+  const map = readProgressCookie(userId);
+  const all = cookieMapToProgressList(userId, map);
+  const start = page * pageSize;
+  return {
+    progress: all.slice(start, start + pageSize),
+    hasMore:  all.length > start + pageSize,
+  };
+}
+
 // Get completed topic IDs for a specific module
 export async function getCompletedTopics(userId: string, moduleId: number): Promise<number[]> {
   if (!userId) return [];
