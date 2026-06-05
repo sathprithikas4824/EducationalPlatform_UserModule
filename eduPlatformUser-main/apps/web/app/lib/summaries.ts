@@ -13,6 +13,7 @@ export interface SummaryRecord {
   syncedToNotion: boolean;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;  // soft delete timestamp — undefined means active
 }
 
 const getSummariesKey = (userId: string) => `edu_summaries_${userId}`;
@@ -95,11 +96,30 @@ export function markSummaryNotion(
 
 export function getAllSummaries(userId: string): SummaryRecord[] {
   if (typeof window === "undefined") return [];
-  return localLoad(userId).sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
+  return localLoad(userId)
+    .filter((r) => !r.deletedAt)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
+// Soft delete — marks with deletedAt timestamp. Data stays in localStorage forever.
 export function deleteSummary(userId: string, topicId: number, level: string): void {
-  localSave(userId, localLoad(userId).filter((r) => !matchKey(r, topicId, level)));
+  const now = new Date().toISOString();
+  localSave(userId, localLoad(userId).map((r) =>
+    matchKey(r, topicId, level) ? { ...r, deletedAt: now } : r
+  ));
+}
+
+// Restore a soft-deleted summary — clears the deletedAt timestamp.
+export function restoreSummary(userId: string, topicId: number, level: string): void {
+  localSave(userId, localLoad(userId).map((r) =>
+    matchKey(r, topicId, level) ? { ...r, deletedAt: undefined } : r
+  ));
+}
+
+// Get all soft-deleted summaries for the trash view.
+export function getDeletedSummaries(userId: string): SummaryRecord[] {
+  if (typeof window === "undefined") return [];
+  return localLoad(userId)
+    .filter((r) => !!r.deletedAt)
+    .sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
 }

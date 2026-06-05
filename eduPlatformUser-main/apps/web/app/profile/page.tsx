@@ -7,8 +7,8 @@ import { useAnnotation } from "../components/common/AnnotationProvider";
 import { supabase, getAllModulesProgress, getProgressPaginated, getUserSurvey, type TopicProgress, type SurveyRow } from "../lib/supabase";
 import { loadDownloads, removeDownload, removeModuleDownloads, type DownloadRecord } from "../lib/downloads";
 import { loadBookmarks, removeBookmark, type BookmarkRecord } from "../lib/bookmarks";
-import { getAllNotes, getNotesPaginated, deleteNote, type NoteRecord } from "../lib/notes";
-import { getAllSummaries, deleteSummary, type SummaryRecord } from "../lib/summaries";
+import { getAllNotes, getNotesPaginated, deleteNote, restoreNote, getDeletedNotes, type NoteRecord } from "../lib/notes";
+import { getAllSummaries, deleteSummary, restoreSummary, getDeletedSummaries, type SummaryRecord } from "../lib/summaries";
 import { BookmarkHeart } from "../components/common/icons/BookmarkHeart";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -1306,11 +1306,18 @@ function MyNotes({ userId }: { userId: string | undefined }) {
   const [loading, setLoading] = useState(true);
   const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
   const [deletingSummaryKey, setDeletingSummaryKey] = useState<string | null>(null);
+  const [deletedNotes, setDeletedNotes] = useState<NoteRecord[]>([]);
+  const [deletedSummaries, setDeletedSummaries] = useState<SummaryRecord[]>([]);
+  const [showTrash, setShowTrash] = useState(false);
 
   useEffect(() => {
     if (!userId) { setNotes([]); setSummaries([]); setLoading(false); return; }
     const allSummaries = getAllSummaries(userId);
-    getNotesPaginated(userId, 0, 10).then(({ notes: firstNotes, hasMore }) => {
+    const trashSummaries = getDeletedSummaries(userId);
+    Promise.all([
+      getNotesPaginated(userId, 0, 10),
+      getDeletedNotes(userId),
+    ]).then(([{ notes: firstNotes, hasMore }, trashNotes]) => {
       setNotes(firstNotes);
       setNotesHasMore(hasMore);
       setNotesPage(0);
@@ -1318,6 +1325,8 @@ function MyNotes({ userId }: { userId: string | undefined }) {
       setSummaries(allSummaries.slice(0, 10));
       setSummariesHasMore(allSummaries.length > 10);
       setSummariesPage(0);
+      setDeletedNotes(trashNotes);
+      setDeletedSummaries(trashSummaries);
       setLoading(false);
     });
   }, [userId]);
@@ -1343,19 +1352,43 @@ function MyNotes({ userId }: { userId: string | undefined }) {
 
   const handleDeleteNote = async (topicId: number) => {
     if (!userId) return;
+    const confirmed = window.confirm("Move this note to Recently Deleted?\nYou can restore it any time.");
+    if (!confirmed) return;
     setDeletingNoteId(topicId);
     await deleteNote(userId, topicId);
+    const moved = notes.find((n) => n.topicId === topicId);
     setNotes((prev) => prev.filter((n) => n.topicId !== topicId));
+    if (moved) setDeletedNotes((prev) => [{ ...moved, deletedAt: new Date().toISOString() }, ...prev]);
     setDeletingNoteId(null);
   };
 
   const handleDeleteSummary = (topicId: number, level: string) => {
     if (!userId) return;
+    const confirmed = window.confirm("Move this summary to Recently Deleted?\nYou can restore it any time.");
+    if (!confirmed) return;
     const key = `${topicId}:${level}`;
     setDeletingSummaryKey(key);
     deleteSummary(userId, topicId, level);
+    const moved = summaries.find((s) => s.topicId === topicId && s.level === level);
     setSummaries((prev) => prev.filter((s) => !(s.topicId === topicId && s.level === level)));
+    if (moved) setDeletedSummaries((prev) => [{ ...moved, deletedAt: new Date().toISOString() }, ...prev]);
     setDeletingSummaryKey(null);
+  };
+
+  const handleRestoreNote = async (topicId: number) => {
+    if (!userId) return;
+    await restoreNote(userId, topicId);
+    const restored = deletedNotes.find((n) => n.topicId === topicId);
+    setDeletedNotes((prev) => prev.filter((n) => n.topicId !== topicId));
+    if (restored) setNotes((prev) => [{ ...restored, deletedAt: undefined }, ...prev]);
+  };
+
+  const handleRestoreSummary = (topicId: number, level: string) => {
+    if (!userId) return;
+    restoreSummary(userId, topicId, level);
+    const restored = deletedSummaries.find((s) => s.topicId === topicId && s.level === level);
+    setDeletedSummaries((prev) => prev.filter((s) => !(s.topicId === topicId && s.level === level)));
+    if (restored) setSummaries((prev) => [{ ...restored, deletedAt: undefined }, ...prev]);
   };
 
   if (loading) {
@@ -1553,6 +1586,56 @@ function MyNotes({ userId }: { userId: string | undefined }) {
             >
               Load More Summaries
             </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Recently Deleted ── */}
+      {(deletedNotes.length > 0 || deletedSummaries.length > 0) && (
+        <div className="mt-4 border border-red-100 rounded-xl overflow-hidden">
+          <button
+            onClick={() => setShowTrash((p) => !p)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Recently Deleted ({deletedNotes.length + deletedSummaries.length})
+            </span>
+            <span>{showTrash ? "▲" : "▼"}</span>
+          </button>
+          {showTrash && (
+            <div className="divide-y divide-red-50 bg-white">
+              {deletedNotes.map((note) => (
+                <div key={note.topicId} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">{note.topicName}</p>
+                    <p className="text-xs text-gray-400">Note · {note.moduleName ?? "No module"}</p>
+                  </div>
+                  <button
+                    onClick={() => handleRestoreNote(note.topicId)}
+                    className="text-xs px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-semibold transition-colors"
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+              {deletedSummaries.map((s) => (
+                <div key={`${s.topicId}:${s.level}`} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">{s.topicName}</p>
+                    <p className="text-xs text-gray-400">Summary · {s.level}</p>
+                  </div>
+                  <button
+                    onClick={() => handleRestoreSummary(s.topicId, s.level)}
+                    className="text-xs px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 font-semibold transition-colors"
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

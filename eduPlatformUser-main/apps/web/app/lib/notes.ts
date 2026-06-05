@@ -15,6 +15,7 @@ export interface NoteRecord {
   syncedToNotion: boolean;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string; // soft delete timestamp — undefined means active
 }
 
 function isSupabaseUserId(userId: string): boolean {
@@ -36,6 +37,7 @@ function rowToRecord(row: Record<string, unknown>): NoteRecord {
     syncedToNotion:  row.synced_to_notion as boolean,
     createdAt:       row.created_at       as string,
     updatedAt:       row.updated_at       as string,
+    deletedAt:       row.deleted_at       as string | undefined,
   };
 }
 
@@ -157,15 +159,16 @@ export async function getAllNotes(userId: string): Promise<NoteRecord[]> {
         .from("notes")
         .select("*")
         .eq("user_id", userId)
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false });
       if (!error) return (data || []).map((r) => rowToRecord(r as Record<string, unknown>));
       console.warn("Supabase getAllNotes failed, using localStorage:", error.message);
     }
   }
 
-  return localLoad(userId).sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
+  return localLoad(userId)
+    .filter((n) => !n.deletedAt)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 export async function getNotesPaginated(
@@ -183,6 +186,7 @@ export async function getNotesPaginated(
         .from("notes")
         .select("*")
         .eq("user_id", userId)
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .range(from, from + pageSize); // fetch one extra to detect hasMore
       if (!error && data) {
@@ -194,10 +198,10 @@ export async function getNotesPaginated(
     }
   }
 
-  // localStorage fallback — paginate in memory
-  const all = localLoad(userId).sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
+  // localStorage fallback — paginate in memory (exclude soft-deleted)
+  const all = localLoad(userId)
+    .filter((n) => !n.deletedAt)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   const start = page * pageSize;
   return {
     notes:   all.slice(start, start + pageSize),
@@ -205,17 +209,60 @@ export async function getNotesPaginated(
   };
 }
 
+// Soft delete — sets deleted_at timestamp. Data is NEVER removed from the database.
 export async function deleteNote(userId: string, topicId: number): Promise<void> {
+  const now = new Date().toISOString();
   if (supabase && isSupabaseUserId(userId)) {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
-      const { error } = await supabase
+      await supabase
         .from("notes")
-        .delete()
+        .update({ deleted_at: now })
         .eq("user_id", userId)
         .eq("topic_id", topicId);
-      if (!error) return;
+      return;
     }
   }
-  localSave(userId, localLoad(userId).filter((n) => n.topicId !== topicId));
+  // localStorage: mark as deleted — do NOT remove from array
+  localSave(userId, localLoad(userId).map((n) =>
+    n.topicId === topicId ? { ...n, deletedAt: now } : n
+  ));
+}
+
+// Restore a soft-deleted note — clears the deleted_at timestamp.
+export async function restoreNote(userId: string, topicId: number): Promise<void> {
+  if (supabase && isSupabaseUserId(userId)) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      await supabase
+        .from("notes")
+        .update({ deleted_at: null })
+        .eq("user_id", userId)
+        .eq("topic_id", topicId);
+      return;
+    }
+  }
+  localSave(userId, localLoad(userId).map((n) =>
+    n.topicId === topicId ? { ...n, deletedAt: undefined } : n
+  ));
+}
+
+// Get all soft-deleted notes for the trash view.
+export async function getDeletedNotes(userId: string): Promise<NoteRecord[]> {
+  if (typeof window === "undefined") return [];
+  if (supabase && isSupabaseUserId(userId)) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .eq("user_id", userId)
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false });
+      if (!error) return (data || []).map((r) => rowToRecord(r as Record<string, unknown>));
+    }
+  }
+  return localLoad(userId)
+    .filter((n) => !!n.deletedAt)
+    .sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
 }
