@@ -8,7 +8,7 @@ import { supabase, getAllModulesProgress, getProgressPaginated, getUserSurvey, t
 import { loadDownloads, removeDownload, removeModuleDownloads, type DownloadRecord } from "../lib/downloads";
 import { loadBookmarks, removeBookmark, type BookmarkRecord } from "../lib/bookmarks";
 import { getAllNotes, getNotesPaginated, deleteNote, restoreNote, getDeletedNotes, type NoteRecord } from "../lib/notes";
-import { getAllSummaries, deleteSummary, restoreSummary, getDeletedSummaries, type SummaryRecord } from "../lib/summaries";
+import { getSummariesPaginated, deleteSummary, restoreSummary, getDeletedSummaries, type SummaryRecord } from "../lib/summaries";
 import { BookmarkHeart } from "../components/common/icons/BookmarkHeart";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -1300,9 +1300,9 @@ function MyNotes({ userId }: { userId: string | undefined }) {
   const [notesHasMore, setNotesHasMore] = useState(false);
   const [notesLoadingMore, setNotesLoadingMore] = useState(false);
   const [summaries, setSummaries] = useState<SummaryRecord[]>([]);
-  const [summariesFull, setSummariesFull] = useState<SummaryRecord[]>([]);
   const [summariesPage, setSummariesPage] = useState(0);
   const [summariesHasMore, setSummariesHasMore] = useState(false);
+  const [summariesLoadingMore, setSummariesLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
   const [deletingSummaryKey, setDeletingSummaryKey] = useState<string | null>(null);
@@ -1312,18 +1312,17 @@ function MyNotes({ userId }: { userId: string | undefined }) {
 
   useEffect(() => {
     if (!userId) { setNotes([]); setSummaries([]); setLoading(false); return; }
-    const allSummaries = getAllSummaries(userId);
-    const trashSummaries = getDeletedSummaries(userId);
     Promise.all([
       getNotesPaginated(userId, 0, 10),
       getDeletedNotes(userId),
-    ]).then(([{ notes: firstNotes, hasMore }, trashNotes]) => {
+      getSummariesPaginated(userId, 0, 10),
+      getDeletedSummaries(userId),
+    ]).then(([{ notes: firstNotes, hasMore: notesMore }, trashNotes, { summaries: firstSummaries, hasMore: summariesMore }, trashSummaries]) => {
       setNotes(firstNotes);
-      setNotesHasMore(hasMore);
+      setNotesHasMore(notesMore);
       setNotesPage(0);
-      setSummariesFull(allSummaries);
-      setSummaries(allSummaries.slice(0, 10));
-      setSummariesHasMore(allSummaries.length > 10);
+      setSummaries(firstSummaries);
+      setSummariesHasMore(summariesMore);
       setSummariesPage(0);
       setDeletedNotes(trashNotes);
       setDeletedSummaries(trashSummaries);
@@ -1342,12 +1341,15 @@ function MyNotes({ userId }: { userId: string | undefined }) {
     setNotesLoadingMore(false);
   };
 
-  const handleLoadMoreSummaries = () => {
+  const handleLoadMoreSummaries = async () => {
+    if (!userId || summariesLoadingMore) return;
+    setSummariesLoadingMore(true);
     const next = summariesPage + 1;
-    const start = next * 10;
-    setSummaries(summariesFull.slice(0, start + 10));
-    setSummariesHasMore(summariesFull.length > start + 10);
+    const { summaries: more, hasMore } = await getSummariesPaginated(userId, next, 10);
+    setSummaries((prev) => [...prev, ...more]);
+    setSummariesHasMore(hasMore);
     setSummariesPage(next);
+    setSummariesLoadingMore(false);
   };
 
   const handleDeleteNote = async (topicId: number) => {
@@ -1362,13 +1364,13 @@ function MyNotes({ userId }: { userId: string | undefined }) {
     setDeletingNoteId(null);
   };
 
-  const handleDeleteSummary = (topicId: number, level: string) => {
+  const handleDeleteSummary = async (topicId: number, level: string) => {
     if (!userId) return;
     const confirmed = window.confirm("Move this summary to Recently Deleted?\nYou can restore it any time.");
     if (!confirmed) return;
     const key = `${topicId}:${level}`;
     setDeletingSummaryKey(key);
-    deleteSummary(userId, topicId, level);
+    await deleteSummary(userId, topicId, level);
     const moved = summaries.find((s) => s.topicId === topicId && s.level === level);
     setSummaries((prev) => prev.filter((s) => !(s.topicId === topicId && s.level === level)));
     if (moved) setDeletedSummaries((prev) => [{ ...moved, deletedAt: new Date().toISOString() }, ...prev]);
@@ -1383,9 +1385,9 @@ function MyNotes({ userId }: { userId: string | undefined }) {
     if (restored) setNotes((prev) => [{ ...restored, deletedAt: undefined }, ...prev]);
   };
 
-  const handleRestoreSummary = (topicId: number, level: string) => {
+  const handleRestoreSummary = async (topicId: number, level: string) => {
     if (!userId) return;
-    restoreSummary(userId, topicId, level);
+    await restoreSummary(userId, topicId, level);
     const restored = deletedSummaries.find((s) => s.topicId === topicId && s.level === level);
     setDeletedSummaries((prev) => prev.filter((s) => !(s.topicId === topicId && s.level === level)));
     if (restored) setSummaries((prev) => [{ ...restored, deletedAt: undefined }, ...prev]);
@@ -1582,9 +1584,10 @@ function MyNotes({ userId }: { userId: string | undefined }) {
           {summariesHasMore && (
             <button
               onClick={handleLoadMoreSummaries}
-              className="w-full py-2.5 text-sm font-semibold text-purple-700 border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors"
+              disabled={summariesLoadingMore}
+              className="w-full py-2.5 text-sm font-semibold text-purple-700 border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors disabled:opacity-50"
             >
-              Load More Summaries
+              {summariesLoadingMore ? "Loading…" : "Load More Summaries"}
             </button>
           )}
         </div>
