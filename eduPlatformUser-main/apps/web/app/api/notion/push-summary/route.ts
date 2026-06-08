@@ -3,15 +3,25 @@ import { createClient } from "@supabase/supabase-js";
 import { createNotionPage, findOrCreateUserDatabase, createUserNotionPage } from "../../../lib/notion";
 import { created, badRequest, validationError, serviceUnavailable, gatewayError } from "../../../lib/apiResponse";
 import { sanitiseText } from "../../../lib/sanitise";
+import { logger } from "../../../lib/logger";
+
+const ROUTE = "/api/notion/push-summary";
 
 export async function POST(req: NextRequest) {
-  let body: { topicName?: string; moduleName?: string; userEmail?: string; content?: string; level?: string; format?: string; userId?: string };
+  let body: {
+    topicName?: string; moduleName?: string; userEmail?: string;
+    content?: string; level?: string; format?: string; userId?: string;
+  };
   try { body = await req.json(); }
   catch { return badRequest("Invalid JSON in request body"); }
 
   const { topicName, moduleName, userEmail, content, level, format, userId } = body;
   const cleanContent = sanitiseText(content ?? "");
+
   if (!topicName || !cleanContent) {
+    logger.warn(ROUTE, "sync_summary", userId ?? "anonymous", "Validation failed: topicName or content missing", undefined, {
+      topicName: topicName ?? "missing", hasContent: !!cleanContent,
+    });
     return validationError("topicName and content are required");
   }
 
@@ -50,10 +60,15 @@ export async function POST(req: NextRequest) {
             level,
             format,
           });
+          logger.info(ROUTE, "sync_summary", userId, "Summary synced to user Notion", {
+            topicName, moduleName, level, format, source: "user", pageId,
+          });
           return created({ pageId, source: "user" }, "Summary synced to Notion");
         }
       } catch (err) {
-        console.warn("User Notion push failed, falling back to admin:", err instanceof Error ? err.message : err);
+        logger.warn(ROUTE, "sync_summary", userId, "User Notion push failed, using admin fallback", err, {
+          topicName, level,
+        });
       }
     }
   }
@@ -62,13 +77,23 @@ export async function POST(req: NextRequest) {
   const apiKey     = process.env.NOTION_API_KEY;
   const databaseId = process.env.NOTION_DATABASE_ID;
   if (!apiKey || !databaseId) {
+    logger.error(ROUTE, "sync_summary", userId ?? "anonymous", "Notion admin credentials not set in environment");
     return serviceUnavailable("Notion not configured. Connect your account in profile.");
   }
 
   try {
-    const pageId = await createNotionPage({ databaseId, apiKey, topicName: topicName!, moduleName, userEmail, content: cleanContent, type: "AI Summary", level, format });
+    const pageId = await createNotionPage({
+      databaseId, apiKey, topicName: topicName!, moduleName,
+      userEmail, content: cleanContent, type: "AI Summary", level, format,
+    });
+    logger.info(ROUTE, "sync_summary", userId ?? "anonymous", "Summary synced to admin Notion", {
+      topicName, level, format, source: "admin", pageId,
+    });
     return created({ pageId, source: "admin" }, "Summary synced to shared Notion");
   } catch (err) {
+    logger.error(ROUTE, "sync_summary", userId ?? "anonymous", "Summary sync failed — all Notion paths exhausted", err, {
+      payload: { topicName, level },
+    });
     const msg = err instanceof Error ? err.message : "Unknown error";
     return gatewayError(msg);
   }

@@ -3,6 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 import { createNotionPage, findOrCreateUserDatabase, createUserNotionPage, updateUserNotionPage } from "../../../lib/notion";
 import { ok, created, badRequest, validationError, serviceUnavailable, gatewayError } from "../../../lib/apiResponse";
 import { sanitiseText } from "../../../lib/sanitise";
+import { logger } from "../../../lib/logger";
+
+const ROUTE = "/api/notion/push-note";
 
 export async function POST(req: NextRequest) {
   let body: {
@@ -14,7 +17,11 @@ export async function POST(req: NextRequest) {
 
   const { topicName, moduleName, userEmail, content, userId, notionPageId } = body;
   const cleanContent = sanitiseText(content ?? "");
+
   if (!topicName || !cleanContent) {
+    logger.warn(ROUTE, "sync_note", userId ?? "anonymous", "Validation failed: topicName or content missing", undefined, {
+      topicName: topicName ?? "missing", hasContent: !!cleanContent,
+    });
     return validationError("topicName and content are required");
   }
 
@@ -32,15 +39,16 @@ export async function POST(req: NextRequest) {
 
     if (tokenRow?.access_token) {
       try {
-        // UPDATE existing page if we already have a page ID
         if (notionPageId) {
           await updateUserNotionPage(tokenRow.access_token, notionPageId, cleanContent, {
             topicName: topicName!, moduleName, type: "Note",
           });
+          logger.info(ROUTE, "sync_note", userId, "Note updated in user Notion", {
+            topicName, moduleName, source: "user", pageId: notionPageId,
+          });
           return ok({ pageId: notionPageId, source: "user", updated: true }, "Note updated in Notion");
         }
 
-        // CREATE new page
         let dbId = tokenRow.notion_database_id;
         if (!dbId) {
           dbId = await findOrCreateUserDatabase(tokenRow.access_token);
@@ -60,10 +68,15 @@ export async function POST(req: NextRequest) {
             content:     cleanContent,
             type:        "Note",
           });
+          logger.info(ROUTE, "sync_note", userId, "Note synced to user Notion", {
+            topicName, moduleName, source: "user", pageId,
+          });
           return created({ pageId, source: "user", updated: false }, "Note synced to Notion");
         }
       } catch (err) {
-        console.warn("User Notion push failed, falling back to admin:", err instanceof Error ? err.message : err);
+        logger.warn(ROUTE, "sync_note", userId, "User Notion push failed, using admin fallback", err, {
+          topicName,
+        });
       }
     }
   }
@@ -72,13 +85,23 @@ export async function POST(req: NextRequest) {
   const apiKey     = process.env.NOTION_API_KEY;
   const databaseId = process.env.NOTION_DATABASE_ID;
   if (!apiKey || !databaseId) {
+    logger.error(ROUTE, "sync_note", userId ?? "anonymous", "Notion admin credentials not set in environment");
     return serviceUnavailable("Notion not configured. Connect your account in profile.");
   }
 
   try {
-    const pageId = await createNotionPage({ databaseId, apiKey, topicName: topicName!, moduleName, userEmail, content: cleanContent, type: "Note" });
+    const pageId = await createNotionPage({
+      databaseId, apiKey, topicName: topicName!, moduleName,
+      userEmail, content: cleanContent, type: "Note",
+    });
+    logger.info(ROUTE, "sync_note", userId ?? "anonymous", "Note synced to admin Notion", {
+      topicName, moduleName, source: "admin", pageId,
+    });
     return created({ pageId, source: "admin", updated: false }, "Note synced to shared Notion");
   } catch (err) {
+    logger.error(ROUTE, "sync_note", userId ?? "anonymous", "Note sync failed — all Notion paths exhausted", err, {
+      payload: { topicName },
+    });
     const msg = err instanceof Error ? err.message : "Unknown error";
     return gatewayError(msg);
   }

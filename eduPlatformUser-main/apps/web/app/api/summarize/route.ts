@@ -1,16 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { ok, validationError, serverError, serviceUnavailable } from "../../lib/apiResponse";
+import { logger } from "../../lib/logger";
 
 export const maxDuration = 30;
+
+const ROUTE = "/api/summarize";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Bullets: structured key facts per level
-// Paragraph: flowing TL;DR sentence summary per level
 const SYSTEM_PROMPTS: Record<string, Record<string, string>> = {
   bullets: {
     professional:
@@ -35,9 +36,10 @@ async function callGroq(
   text: string,
   level: string,
   format: string
-): Promise<string | null> {
+): Promise<{ summary: string | null; durationMs: number }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
+  const start = Date.now();
 
   try {
     const systemPrompt =
@@ -62,86 +64,94 @@ async function callGroq(
     });
 
     const data = await res.json();
+    const durationMs = Date.now() - start;
 
     if (!res.ok) {
-      console.error("[summarize] Groq error:", JSON.stringify(data));
-      return null;
+      return { summary: null, durationMs };
     }
 
-    const summary = data.choices?.[0]?.message?.content?.trim();
-    if (!summary) {
-      console.error("[summarize] Groq empty response:", JSON.stringify(data));
-      return null;
-    }
-
-    return summary;
+    const summary = data.choices?.[0]?.message?.content?.trim() || null;
+    return { summary, durationMs };
   } catch (err: unknown) {
-    if (err instanceof Error && err.name === "AbortError") {
-      console.error("[summarize] Groq timed out after 20s");
-    } else {
-      console.error("[summarize] Groq threw:", err);
-    }
-    return null;
+    return { summary: null, durationMs: Date.now() - start };
   } finally {
     clearTimeout(timeout);
   }
 }
 
 export async function POST(req: NextRequest) {
+  let topicId: unknown, topicName: unknown, content: unknown,
+      level = "professional", format = "bullets", userId = "anonymous";
+
   try {
-    const {
-      topicId,
-      topicName,
-      content,
-      level = "professional",
-      format = "bullets",
-    } = await req.json();
-
-    if (!topicId) {
-      return validationError("topicId is required");
-    }
-
-    // Each level + format combination is cached separately
-    const cacheKey =
-      format === "paragraph"
-        ? `${topicId}_${level}_paragraph`
-        : `${topicId}_${level}`;
-
-    const { data: cached } = await supabaseAdmin
-      .from("topic_summaries")
-      .select("summary")
-      .eq("topic_id", cacheKey)
-      .maybeSingle();
-
-    if (cached?.summary) {
-      return ok({ summary: cached.summary, cached: true }, "Summary ready");
-    }
-
-    if (!process.env.GROQ_API_KEY) {
-      console.error("[summarize] GROQ_API_KEY missing in environment");
-      return serviceUnavailable("AI service is not configured");
-    }
-
-    const text = content?.trim()
-      ? content.trim().slice(0, 3000)
-      : `Topic: ${topicName}. Provide a general educational summary.`;
-
-    const summary = await callGroq(topicName, text, level, format);
-
-    if (!summary) {
-      return serverError("Failed to generate summary. Please try again.");
-    }
-
-    await supabaseAdmin
-      .from("topic_summaries")
-      .upsert(
-        { topic_id: cacheKey, summary },
-        { onConflict: "topic_id", ignoreDuplicates: true }
-      );
-
-    return ok({ summary, cached: false }, "Summary ready");
-  } catch (err) {
-    console.error("[summarize] Unexpected error:", err);
-    return serverError("Unexpected server error");
+    const body = await req.json();
+    topicId   = body.topicId;
+    topicName = body.topicName;
+    content   = body.content;
+    level     = body.level   ?? "professional";
+    format    = body.format  ?? "bullets";
+    userId    = body.userId  ?? "anonymous";
+  } catch {
+    return serverError("Invalid JSON in request body");
   }
+
+  if (!topicId) {
+    logger.warn(ROUTE, "generate_summary", userId, "Validation failed: topicId missing");
+    return validationError("topicId is required");
+  }
+
+  const cacheKey = format === "paragraph"
+    ? `${topicId}_${level}_paragraph`
+    : `${topicId}_${level}`;
+
+  const { data: cached } = await supabaseAdmin
+    .from("topic_summaries")
+    .select("summary")
+    .eq("topic_id", cacheKey)
+    .maybeSingle();
+
+  if (cached?.summary) {
+    logger.info(ROUTE, "serve_cached_summary", userId, "Summary served from cache", {
+      topicId: topicId as string, level, format, cached: true,
+    });
+    return ok({ summary: cached.summary, cached: true }, "Summary ready");
+  }
+
+  if (!process.env.GROQ_API_KEY) {
+    logger.error(ROUTE, "generate_summary", userId, "GROQ_API_KEY not set in environment");
+    return serviceUnavailable("AI service is not configured");
+  }
+
+  const text = (content as string)?.trim()
+    ? (content as string).trim().slice(0, 3000)
+    : `Topic: ${topicName}. Provide a general educational summary.`;
+
+  const { summary, durationMs } = await callGroq(topicName as string, text, level, format);
+
+  if (!summary) {
+    logger.error(ROUTE, "generate_summary", userId, "Groq failed to return summary", undefined, {
+      payload: { topicId: topicId as string, level, format },
+      durationMs,
+    });
+    return serverError("Failed to generate summary. Please try again.");
+  }
+
+  logger.info(ROUTE, "generate_summary", userId, "Summary generated successfully", {
+    topicId: topicId as string, topicName: topicName as string, level, format, durationMs,
+  });
+
+  const { error: cacheErr } = await supabaseAdmin
+    .from("topic_summaries")
+    .upsert(
+      { topic_id: cacheKey, summary },
+      { onConflict: "topic_id", ignoreDuplicates: true }
+    );
+
+  if (cacheErr) {
+    logger.warn(ROUTE, "generate_summary", userId, "Cache write to Supabase failed", cacheErr, {
+      topicId: topicId as string,
+    });
+  }
+
+  return ok({ summary, cached: false }, "Summary ready");
 }

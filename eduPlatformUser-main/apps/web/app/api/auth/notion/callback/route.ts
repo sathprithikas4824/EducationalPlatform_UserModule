@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logger } from "../../../../lib/logger";
 
+const ROUTE = "/api/auth/notion/callback";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://educational-platform-user-module.vercel.app";
 
 export async function GET(req: NextRequest) {
@@ -10,6 +12,10 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get("error");
 
   if (error || !code || !state) {
+    logger.warn(ROUTE, "notion_oauth_complete", "unknown",
+      "Notion callback missing code or state", error ?? "no error param", {
+        hasCode: !!code, hasState: !!state,
+      });
     return NextResponse.redirect(`${SITE_URL}/profile?tab=account&notion=error`);
   }
 
@@ -19,7 +25,9 @@ export async function GET(req: NextRequest) {
     const decoded = JSON.parse(Buffer.from(state, "base64url").toString()) as { userId?: string };
     if (!decoded.userId) throw new Error("missing userId");
     userId = decoded.userId;
-  } catch {
+  } catch (err) {
+    logger.warn(ROUTE, "notion_oauth_complete", "unknown",
+      "Failed to decode state param from Notion callback", err);
     return NextResponse.redirect(`${SITE_URL}/profile?tab=account&notion=error`);
   }
 
@@ -28,12 +36,17 @@ export async function GET(req: NextRequest) {
   const redirectUri  = process.env.NOTION_REDIRECT_URI ?? `${SITE_URL}/api/auth/notion/callback`;
 
   if (!clientId || !clientSecret) {
+    logger.error(ROUTE, "notion_oauth_complete", userId,
+      "NOTION_CLIENT_ID or NOTION_CLIENT_SECRET not set in environment");
     return NextResponse.redirect(`${SITE_URL}/profile?tab=account&notion=not_configured`);
   }
 
   // Exchange code for access token
   const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-  let tokenData: { access_token?: string; workspace_id?: string; workspace_name?: string; workspace_icon?: string; error?: string };
+  let tokenData: {
+    access_token?: string; workspace_id?: string;
+    workspace_name?: string; workspace_icon?: string; error?: string;
+  };
 
   try {
     const tokenRes = await fetch("https://api.notion.com/v1/oauth/token", {
@@ -45,12 +58,17 @@ export async function GET(req: NextRequest) {
       body: JSON.stringify({ grant_type: "authorization_code", code, redirect_uri: redirectUri }),
     });
     tokenData = await tokenRes.json() as typeof tokenData;
-  } catch {
-    return NextResponse.redirect(`${SITE_URL}/profile?tab=account&notion=error`);
-  }
 
-  if (!tokenData.access_token) {
-    console.error("Notion token exchange failed:", tokenData.error);
+    if (!tokenRes.ok || !tokenData.access_token) {
+      logger.error(ROUTE, "notion_oauth_complete", userId,
+        "Notion token exchange failed", tokenData.error, {
+          payload: { httpStatus: tokenRes.status },
+        });
+      return NextResponse.redirect(`${SITE_URL}/profile?tab=account&notion=error`);
+    }
+  } catch (err) {
+    logger.error(ROUTE, "notion_oauth_complete", userId,
+      "Notion token exchange HTTP call failed", err);
     return NextResponse.redirect(`${SITE_URL}/profile?tab=account&notion=error`);
   }
 
@@ -60,7 +78,7 @@ export async function GET(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  await supabaseAdmin.from("user_notion_tokens").upsert(
+  const { error: dbErr } = await supabaseAdmin.from("user_notion_tokens").upsert(
     {
       user_id:        userId,
       access_token:   tokenData.access_token,
@@ -71,6 +89,17 @@ export async function GET(req: NextRequest) {
     },
     { onConflict: "user_id" }
   );
+
+  if (dbErr) {
+    logger.error(ROUTE, "notion_oauth_complete", userId,
+      "Failed to store Notion token in Supabase", dbErr);
+    return NextResponse.redirect(`${SITE_URL}/profile?tab=account&notion=error`);
+  }
+
+  logger.info(ROUTE, "notion_oauth_complete", userId, "Notion connected successfully", {
+    workspaceName: tokenData.workspace_name ?? "unknown",
+    workspaceId:   tokenData.workspace_id   ?? "unknown",
+  });
 
   return NextResponse.redirect(`${SITE_URL}/profile?tab=account&notion=connected`);
 }
