@@ -41,7 +41,11 @@ function build(
     msg,
     ...(extra?.payload    && { payload:    extra.payload }),
     ...(extra?.err        !== undefined && {
-      err: extra.err instanceof Error ? extra.err.message : String(extra.err),
+      err: extra.err instanceof Error
+        ? extra.err.message
+        : typeof extra.err === "object"
+          ? JSON.stringify(extra.err)
+          : String(extra.err),
     }),
     ...(extra?.durationMs !== undefined && { durationMs: extra.durationMs }),
   };

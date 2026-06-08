@@ -426,6 +426,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           topicName: topic.name,
           content: rawText,
           level: SUMMARY_LEVELS[requestedLevel],
+          userId: user?.id,
         }),
       });
       const result = await res.json() as { success: boolean; message: string; data: { summary?: string; cached?: boolean } | null };
@@ -494,6 +495,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           content: rawText,
           level: SUMMARY_LEVELS[level],
           format: "paragraph",
+          userId: user?.id,
         }),
       });
       const result = await res.json() as { success: boolean; message: string; data: { summary?: string; cached?: boolean } | null };

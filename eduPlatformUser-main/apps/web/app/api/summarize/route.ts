@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { ok, validationError, serverError, serviceUnavailable } from "../../lib/apiResponse";
 import { logger } from "../../lib/logger";
@@ -6,11 +5,6 @@ import { logger } from "../../lib/logger";
 export const maxDuration = 30;
 
 const ROUTE = "/api/summarize";
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 const SYSTEM_PROMPTS: Record<string, Record<string, string>> = {
   bullets: {
@@ -100,23 +94,6 @@ export async function POST(req: NextRequest) {
     return validationError("topicId is required");
   }
 
-  const cacheKey = format === "paragraph"
-    ? `${topicId}_${level}_paragraph`
-    : `${topicId}_${level}`;
-
-  const { data: cached } = await supabaseAdmin
-    .from("topic_summaries")
-    .select("summary")
-    .eq("topic_id", cacheKey)
-    .maybeSingle();
-
-  if (cached?.summary) {
-    logger.info(ROUTE, "serve_cached_summary", userId, "Summary served from cache", {
-      topicId: topicId as string, level, format, cached: true,
-    });
-    return ok({ summary: cached.summary, cached: true }, "Summary ready");
-  }
-
   if (!process.env.GROQ_API_KEY) {
     logger.error(ROUTE, "generate_summary", userId, "GROQ_API_KEY not set in environment");
     return serviceUnavailable("AI service is not configured");
@@ -139,19 +116,6 @@ export async function POST(req: NextRequest) {
   logger.info(ROUTE, "generate_summary", userId, "Summary generated successfully", {
     topicId: topicId as string, topicName: topicName as string, level, format, durationMs,
   });
-
-  const { error: cacheErr } = await supabaseAdmin
-    .from("topic_summaries")
-    .upsert(
-      { topic_id: cacheKey, summary },
-      { onConflict: "topic_id", ignoreDuplicates: true }
-    );
-
-  if (cacheErr) {
-    logger.warn(ROUTE, "generate_summary", userId, "Cache write to Supabase failed", cacheErr, {
-      topicId: topicId as string,
-    });
-  }
 
   return ok({ summary, cached: false }, "Summary ready");
 }
