@@ -4,6 +4,7 @@
 //        logger.error(route, action, userId, msg, err?)
 
 import type { Producer } from "kafkajs";
+import { waitUntil } from "@vercel/functions";
 
 type Level = "INFO" | "WARN" | "ERROR";
 
@@ -58,13 +59,16 @@ async function getProducer(): Promise<Producer | null> {
 }
 
 function sendToKafka(entry: LogEntry): void {
-  const topic = process.env.KAFKA_TOPIC ?? "edu-platform-logs";
-  getProducer()
+  const topic = process.env.KAFKA_TOPIC ?? "eduplatform_logs";
+  const promise = getProducer()
     .then((producer) => {
       if (!producer) return;
       return producer.send({ topic, messages: [{ value: JSON.stringify(entry) }] });
     })
-    .catch(() => {}); // fire-and-forget — logging must never crash a route
+    .catch(() => {});
+  // waitUntil keeps the Vercel function alive until Kafka send completes
+  // without delaying the HTTP response back to the user
+  waitUntil(promise);
 }
 // -------------------------------------------------------------------------
 
