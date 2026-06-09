@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ["kafkajs"],
   compress: true,
   poweredByHeader: false,
   images: {

@@ -1,7 +1,9 @@
-// Structured logger — one JSON line per event, searchable in Vercel logs.
+// Structured logger — JSON per event to console (Vercel logs) + Kafka topic.
 // Usage: logger.info(route, action, userId, msg, payload?)
 //        logger.warn(route, action, userId, msg, err?)
 //        logger.error(route, action, userId, msg, err?)
+
+import type { Producer } from "kafkajs";
 
 type Level = "INFO" | "WARN" | "ERROR";
 
@@ -17,11 +19,61 @@ interface LogEntry {
   durationMs?: number;
 }
 
+// --- Kafka producer (cached per warm Lambda, skipped in Edge runtime) ---
+let _producer: Producer | null = null;
+let _connecting = false;
+
+async function getProducer(): Promise<Producer | null> {
+  // kafkajs uses native Node.js TCP/TLS — crashes Turbopack (dev mode) on Windows.
+  // Console logs are sufficient locally; Kafka only runs in production (Vercel/webpack).
+  if (process.env.NODE_ENV !== "production") return null;
+
+  const brokers   = process.env.KAFKA_BROKERS;
+  const username  = process.env.KAFKA_USERNAME;
+  const password  = process.env.KAFKA_PASSWORD;
+  if (!brokers || !username || !password) return null;
+  if (_producer)    return _producer;
+  if (_connecting)  return null;
+
+  _connecting = true;
+  try {
+    // Dynamic import — throws in Edge runtime (V8 isolates lack Node TCP), handled below
+    const { Kafka } = await import("kafkajs");
+    const kafka = new Kafka({
+      clientId: "edu-platform",
+      brokers:  brokers.split(",").map((b) => b.trim()),
+      ssl:      true,
+      sasl:     { mechanism: "scram-sha-256", username, password },
+      logLevel: 0,
+    });
+    _producer = kafka.producer();
+    await _producer.connect();
+    _connecting = false;
+    return _producer;
+  } catch (err) {
+    _connecting = false;
+    console.error("[kafka] Producer connection failed:", err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
+
+function sendToKafka(entry: LogEntry): void {
+  const topic = process.env.KAFKA_TOPIC ?? "edu-platform-logs";
+  getProducer()
+    .then((producer) => {
+      if (!producer) return;
+      return producer.send({ topic, messages: [{ value: JSON.stringify(entry) }] });
+    })
+    .catch(() => {}); // fire-and-forget — logging must never crash a route
+}
+// -------------------------------------------------------------------------
+
 function write(entry: LogEntry): void {
   const line = JSON.stringify(entry);
   if (entry.level === "ERROR") console.error(line);
   else if (entry.level === "WARN")  console.warn(line);
   else                              console.log(line);
+  sendToKafka(entry);
 }
 
 function build(
