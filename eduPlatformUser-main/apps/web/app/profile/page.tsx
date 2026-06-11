@@ -212,12 +212,14 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
     if (stored) setLastChangedAt(stored);
   }, [user?.id]);
 
-  // Load existing avatar
+  // Load existing avatar from auth metadata (reliable across sessions)
   useEffect(() => {
-    if (!user?.id || !supabase) return;
-    supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
-      .then(({ data }) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url); });
-  }, [user?.id]);
+    if (!supabase) return;
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      const url = authUser?.user_metadata?.avatar_url as string | undefined;
+      if (url) setAvatarUrl(url);
+    });
+  }, []);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1717,10 +1719,12 @@ function ProfilePageInner() {
   const [sharedAvatarUrl, setSharedAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user?.id || !supabase) return;
-    supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
-      .then(({ data }) => { if (data?.avatar_url) setSharedAvatarUrl(data.avatar_url); });
-  }, [user?.id]);
+    if (!supabase) return;
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      const url = authUser?.user_metadata?.avatar_url as string | undefined;
+      if (url) setSharedAvatarUrl(url);
+    });
+  }, []);
 
   // Shared topic/submodule data (fetched once, used by highlights + progress)
   const { topicMap, submoduleMap, dataLoaded } = useTopicData();

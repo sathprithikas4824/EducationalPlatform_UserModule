@@ -14,10 +14,12 @@ export const UserProfileButton: React.FC = () => {
   const router = useRouter();
 
   useEffect(() => {
-    if (!user?.id || !supabase) return;
-    supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
-      .then(({ data }) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url); });
-  }, [user?.id]);
+    if (!isLoggedIn || !supabase) return;
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      const url = authUser?.user_metadata?.avatar_url as string | undefined;
+      if (url) setAvatarUrl(url);
+    });
+  }, [isLoggedIn]);
 
   if (!isLoggedIn) {
     return (
