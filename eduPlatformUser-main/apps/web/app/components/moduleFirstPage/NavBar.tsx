@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { SearchDuotoneIcon, PenEditIcon } from "../icons";
 import { useAnnotation } from "../common/AnnotationProvider";
 import ThemeToggle from "../common/ThemeToggle";
+import { supabase } from "../../lib/supabase";
 
 const HamburgerIcon = () => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -121,25 +122,62 @@ const MobileMenu = ({ isOpen, onClose, activeTab, setActiveTab }) => {
   );
 };
 
+const AVATAR_KEY = "edu_avatar_url";
+
 // Reusable auth pill: navigates to /profile when logged in, Login/Signup when not
 const NavAuthSection = ({ compact = false }: { compact?: boolean }) => {
   const { user, isLoggedIn } = useAnnotation();
   const pathname = usePathname();
   const router = useRouter();
+  const [hasMounted, setHasMounted] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  // After mount: read cached URL so it's ready before the user object arrives
+  useEffect(() => {
+    setHasMounted(true);
+    const cached = localStorage.getItem(AVATAR_KEY);
+    if (cached) setAvatarUrl(cached);
+  }, []);
+
+  // When user is known: build stable Supabase Storage URL and cache it
+  useEffect(() => {
+    if (!user?.id || !supabase) return;
+    setImgError(false);
+    setImageLoaded(false);
+    const { data } = supabase.storage.from("avatars").getPublicUrl(`${user.id}/avatar.jpg`);
+    setAvatarUrl(data.publicUrl);
+    localStorage.setItem(AVATAR_KEY, data.publicUrl);
+  }, [user?.id]);
 
   if (isLoggedIn && user) {
     const initial = user.name?.charAt(0).toUpperCase() || "U";
+    const avatarSize = compact ? "w-6 h-6" : "w-7 h-7";
     const textSize = compact ? "text-xs" : "text-sm";
     return (
       <button
         onClick={() => router.push("/profile")}
         className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-100 rounded-lg transition-all duration-200"
       >
-        <div
-          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
-        >
-          {initial}
+        <div className={`relative ${avatarSize} flex-shrink-0`}>
+          {/* Base layer: gradient circle. Letter only shows when confirmed no photo. */}
+          <div
+            className={`absolute inset-0 rounded-full flex items-center justify-center text-white text-xs font-bold`}
+            style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
+          >
+            {hasMounted && (!avatarUrl || imgError) ? initial : null}
+          </div>
+          {/* Photo layer: renders invisible until loaded, then fades in */}
+          {avatarUrl && !imgError && (
+            <img
+              src={avatarUrl}
+              alt={user.name || "User"}
+              className={`absolute inset-0 w-full h-full rounded-full object-cover transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+              onLoad={() => setImageLoaded(true)}
+              onError={() => setImgError(true)}
+            />
+          )}
         </div>
         <span className={`${textSize} font-medium text-gray-700 max-w-[80px] truncate hidden sm:block`}>{user.name}</span>
       </button>
