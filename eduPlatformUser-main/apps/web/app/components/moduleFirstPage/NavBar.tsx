@@ -156,10 +156,11 @@ const NavAuthSection = ({ compact = false }: { compact?: boolean }) => {
     return () => window.removeEventListener("edu:avatar-changed", handler);
   }, []);
 
-  // When user is known: build stable Supabase Storage URL and update cache
+  // Only fall back to Storage if localStorage has no cached URL (new device / first visit)
   useEffect(() => {
     if (!user?.id || !supabase) return;
     setImgError(false);
+    if (localStorage.getItem(AVATAR_KEY)) return; // localStorage is the source of truth
     const { data } = supabase.storage.from("avatars").getPublicUrl(`${user.id}/avatar.jpg`);
     setAvatarUrl(data.publicUrl);
     localStorage.setItem(AVATAR_KEY, data.publicUrl);

@@ -215,16 +215,15 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
     if (stored) setLastChangedAt(stored);
   }, [user?.id]);
 
-  // Load existing avatar from DB (keeps in sync even if localStorage is stale)
+  // Only fall back to Supabase Storage if localStorage has no cached URL.
+  // Never read from the profiles DB — it can have a stale URL that would
+  // overwrite a newer one that's already showing.
   useEffect(() => {
     if (!user?.id || !supabase) return;
-    supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
-      .then(({ data }) => {
-        if (data?.avatar_url) {
-          setAvatarUrl(data.avatar_url);
-          localStorage.setItem("edu_avatar_url", data.avatar_url);
-        }
-      });
+    if (localStorage.getItem("edu_avatar_url")) return; // trust the cache
+    const { data } = supabase.storage.from("avatars").getPublicUrl(`${user.id}/avatar.jpg`);
+    setAvatarUrl(data.publicUrl);
+    localStorage.setItem("edu_avatar_url", data.publicUrl);
   }, [user?.id]);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
