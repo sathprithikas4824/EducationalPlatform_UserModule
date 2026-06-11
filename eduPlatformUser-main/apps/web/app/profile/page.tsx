@@ -201,6 +201,7 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
   const [notionInfo, setNotionInfo] = useState<NotionTokenInfo | null | "loading">("loading");
   const [notionDisconnecting, setNotionDisconnecting] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarImgError, setAvatarImgError] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -212,14 +213,13 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
     if (stored) setLastChangedAt(stored);
   }, [user?.id]);
 
-  // Load existing avatar from auth metadata (reliable across sessions)
+  // Load existing avatar from storage URL (works with existing uploads)
   useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      const url = authUser?.user_metadata?.avatar_url as string | undefined;
-      if (url) setAvatarUrl(url);
-    });
-  }, []);
+    if (!user?.id || !supabase) return;
+    setAvatarImgError(false);
+    const { data } = supabase.storage.from("avatars").getPublicUrl(`${user.id}/avatar.jpg`);
+    setAvatarUrl(data.publicUrl);
+  }, [user?.id]);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -283,8 +283,8 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
           className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-full flex-shrink-0 group focus:outline-none"
           title="Click to change profile photo"
         >
-          {avatarUrl ? (
-            <Image src={avatarUrl} alt="Profile" fill className="rounded-full object-cover" />
+          {avatarUrl && !avatarImgError ? (
+            <Image src={avatarUrl} alt="Profile" fill className="rounded-full object-cover" onError={() => setAvatarImgError(true)} />
           ) : (
             <div
               className="w-full h-full rounded-full flex items-center justify-center text-white text-2xl sm:text-3xl font-bold"
@@ -1717,14 +1717,14 @@ function ProfilePageInner() {
   const activeTab = (searchParams.get("tab") as Tab) || "account";
 
   const [sharedAvatarUrl, setSharedAvatarUrl] = useState<string | null>(null);
+  const [sharedImgError, setSharedImgError] = useState(false);
 
   useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      const url = authUser?.user_metadata?.avatar_url as string | undefined;
-      if (url) setSharedAvatarUrl(url);
-    });
-  }, []);
+    if (!user?.id || !supabase) return;
+    setSharedImgError(false);
+    const { data } = supabase.storage.from("avatars").getPublicUrl(`${user.id}/avatar.jpg`);
+    setSharedAvatarUrl(data.publicUrl);
+  }, [user?.id]);
 
   // Shared topic/submodule data (fetched once, used by highlights + progress)
   const { topicMap, submoduleMap, dataLoaded } = useTopicData();
@@ -1800,8 +1800,8 @@ function ProfilePageInner() {
           <div
             className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden"
           >
-            {sharedAvatarUrl ? (
-              <Image src={sharedAvatarUrl} alt={user?.name || "User"} width={40} height={40} className="w-full h-full object-cover rounded-full" />
+            {sharedAvatarUrl && !sharedImgError ? (
+              <Image src={sharedAvatarUrl} alt={user?.name || "User"} width={40} height={40} className="w-full h-full object-cover rounded-full" onError={() => setSharedImgError(true)} />
             ) : (
               <div className="w-full h-full rounded-full flex items-center justify-center text-white text-base font-bold" style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}>{initial}</div>
             )}
@@ -1844,8 +1844,8 @@ function ProfilePageInner() {
               <div className="px-5 py-5 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-br from-purple-50 to-indigo-50">
                 <div className="flex items-center gap-3">
                   <div className="w-11 h-11 rounded-full flex-shrink-0 overflow-hidden">
-                    {sharedAvatarUrl ? (
-                      <Image src={sharedAvatarUrl} alt={user?.name || "User"} width={44} height={44} className="w-full h-full object-cover rounded-full" />
+                    {sharedAvatarUrl && !sharedImgError ? (
+                      <Image src={sharedAvatarUrl} alt={user?.name || "User"} width={44} height={44} className="w-full h-full object-cover rounded-full" onError={() => setSharedImgError(true)} />
                     ) : (
                       <div className="w-full h-full rounded-full flex items-center justify-center text-white text-base font-bold" style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}>{initial}</div>
                     )}

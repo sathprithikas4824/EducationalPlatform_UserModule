@@ -11,15 +11,16 @@ export const UserProfileButton: React.FC = () => {
   const { user, isLoggedIn, highlights } = useAnnotation();
   const [showModal, setShowModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [imgError, setImgError] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoggedIn || !supabase) return;
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      const url = authUser?.user_metadata?.avatar_url as string | undefined;
-      if (url) setAvatarUrl(url);
-    });
-  }, [isLoggedIn]);
+    if (!user?.id || !supabase) return;
+    setImgError(false);
+    // Construct URL directly from storage path — no DB/auth query needed
+    const { data } = supabase.storage.from("avatars").getPublicUrl(`${user.id}/avatar.jpg`);
+    setAvatarUrl(data.publicUrl);
+  }, [user?.id]);
 
   if (!isLoggedIn) {
     return (
@@ -46,8 +47,8 @@ export const UserProfileButton: React.FC = () => {
       className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
     >
       <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-        {avatarUrl ? (
-          <Image src={avatarUrl} alt={user?.name || "User"} width={32} height={32} className="w-full h-full object-cover rounded-full" />
+        {avatarUrl && !imgError ? (
+          <Image src={avatarUrl} alt={user?.name || "User"} width={32} height={32} className="w-full h-full object-cover rounded-full" onError={() => setImgError(true)} />
         ) : (
           <div className="w-full h-full bg-purple-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
             {initial}
