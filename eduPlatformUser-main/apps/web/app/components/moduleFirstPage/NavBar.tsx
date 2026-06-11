@@ -146,6 +146,16 @@ const NavAuthSection = ({ compact = false }: { compact?: boolean }) => {
     setHasMounted(true);
   }, []);
 
+  // Update instantly when the user uploads a new photo on the profile page
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const url = (e as CustomEvent<{ url: string }>).detail?.url;
+      if (url) { setAvatarUrl(url); setImgError(false); }
+    };
+    window.addEventListener("edu:avatar-changed", handler);
+    return () => window.removeEventListener("edu:avatar-changed", handler);
+  }, []);
+
   // When user is known: build stable Supabase Storage URL and update cache
   useEffect(() => {
     if (!user?.id || !supabase) return;

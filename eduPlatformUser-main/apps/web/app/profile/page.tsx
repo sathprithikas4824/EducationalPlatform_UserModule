@@ -188,7 +188,7 @@ type ResetStep = "idle" | "send-email" | "email-sent";
 
 interface NotionTokenInfo { workspace_name: string | null; workspace_icon: string | null }
 
-function AccountDetails() {
+function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => void }) {
   const { user } = useAnnotation();
   const searchParams = useSearchParams();
   const initial = user?.name?.charAt(0).toUpperCase() || "U";
@@ -200,7 +200,10 @@ function AccountDetails() {
   const [lastChangedAt, setLastChangedAt] = useState<string | null>(null);
   const [notionInfo, setNotionInfo] = useState<NotionTokenInfo | null | "loading">("loading");
   const [notionDisconnecting, setNotionDisconnecting] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  // Read from localStorage immediately so the photo shows without waiting for the DB
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("edu_avatar_url") : null
+  );
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -212,11 +215,16 @@ function AccountDetails() {
     if (stored) setLastChangedAt(stored);
   }, [user?.id]);
 
-  // Load existing avatar
+  // Load existing avatar from DB (keeps in sync even if localStorage is stale)
   useEffect(() => {
     if (!user?.id || !supabase) return;
     supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
-      .then(({ data }) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url); });
+      .then(({ data }) => {
+        if (data?.avatar_url) {
+          setAvatarUrl(data.avatar_url);
+          localStorage.setItem("edu_avatar_url", data.avatar_url);
+        }
+      });
   }, [user?.id]);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -228,6 +236,9 @@ function AccountDetails() {
     if (url) {
       setAvatarUrl(url);
       localStorage.setItem("edu_avatar_url", url);
+      // Notify sidebar and navbar instantly without a page reload
+      onAvatarChange?.(url);
+      window.dispatchEvent(new CustomEvent("edu:avatar-changed", { detail: { url } }));
     }
     setAvatarUploading(false);
     if (e.target) e.target.value = "";
@@ -1717,6 +1728,21 @@ function ProfilePageInner() {
   const searchParams = useSearchParams();
   const activeTab = (searchParams.get("tab") as Tab) || "account";
 
+  // Avatar URL for the sidebar/mobile card — read from localStorage instantly
+  const [sidebarAvatar, setSidebarAvatar] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("edu_avatar_url") : null
+  );
+
+  // Keep sidebar avatar in sync when upload happens (same tab) or when user loads
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const url = (e as CustomEvent<{ url: string }>).detail?.url;
+      if (url) setSidebarAvatar(url);
+    };
+    window.addEventListener("edu:avatar-changed", handler);
+    return () => window.removeEventListener("edu:avatar-changed", handler);
+  }, []);
+
   // Shared topic/submodule data (fetched once, used by highlights + progress)
   const { topicMap, submoduleMap, dataLoaded } = useTopicData();
 
@@ -1737,7 +1763,7 @@ function ProfilePageInner() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case "account":    return <AccountDetails />;
+      case "account":    return <AccountDetails onAvatarChange={setSidebarAvatar} />;
       case "highlights": return <MyHighlights topicMap={topicMap} dataLoaded={dataLoaded} />;
       case "progress":   return <MyProgress userId={user?.id} topicMap={topicMap} submoduleMap={submoduleMap} dataLoaded={dataLoaded} />;
       case "projects":   return <MyProjects />;
@@ -1788,11 +1814,23 @@ function ProfilePageInner() {
       <div className="md:hidden bg-white border-b border-gray-200">
         {/* User card */}
         <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-purple-50 to-indigo-50">
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-base font-bold flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
-          >
-            {initial}
+          <div className="relative w-10 h-10 flex-shrink-0">
+            <div
+              className="absolute inset-0 rounded-full flex items-center justify-center text-white text-base font-bold"
+              style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
+            >
+              {!sidebarAvatar ? initial : null}
+            </div>
+            {sidebarAvatar && (
+              <Image
+                src={sidebarAvatar}
+                alt={user?.name || "User"}
+                fill
+                unoptimized
+                className="rounded-full object-cover"
+                onError={() => setSidebarAvatar(null)}
+              />
+            )}
           </div>
           <div className="min-w-0">
             <p className="text-sm font-bold text-gray-900 truncate">{user?.name}</p>
@@ -1831,11 +1869,23 @@ function ProfilePageInner() {
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               <div className="px-5 py-5 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-br from-purple-50 to-indigo-50">
                 <div className="flex items-center gap-3">
-                  <div
-                    className="w-11 h-11 rounded-full flex items-center justify-center text-white text-base font-bold flex-shrink-0"
-                    style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
-                  >
-                    {initial}
+                  <div className="relative w-11 h-11 flex-shrink-0">
+                    <div
+                      className="absolute inset-0 rounded-full flex items-center justify-center text-white text-base font-bold"
+                      style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
+                    >
+                      {!sidebarAvatar ? initial : null}
+                    </div>
+                    {sidebarAvatar && (
+                      <Image
+                        src={sidebarAvatar}
+                        alt={user?.name || "User"}
+                        fill
+                        unoptimized
+                        className="rounded-full object-cover"
+                        onError={() => setSidebarAvatar(null)}
+                      />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-gray-900 truncate">{user?.name}</p>
