@@ -225,7 +225,10 @@ function AccountDetails() {
     setAvatarUploading(true);
     const compressed = await compressImage(file);
     const url = await uploadAvatar(user.id, compressed);
-    if (url) setAvatarUrl(url);
+    if (url) {
+      setAvatarUrl(url);
+      localStorage.setItem("edu_avatar_url", url);
+    }
     setAvatarUploading(false);
     if (e.target) e.target.value = "";
   };
