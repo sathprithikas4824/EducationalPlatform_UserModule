@@ -1,26 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Image from "next/image";
+import React, { useState } from "react";
 import { useAnnotation } from "./AnnotationProvider";
 import { useRouter } from "next/navigation";
 import DemoLoginModal from "./DemoLoginModal";
-import { supabase } from "../../lib/supabase";
 
 export const UserProfileButton: React.FC = () => {
   const { user, isLoggedIn, highlights } = useAnnotation();
   const [showModal, setShowModal] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [imgError, setImgError] = useState(false);
   const router = useRouter();
-
-  useEffect(() => {
-    if (!user?.id || !supabase) return;
-    setImgError(false);
-    // Construct URL directly from storage path — no DB/auth query needed
-    const { data } = supabase.storage.from("avatars").getPublicUrl(`${user.id}/avatar.jpg`);
-    setAvatarUrl(data.publicUrl);
-  }, [user?.id]);
 
   if (!isLoggedIn) {
     return (
@@ -39,21 +27,13 @@ export const UserProfileButton: React.FC = () => {
     );
   }
 
-  const initial = user?.name?.charAt(0).toUpperCase() || "U";
-
   return (
     <button
       onClick={() => router.push("/profile")}
       className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
     >
-      <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-        {avatarUrl && !imgError ? (
-          <Image src={avatarUrl} alt={user?.name || "User"} width={32} height={32} unoptimized className="w-full h-full object-cover rounded-full" onError={() => setImgError(true)} />
-        ) : (
-          <div className="w-full h-full bg-purple-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-            {initial}
-          </div>
-        )}
+      <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+        {user?.name?.charAt(0).toUpperCase() || "U"}
       </div>
       <div className="text-left hidden sm:block">
         <p className="text-sm font-medium text-gray-800">{user?.name}</p>

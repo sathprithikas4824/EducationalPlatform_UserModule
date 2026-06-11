@@ -320,9 +320,6 @@ export async function uploadAvatar(userId: string, file: File): Promise<string |
   const { data } = supabase.storage.from("avatars").getPublicUrl(path);
   const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
 
-  // Store in auth user metadata — reliable, no RLS dependency
-  await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
-  // Also update profiles table (best-effort)
   await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", userId);
   return publicUrl;
 }

@@ -188,7 +188,7 @@ type ResetStep = "idle" | "send-email" | "email-sent";
 
 interface NotionTokenInfo { workspace_name: string | null; workspace_icon: string | null }
 
-function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => void }) {
+function AccountDetails() {
   const { user } = useAnnotation();
   const searchParams = useSearchParams();
   const initial = user?.name?.charAt(0).toUpperCase() || "U";
@@ -201,7 +201,6 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
   const [notionInfo, setNotionInfo] = useState<NotionTokenInfo | null | "loading">("loading");
   const [notionDisconnecting, setNotionDisconnecting] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [avatarImgError, setAvatarImgError] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -213,12 +212,11 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
     if (stored) setLastChangedAt(stored);
   }, [user?.id]);
 
-  // Load existing avatar from storage URL (works with existing uploads)
+  // Load existing avatar
   useEffect(() => {
     if (!user?.id || !supabase) return;
-    setAvatarImgError(false);
-    const { data } = supabase.storage.from("avatars").getPublicUrl(`${user.id}/avatar.jpg`);
-    setAvatarUrl(data.publicUrl);
+    supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
+      .then(({ data }) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url); });
   }, [user?.id]);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -227,7 +225,7 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
     setAvatarUploading(true);
     const compressed = await compressImage(file);
     const url = await uploadAvatar(user.id, compressed);
-    if (url) { setAvatarUrl(url); onAvatarChange?.(url); }
+    if (url) setAvatarUrl(url);
     setAvatarUploading(false);
     if (e.target) e.target.value = "";
   };
@@ -283,8 +281,8 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
           className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-full flex-shrink-0 group focus:outline-none"
           title="Click to change profile photo"
         >
-          {avatarUrl && !avatarImgError ? (
-            <Image src={avatarUrl} alt="Profile" fill unoptimized className="rounded-full object-cover" onError={() => setAvatarImgError(true)} />
+          {avatarUrl ? (
+            <Image src={avatarUrl} alt="Profile" fill className="rounded-full object-cover" />
           ) : (
             <div
               className="w-full h-full rounded-full flex items-center justify-center text-white text-2xl sm:text-3xl font-bold"
@@ -1716,16 +1714,6 @@ function ProfilePageInner() {
   const searchParams = useSearchParams();
   const activeTab = (searchParams.get("tab") as Tab) || "account";
 
-  const [sharedAvatarUrl, setSharedAvatarUrl] = useState<string | null>(null);
-  const [sharedImgError, setSharedImgError] = useState(false);
-
-  useEffect(() => {
-    if (!user?.id || !supabase) return;
-    setSharedImgError(false);
-    const { data } = supabase.storage.from("avatars").getPublicUrl(`${user.id}/avatar.jpg`);
-    setSharedAvatarUrl(data.publicUrl);
-  }, [user?.id]);
-
   // Shared topic/submodule data (fetched once, used by highlights + progress)
   const { topicMap, submoduleMap, dataLoaded } = useTopicData();
 
@@ -1746,7 +1734,7 @@ function ProfilePageInner() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case "account":    return <AccountDetails onAvatarChange={setSharedAvatarUrl} />;
+      case "account":    return <AccountDetails />;
       case "highlights": return <MyHighlights topicMap={topicMap} dataLoaded={dataLoaded} />;
       case "progress":   return <MyProgress userId={user?.id} topicMap={topicMap} submoduleMap={submoduleMap} dataLoaded={dataLoaded} />;
       case "projects":   return <MyProjects />;
@@ -1798,13 +1786,10 @@ function ProfilePageInner() {
         {/* User card */}
         <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-purple-50 to-indigo-50">
           <div
-            className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-base font-bold flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
           >
-            {sharedAvatarUrl && !sharedImgError ? (
-              <Image src={sharedAvatarUrl} alt={user?.name || "User"} width={40} height={40} unoptimized className="w-full h-full object-cover rounded-full" onError={() => setSharedImgError(true)} />
-            ) : (
-              <div className="w-full h-full rounded-full flex items-center justify-center text-white text-base font-bold" style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}>{initial}</div>
-            )}
+            {initial}
           </div>
           <div className="min-w-0">
             <p className="text-sm font-bold text-gray-900 truncate">{user?.name}</p>
@@ -1843,12 +1828,11 @@ function ProfilePageInner() {
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               <div className="px-5 py-5 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-br from-purple-50 to-indigo-50">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-full flex-shrink-0 overflow-hidden">
-                    {sharedAvatarUrl && !sharedImgError ? (
-                      <Image src={sharedAvatarUrl} alt={user?.name || "User"} width={44} height={44} unoptimized className="w-full h-full object-cover rounded-full" onError={() => setSharedImgError(true)} />
-                    ) : (
-                      <div className="w-full h-full rounded-full flex items-center justify-center text-white text-base font-bold" style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}>{initial}</div>
-                    )}
+                  <div
+                    className="w-11 h-11 rounded-full flex items-center justify-center text-white text-base font-bold flex-shrink-0"
+                    style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
+                  >
+                    {initial}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-gray-900 truncate">{user?.name}</p>
