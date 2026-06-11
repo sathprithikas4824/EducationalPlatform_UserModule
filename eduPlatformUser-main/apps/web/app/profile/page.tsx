@@ -284,7 +284,7 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
           title="Click to change profile photo"
         >
           {avatarUrl && !avatarImgError ? (
-            <Image src={avatarUrl} alt="Profile" fill className="rounded-full object-cover" onError={() => setAvatarImgError(true)} />
+            <Image src={avatarUrl} alt="Profile" fill unoptimized className="rounded-full object-cover" onError={() => setAvatarImgError(true)} />
           ) : (
             <div
               className="w-full h-full rounded-full flex items-center justify-center text-white text-2xl sm:text-3xl font-bold"
@@ -1801,7 +1801,7 @@ function ProfilePageInner() {
             className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden"
           >
             {sharedAvatarUrl && !sharedImgError ? (
-              <Image src={sharedAvatarUrl} alt={user?.name || "User"} width={40} height={40} className="w-full h-full object-cover rounded-full" onError={() => setSharedImgError(true)} />
+              <Image src={sharedAvatarUrl} alt={user?.name || "User"} width={40} height={40} unoptimized className="w-full h-full object-cover rounded-full" onError={() => setSharedImgError(true)} />
             ) : (
               <div className="w-full h-full rounded-full flex items-center justify-center text-white text-base font-bold" style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}>{initial}</div>
             )}
@@ -1845,7 +1845,7 @@ function ProfilePageInner() {
                 <div className="flex items-center gap-3">
                   <div className="w-11 h-11 rounded-full flex-shrink-0 overflow-hidden">
                     {sharedAvatarUrl && !sharedImgError ? (
-                      <Image src={sharedAvatarUrl} alt={user?.name || "User"} width={44} height={44} className="w-full h-full object-cover rounded-full" onError={() => setSharedImgError(true)} />
+                      <Image src={sharedAvatarUrl} alt={user?.name || "User"} width={44} height={44} unoptimized className="w-full h-full object-cover rounded-full" onError={() => setSharedImgError(true)} />
                     ) : (
                       <div className="w-full h-full rounded-full flex items-center justify-center text-white text-base font-bold" style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}>{initial}</div>
                     )}

@@ -48,7 +48,7 @@ export const UserProfileButton: React.FC = () => {
     >
       <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
         {avatarUrl && !imgError ? (
-          <Image src={avatarUrl} alt={user?.name || "User"} width={32} height={32} className="w-full h-full object-cover rounded-full" onError={() => setImgError(true)} />
+          <Image src={avatarUrl} alt={user?.name || "User"} width={32} height={32} unoptimized className="w-full h-full object-cover rounded-full" onError={() => setImgError(true)} />
         ) : (
           <div className="w-full h-full bg-purple-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
             {initial}
