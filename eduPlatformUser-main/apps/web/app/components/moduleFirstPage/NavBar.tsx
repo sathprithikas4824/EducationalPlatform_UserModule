@@ -124,28 +124,32 @@ const MobileMenu = ({ isOpen, onClose, activeTab, setActiveTab }) => {
 
 const AVATAR_KEY = "edu_avatar_url";
 
+// Read localStorage synchronously so the image URL is available on the very
+// first client render — before any effects fire.
+function readAvatarCache(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(AVATAR_KEY);
+}
+
 // Reusable auth pill: navigates to /profile when logged in, Login/Signup when not
 const NavAuthSection = ({ compact = false }: { compact?: boolean }) => {
   const { user, isLoggedIn } = useAnnotation();
   const pathname = usePathname();
   const router = useRouter();
+  // Read from cache immediately so the image is present on the first render
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(readAvatarCache);
   const [hasMounted, setHasMounted] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [imageLoaded, setImageLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
-  // After mount: read cached URL so it's ready before the user object arrives
+  // Mark mounted so we can show the fallback letter when confirmed no photo
   useEffect(() => {
     setHasMounted(true);
-    const cached = localStorage.getItem(AVATAR_KEY);
-    if (cached) setAvatarUrl(cached);
   }, []);
 
-  // When user is known: build stable Supabase Storage URL and cache it
+  // When user is known: build stable Supabase Storage URL and update cache
   useEffect(() => {
     if (!user?.id || !supabase) return;
     setImgError(false);
-    setImageLoaded(false);
     const { data } = supabase.storage.from("avatars").getPublicUrl(`${user.id}/avatar.jpg`);
     setAvatarUrl(data.publicUrl);
     localStorage.setItem(AVATAR_KEY, data.publicUrl);
@@ -159,22 +163,22 @@ const NavAuthSection = ({ compact = false }: { compact?: boolean }) => {
       <button
         onClick={() => router.push("/profile")}
         className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-100 rounded-lg transition-all duration-200"
+        suppressHydrationWarning
       >
-        <div className={`relative ${avatarSize} flex-shrink-0`}>
-          {/* Base layer: gradient circle. Letter only shows when confirmed no photo. */}
+        <div className={`relative ${avatarSize} flex-shrink-0`} suppressHydrationWarning>
+          {/* Gradient circle — only shows letter when confirmed no photo */}
           <div
-            className={`absolute inset-0 rounded-full flex items-center justify-center text-white text-xs font-bold`}
+            className="absolute inset-0 rounded-full flex items-center justify-center text-white text-xs font-bold"
             style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
           >
             {hasMounted && (!avatarUrl || imgError) ? initial : null}
           </div>
-          {/* Photo layer: renders invisible until loaded, then fades in */}
+          {/* Photo — rendered immediately on first client render if URL is cached */}
           {avatarUrl && !imgError && (
             <img
               src={avatarUrl}
               alt={user.name || "User"}
-              className={`absolute inset-0 w-full h-full rounded-full object-cover transition-opacity duration-200 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
-              onLoad={() => setImageLoaded(true)}
+              className="absolute inset-0 w-full h-full rounded-full object-cover"
               onError={() => setImgError(true)}
             />
           )}
