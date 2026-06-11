@@ -306,6 +306,24 @@ export async function updateProfile(updates: Partial<Profile>): Promise<boolean>
   return true;
 }
 
+// Upload avatar to Supabase Storage and update profile
+export async function uploadAvatar(userId: string, file: File): Promise<string | null> {
+  if (!supabase) return null;
+  const path = `${userId}/avatar.jpg`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(path, file, { upsert: true, contentType: "image/jpeg" });
+
+  if (uploadError) { console.error("Avatar upload error:", uploadError); return null; }
+
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
+
+  await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", userId);
+  return publicUrl;
+}
+
 // =============================================
 // MODULE PROGRESS FUNCTIONS (Supabase + Cookie fallback)
 // =============================================

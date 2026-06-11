@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, Suspense } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAnnotation } from "../components/common/AnnotationProvider";
-import { supabase, getAllModulesProgress, getProgressPaginated, getUserSurvey, type TopicProgress, type SurveyRow } from "../lib/supabase";
+import { supabase, getAllModulesProgress, getProgressPaginated, getUserSurvey, uploadAvatar, type TopicProgress, type SurveyRow } from "../lib/supabase";
+import { compressImage } from "../lib/imageCompress";
 import { loadDownloads, removeDownload, removeModuleDownloads, type DownloadRecord } from "../lib/downloads";
 import { loadBookmarks, removeBookmark, type BookmarkRecord } from "../lib/bookmarks";
 import { getAllNotes, getNotesPaginated, deleteNote, restoreNote, getDeletedNotes, type NoteRecord } from "../lib/notes";
@@ -198,6 +200,9 @@ function AccountDetails() {
   const [lastChangedAt, setLastChangedAt] = useState<string | null>(null);
   const [notionInfo, setNotionInfo] = useState<NotionTokenInfo | null | "loading">("loading");
   const [notionDisconnecting, setNotionDisconnecting] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const notionParam = searchParams.get("notion");
 
@@ -206,6 +211,24 @@ function AccountDetails() {
     const stored = localStorage.getItem(`pwd_changed_${user.id}`);
     if (stored) setLastChangedAt(stored);
   }, [user?.id]);
+
+  // Load existing avatar
+  useEffect(() => {
+    if (!user?.id || !supabase) return;
+    supabase.from("profiles").select("avatar_url").eq("id", user.id).single()
+      .then(({ data }) => { if (data?.avatar_url) setAvatarUrl(data.avatar_url); });
+  }, [user?.id]);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id) return;
+    setAvatarUploading(true);
+    const compressed = await compressImage(file);
+    const url = await uploadAvatar(user.id, compressed);
+    if (url) setAvatarUrl(url);
+    setAvatarUploading(false);
+    if (e.target) e.target.value = "";
+  };
 
   // Load Notion connection status
   useEffect(() => {
@@ -250,15 +273,53 @@ function AccountDetails() {
 
       {/* Avatar + name banner */}
       <div className="flex items-center gap-4 p-4 sm:p-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-100">
-        <div
-          className="w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-white text-2xl sm:text-3xl font-bold flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
+        {/* Clickable avatar — click to change photo */}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={avatarUploading}
+          className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-full flex-shrink-0 group focus:outline-none"
+          title="Click to change profile photo"
         >
-          {initial}
-        </div>
+          {avatarUrl ? (
+            <Image src={avatarUrl} alt="Profile" fill className="rounded-full object-cover" />
+          ) : (
+            <div
+              className="w-full h-full rounded-full flex items-center justify-center text-white text-2xl sm:text-3xl font-bold"
+              style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
+            >
+              {avatarUploading ? (
+                <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+              ) : initial}
+            </div>
+          )}
+          {/* Hover overlay */}
+          {!avatarUploading && (
+            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+          )}
+        </button>
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleAvatarChange}
+        />
         <div className="min-w-0">
           <p className="text-base sm:text-xl font-bold text-gray-900 truncate">{user?.name}</p>
           <p className="text-xs sm:text-sm text-gray-500 mt-0.5 truncate">{user?.email}</p>
+          <p className="text-xs text-purple-500 mt-1">
+            {avatarUploading ? "Uploading…" : "Click photo to change"}
+          </p>
         </div>
       </div>
 
