@@ -95,7 +95,7 @@ export default function AuthCallbackPage() {
           return;
         }
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) updateUserProviders(user.id);
+        if (user) { updateUserProviders(user.id); logAudit({ action: "user_logged_in", category: "auth", metadata: { method: "email" } }); }
 
         const dest2 =
           typeof sessionStorage !== "undefined"
@@ -123,6 +123,7 @@ export default function AuthCallbackPage() {
 
       // Fire-and-forget — don't block navigation on this analytics call
       updateUserProviders(session.user.id);
+      logAudit({ action: "user_logged_in", category: "auth", metadata: { method: "google" } });
 
       const dest =
         typeof sessionStorage !== "undefined"
