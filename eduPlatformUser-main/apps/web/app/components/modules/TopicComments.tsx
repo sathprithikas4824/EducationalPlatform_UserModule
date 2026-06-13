@@ -126,7 +126,7 @@ export default function TopicComments({ topicId, currentUserId, currentUserName 
     setUpvoting((prev) => { const n = new Set(prev); n.delete(comment.id); return n; });
 
     if (result) {
-      logAudit({ action: result.userUpvoted ? "comment_upvoted" : "comment_upvote_removed", category: "comment", entity_id: comment.id });
+      logAudit({ action: result.upvoted ? "comment_upvoted" : "comment_upvote_removed", category: "comment", entity_id: comment.id });
       // Sync with DB result (handles race conditions)
       setComments((prev) =>
         prev.map((c) =>
