@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { logAudit } from "../../lib/audit";
 import {
   supabase,
   addHighlight as addHighlightToSupabase,
@@ -334,6 +335,7 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // Backup all Supabase progress to cookie BEFORE signing out (session must still be active).
     // This ensures every module's progress is visible after logout on the same device.
     const userId = user?.id;
+    logAudit({ action: "user_logged_out", category: "auth" });
     if (userId && isSupabaseUUID(userId)) {
       backupProgressToCookies(userId).finally(() => {
         if (supabase) supabase.auth.signOut();
@@ -385,6 +387,7 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         saveHighlightsToStorage(user.id, updated);
         return updated;
       });
+      logAudit({ action: "highlight_created", category: "highlight", entity_id: highlight.pageId, metadata: { color: highlight.color } });
     }
     // If Supabase fails, localStorage already has the highlight — no revert
   }, [user]);
@@ -400,6 +403,7 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     if (supabase && isSupabaseUUID(user.id)) {
       await removeHighlightFromSupabase(id);
+      logAudit({ action: "highlight_deleted", category: "highlight", entity_id: id });
     }
   }, [user]);
 

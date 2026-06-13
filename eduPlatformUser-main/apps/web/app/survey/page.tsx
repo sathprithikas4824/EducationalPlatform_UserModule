@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { saveSurveyResponse } from "../lib/supabase";
 import { sanitiseText } from "../lib/sanitise";
+import { logAudit } from "../lib/audit";
 
 const TOPICS = [
   "Programming & Development",
@@ -110,8 +111,10 @@ export default function SurveyPage() {
         primary_goal:      primaryGoal      ? sanitiseText(primaryGoal)      : primaryGoal,
       });
       if (ok) {
+        logAudit({ action: "survey_submitted", category: "profile", metadata: { profession } });
         router.push("/");
       } else {
+        logAudit({ action: "survey_submitted", category: "profile", status: "failure", error_msg: "saveSurveyResponse returned false" });
         setError("Failed to save your responses. Please try again.");
       }
     } finally {

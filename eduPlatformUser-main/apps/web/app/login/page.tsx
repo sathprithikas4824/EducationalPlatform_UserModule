@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, signInWithOAuth, updateUserProviders, checkSurveyCompleted } from "../lib/supabase";
+import { logAudit } from "../lib/audit";
 
 function LoginForm() {
   const router = useRouter();
@@ -24,12 +25,14 @@ function LoginForm() {
       const { data, error: signInError } = await signIn(email, password);
       if (signInError) {
         const msg = signInError.message || "";
+        logAudit({ action: "user_logged_in", category: "auth", status: "failure", error_msg: msg, metadata: { method: "email" } });
         if (msg.toLowerCase().includes("invalid login credentials")) {
           setError("Incorrect email or password.");
         } else {
           setError(msg);
         }
       } else if (data?.user) {
+        logAudit({ action: "user_logged_in", category: "auth", metadata: { method: "email" } });
         updateUserProviders(data.user.id);
         const surveyDone = await checkSurveyCompleted(data.user.id);
         router.push(surveyDone ? redirectTo : "/survey");
@@ -48,6 +51,7 @@ function LoginForm() {
       if (typeof sessionStorage !== "undefined") {
         sessionStorage.setItem("auth_redirect", redirectTo);
       }
+      logAudit({ action: "oauth_initiated", category: "auth", metadata: { provider } });
       const { error: oauthError } = await signInWithOAuth(provider);
       if (oauthError) {
         setError(oauthError.message);

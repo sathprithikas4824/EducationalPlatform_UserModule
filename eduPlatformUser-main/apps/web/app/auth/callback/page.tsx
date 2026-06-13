@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase, updateUserProviders, checkSurveyCompleted } from "../../lib/supabase";
+import { logAudit } from "../../lib/audit";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -65,13 +66,14 @@ export default function AuthCallbackPage() {
         });
 
         if (verifyError) {
-          // Verification failed (e.g. link expired) — send to login with a hint
+          logAudit({ action: "email_verified", category: "auth", status: "failure", error_msg: verifyError.message });
           router.push("/login?error=verify_failed");
           return;
         }
 
         // Session established — fire-and-forget provider sync, then go home
         const { data: { user } } = await supabase.auth.getUser();
+        if (user) logAudit({ action: "email_verified", category: "auth" });
         if (user) updateUserProviders(user.id);
 
         const storedDest =
@@ -176,8 +178,10 @@ export default function AuthCallbackPage() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
+        logAudit({ action: "password_updated", category: "auth", status: "failure", error_msg: updateError.message });
         setError(updateError.message);
       } else {
+        logAudit({ action: "password_updated", category: "auth" });
         // Store password-changed timestamp so profile page can show "changed X ago"
         if (recoveryUserId) {
           try {

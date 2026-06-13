@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signUp, signIn, signInWithOAuth, supabase } from "../lib/supabase";
+import { logAudit } from "../lib/audit";
 import { sanitiseText } from "../lib/sanitise";
 
 export default function SignupPage() {
@@ -44,11 +45,14 @@ export default function SignupPage() {
           signUpError.message.toLowerCase().includes("sending email");
 
         if (!isSmtpFailure) {
+          logAudit({ action: "user_signed_up", category: "auth", status: "failure", error_msg: signUpError.message, metadata: { method: "email" } });
           setError(signUpError.message);
           return;
         }
         // SMTP failed but user exists — fall through to sign-in attempt
       }
+
+      logAudit({ action: "user_signed_up", category: "auth", metadata: { method: "email" } });
 
       if (data?.user || signUpError) {
         // Try immediate sign-in — succeeds when email confirmation is disabled
@@ -94,6 +98,7 @@ export default function SignupPage() {
       if (typeof sessionStorage !== "undefined") {
         sessionStorage.setItem("auth_redirect", "/");
       }
+      logAudit({ action: "oauth_initiated", category: "auth", metadata: { provider, flow: "signup" } });
       const { error: oauthError } = await signInWithOAuth(provider);
       if (oauthError) {
         setError(oauthError.message);

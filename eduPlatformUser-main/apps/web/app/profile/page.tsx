@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useAnnotation } from "../components/common/AnnotationProvider";
 import { supabase, getAllModulesProgress, getProgressPaginated, getUserSurvey, uploadAvatar, type TopicProgress, type SurveyRow } from "../lib/supabase";
 import { compressImage } from "../lib/imageCompress";
+import { logAudit } from "../lib/audit";
 import { loadDownloads, removeDownload, removeModuleDownloads, type DownloadRecord } from "../lib/downloads";
 import { loadBookmarks, removeBookmark, type BookmarkRecord } from "../lib/bookmarks";
 import { getAllNotes, getNotesPaginated, deleteNote, restoreNote, getDeletedNotes, type NoteRecord } from "../lib/notes";
@@ -235,9 +236,11 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
     if (url) {
       setAvatarUrl(url);
       localStorage.setItem("edu_avatar_url", url);
-      // Notify sidebar and navbar instantly without a page reload
       onAvatarChange?.(url);
       window.dispatchEvent(new CustomEvent("edu:avatar-changed", { detail: { url } }));
+      logAudit({ action: "avatar_uploaded", category: "profile" });
+    } else {
+      logAudit({ action: "avatar_uploaded", category: "profile", status: "failure" });
     }
     setAvatarUploading(false);
     if (e.target) e.target.value = "";
@@ -258,6 +261,7 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
     if (!user?.id || !supabase) return;
     setNotionDisconnecting(true);
     await supabase.from("user_notion_tokens").delete().eq("user_id", user.id);
+    logAudit({ action: "notion_disconnected", category: "profile" });
     setNotionInfo(null);
     setNotionDisconnecting(false);
   };
@@ -271,6 +275,7 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     setPwLoading(false);
     if (error) { setPwError(error.message); return; }
+    logAudit({ action: "password_reset_requested", category: "auth", metadata: { email } });
     setResetStep("email-sent");
   };
 
@@ -1012,6 +1017,7 @@ function MyDownloads() {
   const handleRemoveFile = async (id: string) => {
     if (!user?.id) return;
     await removeDownload(user.id, id);
+    logAudit({ action: "download_removed", category: "download", entity_id: id });
     setDownloads((prev) => prev.filter((d) => d.id !== id));
   };
 
@@ -1019,6 +1025,7 @@ function MyDownloads() {
     if (!user?.id) return;
     setRemovingModule(group.moduleName);
     await removeModuleDownloads(user.id, group.moduleName, group.submoduleId);
+    logAudit({ action: "module_downloads_cleared", category: "download", metadata: { moduleName: group.moduleName } });
     setDownloads((prev) => prev.filter((d) => d.moduleName !== group.moduleName));
     setRemovingModule(null);
   };
@@ -1432,6 +1439,7 @@ function MyNotes({ userId }: { userId: string | undefined }) {
     if (!confirmed) return;
     setDeletingNoteId(topicId);
     await deleteNote(userId, topicId);
+    logAudit({ action: "note_deleted", category: "note", entity_id: String(topicId) });
     const moved = notes.find((n) => n.topicId === topicId);
     setNotes((prev) => prev.filter((n) => n.topicId !== topicId));
     if (moved) setDeletedNotes((prev) => [{ ...moved, deletedAt: new Date().toISOString() }, ...prev]);
@@ -1445,6 +1453,7 @@ function MyNotes({ userId }: { userId: string | undefined }) {
     const key = `${topicId}:${level}`;
     setDeletingSummaryKey(key);
     await deleteSummary(userId, topicId, level);
+    logAudit({ action: "summary_deleted", category: "summary", entity_id: String(topicId), metadata: { level } });
     const moved = summaries.find((s) => s.topicId === topicId && s.level === level);
     setSummaries((prev) => prev.filter((s) => !(s.topicId === topicId && s.level === level)));
     if (moved) setDeletedSummaries((prev) => [{ ...moved, deletedAt: new Date().toISOString() }, ...prev]);
@@ -1454,6 +1463,7 @@ function MyNotes({ userId }: { userId: string | undefined }) {
   const handleRestoreNote = async (topicId: number) => {
     if (!userId) return;
     await restoreNote(userId, topicId);
+    logAudit({ action: "note_restored", category: "note", entity_id: String(topicId) });
     const restored = deletedNotes.find((n) => n.topicId === topicId);
     setDeletedNotes((prev) => prev.filter((n) => n.topicId !== topicId));
     if (restored) setNotes((prev) => [{ ...restored, deletedAt: undefined }, ...prev]);
@@ -1462,6 +1472,7 @@ function MyNotes({ userId }: { userId: string | undefined }) {
   const handleRestoreSummary = async (topicId: number, level: string) => {
     if (!userId) return;
     await restoreSummary(userId, topicId, level);
+    logAudit({ action: "summary_restored", category: "summary", entity_id: String(topicId), metadata: { level } });
     const restored = deletedSummaries.find((s) => s.topicId === topicId && s.level === level);
     setDeletedSummaries((prev) => prev.filter((s) => !(s.topicId === topicId && s.level === level)));
     if (restored) setSummaries((prev) => [{ ...restored, deletedAt: undefined }, ...prev]);
