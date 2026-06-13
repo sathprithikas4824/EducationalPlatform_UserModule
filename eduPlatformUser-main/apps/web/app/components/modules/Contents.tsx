@@ -12,6 +12,7 @@ import { saveDownload } from "../../lib/downloads";
 import { loadBookmarks, toggleBookmark } from "../../lib/bookmarks";
 import { getNoteForTopic, upsertNote } from "../../lib/notes";
 import { upsertSummary, markSummaryNotion } from "../../lib/summaries";
+import { logAudit } from "../../lib/audit";
 import { BookmarkHeart } from "../common/icons/BookmarkHeart";
 import TopicComments from "./TopicComments";
 
@@ -446,6 +447,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           moduleId:   currentSubmodule?.submodule_id ?? undefined,
           moduleName: currentSubmodule?.name,
         });
+        logAudit({ action: "summary_generated", category: "summary", entity_id: String(id), metadata: { level: SUMMARY_LEVEL_NAMES[requestedLevel], format: "bullets" } });
       }
     } catch {
       setSummaries((prev) => ({ ...prev, [id]: "⚠ Network error. Please try again." }));
@@ -513,6 +515,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           moduleId:   currentSubmodule?.submodule_id ?? undefined,
           moduleName: currentSubmodule?.name,
         });
+        logAudit({ action: "summary_generated", category: "summary", entity_id: String(id), metadata: { level: SUMMARY_LEVEL_NAMES[level], format: "paragraph" } });
       }
     } catch {
       setSummaryParagraphVersions((prev) => {
