@@ -261,6 +261,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       else next.delete(topicId);
       return next;
     });
+    logAudit({ action: nowBookmarked ? "bookmark_added" : "bookmark_removed", category: "bookmark", entity_id: String(topicId), metadata: { topicName } });
   }, [user?.id]);
 
   const handleTopicLike = useCallback(async (topicId: number) => {
@@ -285,6 +286,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         return next;
       });
       setTopicLikeCounts((prev) => ({ ...prev, [topicId]: count }));
+      logAudit({ action: liked ? "topic_liked" : "topic_unliked", category: "content", entity_id: String(topicId) });
     } finally {
       setLikeLoading(false);
     }
@@ -306,6 +308,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           moduleId:   currentSubmodule?.module_id,
           moduleName: currentSubmodule?.name,
         });
+        logAudit({ action: "note_created", category: "note", entity_id: String(topicId), metadata: { charCount: content.length } });
         setNotesSaveStatus((prev) => ({ ...prev, [topicId]: "saved" }));
       } catch {
         setNotesSaveStatus((prev) => ({ ...prev, [topicId]: "error" }));
@@ -1132,6 +1135,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     // Persist to Supabase
     const subId = currentSubmodule?.submodule_id ?? submoduleId;
     await markTopicCompleted(user.id, selectedTopic.topic_id, subId, true);
+    logAudit({ action: "topic_completed", category: "content", entity_type: "topic", entity_id: String(selectedTopic.topic_id), metadata: { topicName: selectedTopic.name, moduleId: subId } });
 
     // Update sidebar UI
     setSidebarModules((prev) =>
@@ -1151,6 +1155,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
     // Clear from Supabase
     await resetModuleProgress(user.id, subId);
+    logAudit({ action: "module_progress_reset", category: "content", entity_type: "module", entity_id: String(subId) });
 
     // Clear saved scroll positions for all topics in this module
     clearModuleScrollPositions(user.id, topics.map(t => t.topic_id));
@@ -1184,6 +1189,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
     // Clear from Supabase
     await resetTopicProgress(user.id, topicId, subId);
+    logAudit({ action: "topic_progress_reset", category: "content", entity_id: String(topicId) });
 
     // Clear saved scroll position for this topic
     clearModuleScrollPositions(user.id, [topicId]);

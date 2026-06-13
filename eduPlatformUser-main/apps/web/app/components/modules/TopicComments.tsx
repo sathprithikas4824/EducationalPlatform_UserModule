@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { fetchComments, postComment, toggleUpvote, deleteComment, type Comment } from "../../lib/comments";
+import { logAudit } from "../../lib/audit";
 
 interface Props {
   topicId: number;
@@ -103,6 +104,7 @@ export default function TopicComments({ topicId, currentUserId, currentUserName 
       seenIds.current.add(comment.id);
       setComments((prev) => [comment, ...prev]);
       setText("");
+      logAudit({ action: "comment_posted", category: "comment", entity_id: String(topicId) });
     }
     setSubmitting(false);
   };
@@ -124,6 +126,7 @@ export default function TopicComments({ topicId, currentUserId, currentUserName 
     setUpvoting((prev) => { const n = new Set(prev); n.delete(comment.id); return n; });
 
     if (result) {
+      logAudit({ action: result.userUpvoted ? "comment_upvoted" : "comment_upvote_removed", category: "comment", entity_id: comment.id });
       // Sync with DB result (handles race conditions)
       setComments((prev) =>
         prev.map((c) =>
@@ -145,6 +148,7 @@ export default function TopicComments({ topicId, currentUserId, currentUserName 
     setComments((prev) => prev.filter((c) => c.id !== commentId));
     seenIds.current.delete(commentId);
     await deleteComment(commentId);
+    logAudit({ action: "comment_deleted", category: "comment", entity_id: commentId });
   };
 
   return (

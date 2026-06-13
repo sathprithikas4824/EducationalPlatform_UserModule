@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
           logger.info(ROUTE, "sync_summary", userId, "Summary synced to user Notion", {
             topicName, moduleName, level, format, source: "user", pageId,
           });
+          await supabaseAdmin.from("user_audit_logs").insert({ user_id: userId, action: "summary_synced_to_notion", category: "summary", metadata: { topicName, level, format }, status: "success" });
           return created({ pageId, source: "user" }, "Summary synced to Notion");
         }
       } catch (err) {
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
     });
     return created({ pageId, source: "admin" }, "Summary synced to shared Notion");
   } catch (err) {
+    if (userId) { const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!); await supabaseAdmin.from("user_audit_logs").insert({ user_id: userId, action: "summary_synced_to_notion", category: "summary", status: "failure", error_msg: err instanceof Error ? err.message : "Unknown error" }); }
     logger.error(ROUTE, "sync_summary", userId ?? "anonymous", "Summary sync failed — all Notion paths exhausted", err, {
       payload: { topicName, level },
     });
