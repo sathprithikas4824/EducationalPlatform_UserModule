@@ -1,7 +1,11 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import OfflineLandingPage from "./OfflineLandingPage";
 import { useOfflineContext } from "./OfflineContext";
+
+// Routes that work fully offline (data is in localStorage) — skip the overlay
+const OFFLINE_ACCESSIBLE = ["/profile", "/offline"];
 
 // ── Single back-online popup — rendered once in the root layout ───────────────
 function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
@@ -54,10 +58,12 @@ function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
 // ── GlobalOfflineGuard — consumes shared OfflineContext ───────────────────────
 export default function GlobalOfflineGuard() {
   const { isOnline, wasOffline, confirmed, setConfirmed } = useOfflineContext();
+  const pathname = usePathname();
 
   if (isOnline === null) return null;
   if (isOnline && !wasOffline) return null;
   if (isOnline && confirmed) return null;
+  if (!isOnline && OFFLINE_ACCESSIBLE.some((p) => pathname.startsWith(p))) return null;
 
   return (
     <div className="fixed inset-0 z-[9990] overflow-y-auto bg-white dark:bg-[#0d0d1a]">
