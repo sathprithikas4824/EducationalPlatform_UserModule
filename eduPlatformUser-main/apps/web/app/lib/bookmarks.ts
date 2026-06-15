@@ -111,7 +111,15 @@ export async function addBookmark(
       .select()
       .single();
 
-    if (!error && data) return rowToRecord(data as Record<string, unknown>);
+    if (!error && data) {
+      const saved = rowToRecord(data as Record<string, unknown>);
+      const existing = localLoad(userId);
+      const filtered = existing.filter(
+        (b) => !(b.type === record.type && b.moduleId === record.moduleId && b.topicId === record.topicId)
+      );
+      localSave(userId, [...filtered, saved]);
+      return saved;
+    }
     console.warn("Supabase addBookmark failed, using localStorage:", error?.message);
   }
 
@@ -136,7 +144,10 @@ export async function removeBookmark(userId: string, bookmarkId: string): Promis
       .eq("id", bookmarkId)
       .eq("user_id", userId);
 
-    if (!error) return;
+    if (!error) {
+      localSave(userId, localLoad(userId).filter((b) => b.id !== bookmarkId));
+      return;
+    }
     console.warn("Supabase removeBookmark failed, using localStorage:", error.message);
   }
 

@@ -101,7 +101,11 @@ export async function upsertSummary(
         )
         .select()
         .single();
-      if (!error && data) return rowToRecord(data as Record<string, unknown>);
+      if (!error && data) {
+        const saved = rowToRecord(data as Record<string, unknown>);
+        localSave(userId, [...localLoad(userId).filter((r) => !matchKey(r, topicId, level)), saved]);
+        return saved;
+      }
       console.warn("Supabase upsertSummary failed, using localStorage:", error?.message);
     }
   }
@@ -158,6 +162,11 @@ export async function markSummaryNotion(
         .eq("user_id", userId)
         .eq("topic_id", topicId)
         .eq("level", level);
+      localSave(userId, localLoad(userId).map((r) =>
+        matchKey(r, topicId, level)
+          ? { ...r, syncedToNotion: synced, ...(pageId !== undefined && { notionPageId: pageId }) }
+          : r
+      ));
       return;
     }
   }
@@ -242,6 +251,9 @@ export async function deleteSummary(userId: string, topicId: number, level: stri
         .eq("user_id", userId)
         .eq("topic_id", topicId)
         .eq("level", level);
+      localSave(userId, localLoad(userId).map((r) =>
+        matchKey(r, topicId, level) ? { ...r, deletedAt: now } : r
+      ));
       return;
     }
   }
@@ -262,6 +274,9 @@ export async function restoreSummary(userId: string, topicId: number, level: str
         .eq("user_id", userId)
         .eq("topic_id", topicId)
         .eq("level", level);
+      localSave(userId, localLoad(userId).map((r) =>
+        matchKey(r, topicId, level) ? { ...r, deletedAt: undefined } : r
+      ));
       return;
     }
   }

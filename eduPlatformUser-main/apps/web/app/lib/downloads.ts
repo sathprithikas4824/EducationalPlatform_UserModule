@@ -151,7 +151,10 @@ export async function removeDownload(userId: string, downloadId: string): Promis
       .eq("id", downloadId)
       .eq("user_id", userId);
 
-    if (!error) return;
+    if (!error) {
+      localSave(userId, localLoad(userId).filter((d) => d.id !== downloadId));
+      return;
+    }
     console.warn("Supabase removeDownload failed, using localStorage:", error.message);
   }
 

@@ -115,7 +115,11 @@ export async function upsertNote(
         )
         .select()
         .single();
-      if (!error && data) return rowToRecord(data as Record<string, unknown>);
+      if (!error && data) {
+        const saved = rowToRecord(data as Record<string, unknown>);
+        localSave(userId, [...localLoad(userId).filter((n) => n.topicId !== topicId), saved]);
+        return saved;
+      }
       console.warn("Supabase upsertNote failed, using localStorage:", error?.message);
     }
   }
@@ -220,6 +224,9 @@ export async function deleteNote(userId: string, topicId: number): Promise<void>
         .update({ deleted_at: now })
         .eq("user_id", userId)
         .eq("topic_id", topicId);
+      localSave(userId, localLoad(userId).map((n) =>
+        n.topicId === topicId ? { ...n, deletedAt: now } : n
+      ));
       return;
     }
   }
@@ -239,6 +246,9 @@ export async function restoreNote(userId: string, topicId: number): Promise<void
         .update({ deleted_at: null })
         .eq("user_id", userId)
         .eq("topic_id", topicId);
+      localSave(userId, localLoad(userId).map((n) =>
+        n.topicId === topicId ? { ...n, deletedAt: undefined } : n
+      ));
       return;
     }
   }
