@@ -25,17 +25,19 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: eduPlatformUser-main/pnpm-lock.yaml
 
       - name: Install dependencies
+        working-directory: eduPlatformUser-main
         run: pnpm install --frozen-lockfile
 
       - name: ESLint — jsx-a11y accessibility rules
-        working-directory: apps/web
+        working-directory: eduPlatformUser-main/apps/web
         run: pnpm eslint app/ --quiet
-        # --quiet reports only errors (skips pre-existing unrelated warnings)
+        # --quiet reports only errors, skipping pre-existing unrelated warnings
 
       - name: jest-axe — WCAG 2.1 AA automated tests
-        working-directory: apps/web
+        working-directory: eduPlatformUser-main/apps/web
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
