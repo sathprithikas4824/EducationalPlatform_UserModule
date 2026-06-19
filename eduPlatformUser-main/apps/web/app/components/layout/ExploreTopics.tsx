@@ -299,7 +299,10 @@ const ExploreTopics = () => {
                       }}
                     >
                       <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleCardClick(topic.link)}
+                        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleCardClick(topic.link)}
                         onMouseEnter={() => setHoveredCard(index)}
                         onMouseLeave={() => setHoveredCard(null)}
                         className="bg-white overflow-hidden cursor-pointer h-full flex flex-col transform transition-all duration-300"

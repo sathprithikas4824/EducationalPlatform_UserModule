@@ -387,8 +387,9 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
           <div className="space-y-3">
             <p className="text-sm text-gray-500">Enter your email to receive a password reset link.</p>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Email Address</label>
+              <label htmlFor="profile-email-reset" className="block text-xs font-medium text-gray-600 mb-1">Email Address</label>
               <input
+                id="profile-email-reset"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -751,7 +752,10 @@ function MyProgress({
           return (
             <div
               key={`${p.topic_id}-${idx}`}
+              role="button"
+              tabIndex={0}
               onClick={() => router.push(`/modules/${p.module_id}`)}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && router.push(`/modules/${p.module_id}`)}
               className="cursor-pointer p-4 bg-white rounded-xl border border-gray-200 hover:border-purple-300 hover:shadow-sm transition-all group"
             >
               <div className="flex items-center gap-4">

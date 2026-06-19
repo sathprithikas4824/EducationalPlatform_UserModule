@@ -2077,10 +2077,13 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       ref={containerRef}
       className={`relative ${className} ${highlightModeEnabled && isMobileDevice ? "highlight-container-mobile" : ""}`}
     >
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         ref={contentRef}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
+        role="region"
+        aria-label="Readable content"
         className={`highlightable-content ${showColorPicker ? "picker-active" : ""} ${highlightModeEnabled && isMobileDevice ? "mobile-highlight-mode" : ""} ${highlightModeEnabled && isIOSDevice ? "ios-highlight-mode" : ""}`}
       >
         {children}
@@ -2115,7 +2118,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       {/* Color picker - always positioned ABOVE the selected text */}
       {showColorPicker && isLoggedIn && selectedText && (
         <>
-          <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
+          <div className="fixed inset-0 z-[99]" role="presentation" aria-hidden="true" onClick={closeColorPicker} onKeyDown={(e) => e.key === "Escape" && closeColorPicker()} />
           <div
             className="absolute z-[100] bg-white rounded-2xl shadow-2xl border border-gray-200 p-3 sm:p-4"
             style={{
@@ -2146,7 +2149,7 @@ export const Highlightable: React.FC<HighlightableProps> = ({
       {/* Login prompt popup — appears at selection position when guest selects text */}
       {(showColorPicker || showMobileHighlightButton) && !isLoggedIn && selectedText && (
         <>
-          <div className="fixed inset-0 z-[99]" onClick={closeColorPicker} />
+          <div className="fixed inset-0 z-[99]" role="presentation" aria-hidden="true" onClick={closeColorPicker} onKeyDown={(e) => e.key === "Escape" && closeColorPicker()} />
           <div
             className="absolute z-[100] bg-white rounded-2xl shadow-2xl border p-4 text-center"
             style={{

@@ -27,7 +27,7 @@ const LoginToAnnotateModal = ({ onClose }: { onClose: () => void }) => {
   const pathname = usePathname();
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-40 z-[9998]" onClick={onClose} />
+      <div className="fixed inset-0 bg-black bg-opacity-40 z-[9998]" role="presentation" aria-hidden="true" onClick={onClose} onKeyDown={(e) => e.key === "Escape" && onClose()} />
       <div
         className="fixed z-[9999] bg-white rounded-2xl shadow-2xl p-6 text-center"
         style={{
@@ -73,7 +73,7 @@ const MobileMenu = ({ isOpen, onClose, activeTab, setActiveTab }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998] lg:hidden" onClick={onClose} />
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998] lg:hidden" role="presentation" aria-hidden="true" onClick={onClose} onKeyDown={(e) => e.key === "Escape" && onClose()} />
       <div className="fixed inset-0 bg-white dark:bg-[#0d0d1a] z-[9999] overflow-y-auto lg:hidden shadow-2xl jakarta-font">
         <div className="sticky top-0 bg-white dark:bg-[#0d0d1a] border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2" onClick={onClose}>
@@ -186,6 +186,7 @@ const NavAuthSection = ({ compact = false }: { compact?: boolean }) => {
           </div>
           {/* Photo — rendered immediately on first client render if URL is cached */}
           {avatarUrl && !imgError && (
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
             <img
               src={avatarUrl}
               alt={user.name || "User"}
@@ -256,7 +257,7 @@ export default function NavBar() {
             <div className="flex items-center gap-0.5 px-2 py-2.5 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={pillStyle}>
               <Link href="/" className="flex items-center gap-2 px-3.5 py-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200">
                 <div className="w-5 h-5">
-                  <img src="/logo.svg" alt="Logo" className="w-full h-full object-contain" />
+                  <img src="/logo.svg" alt="" aria-hidden="true" className="w-full h-full object-contain" />
                 </div>
                 <span className="text-gray-900">Logo</span>
               </Link>
@@ -318,7 +319,7 @@ export default function NavBar() {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={pillStyle}>
                 <Link href="/" className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200">
-                  <div className="w-5 h-5"><img src="/logo.svg" alt="Logo" className="w-full h-full" /></div>
+                  <div className="w-5 h-5"><img src="/logo.svg" alt="" className="w-full h-full" aria-hidden="true" /></div>
                   <span className="text-gray-900">Logo</span>
                 </Link>
               </div>
@@ -340,7 +341,7 @@ export default function NavBar() {
             {/* Right Group: Search + Edit + Auth */}
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={pillStyle}>
-                <button className="p-1.5 text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center">
+                <button aria-label="Search" className="p-1.5 text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center">
                   <SearchDuotoneIcon size={20} />
                 </button>
               </div>
@@ -373,13 +374,13 @@ export default function NavBar() {
             {/* Left: Hamburger + Logo */}
             <div className="flex items-center gap-1.5">
               <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={pillStyle}>
-                <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-1.5 text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center">
+                <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label={mobileMenuOpen ? "Close menu" : "Open menu"} aria-expanded={mobileMenuOpen} className="p-1.5 text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center">
                   <HamburgerIcon />
                 </button>
               </div>
               <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={pillStyle}>
                 <Link href="/" className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200">
-                  <img src="/logo.svg" alt="Logo" className="w-5 h-5" />
+                  <img src="/logo.svg" alt="" className="w-5 h-5" aria-hidden="true" />
                   <span className="text-gray-900">Logo</span>
                 </Link>
               </div>

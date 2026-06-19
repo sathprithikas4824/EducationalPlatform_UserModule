@@ -319,8 +319,9 @@ export default function AuthCallbackPage() {
 
           <form onSubmit={handleSetPassword} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">New password</label>
+              <label htmlFor="new-password" className="block text-sm font-medium text-gray-700 mb-1.5">New password</label>
               <input
+                id="new-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -331,8 +332,9 @@ export default function AuthCallbackPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm password</label>
+              <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700 mb-1.5">Confirm password</label>
               <input
+                id="confirm-password"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

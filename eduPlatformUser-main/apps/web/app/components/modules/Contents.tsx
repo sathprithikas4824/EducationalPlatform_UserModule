@@ -2167,7 +2167,10 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                       return (
                         <div
                           key={topic.id}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => handleTopicClick(topic.id, mod.submoduleId)}
+                          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleTopicClick(topic.id, mod.submoduleId)}
                           className={`group flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800 ${
                             index !== mod.topics.length - 1 ? "border-b border-gray-100 dark:border-gray-700 dark:border-gray-700" : ""
                           }`}

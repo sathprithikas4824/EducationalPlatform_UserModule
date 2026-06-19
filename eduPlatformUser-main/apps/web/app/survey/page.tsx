@@ -223,10 +223,11 @@ export default function SurveyPage() {
               {profession === "student" && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label htmlFor="survey-education-level" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Current education level
                     </label>
                     <select
+                      id="survey-education-level"
                       value={educationLevel}
                       onChange={(e) => setEducationLevel(e.target.value)}
                       className={inputClass}
@@ -241,10 +242,11 @@ export default function SurveyPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label htmlFor="survey-field-of-study" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Field of study <span className="text-gray-400 font-normal">(optional)</span>
                     </label>
                     <input
+                      id="survey-field-of-study"
                       type="text"
                       value={fieldOfStudy}
                       onChange={(e) => setFieldOfStudy(e.target.value)}
@@ -254,9 +256,9 @@ export default function SurveyPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <p className="block text-sm font-medium text-gray-700 mb-2">
                       Career goal
-                    </label>
+                    </p>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         "Software Engineering",
@@ -290,10 +292,11 @@ export default function SurveyPage() {
               {profession === "teacher" && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label htmlFor="survey-subject-taught" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Subject(s) you teach
                     </label>
                     <input
+                      id="survey-subject-taught"
                       type="text"
                       value={subjectTaught}
                       onChange={(e) => setSubjectTaught(e.target.value)}
@@ -303,10 +306,11 @@ export default function SurveyPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label htmlFor="survey-teaching-level" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Teaching level
                     </label>
                     <select
+                      id="survey-teaching-level"
                       value={teachingLevel}
                       onChange={(e) => setTeachingLevel(e.target.value)}
                       className={inputClass}
@@ -321,9 +325,9 @@ export default function SurveyPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <p className="block text-sm font-medium text-gray-700 mb-2">
                       Years of experience <span className="text-gray-400 font-normal">(optional)</span>
-                    </label>
+                    </p>
                     <div className="flex gap-2 flex-wrap">
                       {["0–2 years", "3–5 years", "6–10 years", "10+ years"].map((y) => (
                         <button
@@ -350,10 +354,11 @@ export default function SurveyPage() {
               {profession === "professional" && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label htmlFor="survey-industry" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Industry
                     </label>
                     <select
+                      id="survey-industry"
                       value={industry}
                       onChange={(e) => setIndustry(e.target.value)}
                       className={inputClass}
@@ -372,10 +377,11 @@ export default function SurveyPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label htmlFor="survey-job-role" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Current role / title <span className="text-gray-400 font-normal">(optional)</span>
                     </label>
                     <input
+                      id="survey-job-role"
                       type="text"
                       value={jobRole}
                       onChange={(e) => setJobRole(e.target.value)}
@@ -385,9 +391,9 @@ export default function SurveyPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <p className="block text-sm font-medium text-gray-700 mb-2">
                       Why are you using this platform?
-                    </label>
+                    </p>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         "Upskilling / Learning new skills",
@@ -419,10 +425,11 @@ export default function SurveyPage() {
               {profession === "jobseeker" && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label htmlFor="survey-target-role" className="block text-sm font-medium text-gray-700 mb-1.5">
                       What role are you targeting?
                     </label>
                     <input
+                      id="survey-target-role"
                       type="text"
                       value={targetRole}
                       onChange={(e) => setTargetRole(e.target.value)}
@@ -432,10 +439,11 @@ export default function SurveyPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label htmlFor="survey-seeker-education" className="block text-sm font-medium text-gray-700 mb-1.5">
                       Highest education level <span className="text-gray-400 font-normal">(optional)</span>
                     </label>
                     <select
+                      id="survey-seeker-education"
                       value={seekerEducation}
                       onChange={(e) => setSeekerEducation(e.target.value)}
                       className={inputClass}
@@ -455,10 +463,11 @@ export default function SurveyPage() {
               {/* Other */}
               {profession === "other" && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  <label htmlFor="survey-other-description" className="block text-sm font-medium text-gray-700 mb-1.5">
                     Tell us a bit about yourself
                   </label>
                   <textarea
+                    id="survey-other-description"
                     value={otherDescription}
                     onChange={(e) => setOtherDescription(e.target.value)}
                     placeholder="What brings you to EduPlatform?"
@@ -520,9 +529,9 @@ export default function SurveyPage() {
 
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <p className="block text-sm font-medium text-gray-700 mb-2">
                     How much time can you dedicate per week?
-                  </label>
+                  </p>
                   <div className="grid grid-cols-2 gap-2">
                     {["Less than 1 hour", "1–3 hours", "3–5 hours", "5+ hours"].map((h) => (
                       <button
@@ -543,9 +552,9 @@ export default function SurveyPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <p className="block text-sm font-medium text-gray-700 mb-2">
                     What&apos;s your primary learning goal?
-                  </label>
+                  </p>
                   <div className="space-y-2">
                     {[
                       "Get a job / land my first role",

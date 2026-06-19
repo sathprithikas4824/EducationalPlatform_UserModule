@@ -359,6 +359,7 @@ function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => vo
                         </div>
                       </div>
                     ) : (
+                      // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
                       <iframe
                         key={selected.topicId}
                         srcDoc={processedContent}
@@ -635,12 +636,20 @@ function ReconnectPopup({ onConnect, onDismiss }: { onConnect: () => void; onDis
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.45)" }}
+      role="presentation"
+      aria-hidden="true"
       onClick={onDismiss}
+      onKeyDown={(e) => e.key === "Escape" && onDismiss()}
     >
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="You're back online"
         className="bg-white dark:bg-[#1a1a2e] rounded-2xl p-7 max-w-sm w-full shadow-2xl text-center"
         style={{ animation: "slideUp .25s ease" }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       >
         {/* Icon */}
         <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
@@ -691,7 +700,10 @@ function ModuleGroupCard({ group, onOpen }: { group: ModuleGroup; onOpen: () => 
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpen()}
       className="group rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer hover:border-purple-400 dark:hover:border-purple-500"
       style={{
         backgroundColor: "var(--card-bg)",
@@ -733,7 +745,7 @@ function ModuleGroupCard({ group, onOpen }: { group: ModuleGroup; onOpen: () => 
         </div>
 
         {/* Topic list preview */}
-        <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="space-y-1.5">
           {uniqueTopics.slice(0, expanded ? uniqueTopics.length : 2).map((topic) => (
             <div key={topic.topicId} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg">
               <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-purple-400" />
@@ -757,13 +769,12 @@ function ModuleGroupCard({ group, onOpen }: { group: ModuleGroup; onOpen: () => 
       <div
         className="px-4 py-2.5 border-t flex items-center justify-between"
         style={{ borderColor: "var(--card-border)", backgroundColor: "var(--pill-bg)" }}
-        onClick={(e) => e.stopPropagation()}
       >
         <span className="text-[10px] text-gray-400 dark:text-gray-500">
           Last saved: {new Date(group.topics[0].downloadedAt).toLocaleDateString()}
         </span>
         <button
-          onClick={onOpen}
+          onClick={(e) => { e.stopPropagation(); onOpen(); }}
           className="text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 text-white"
           style={{ background: "linear-gradient(90deg, #7a12fa, #b614ef)" }}
         >

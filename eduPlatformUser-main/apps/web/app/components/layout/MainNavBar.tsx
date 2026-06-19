@@ -24,7 +24,10 @@ const MobileMenu = ({ isOpen, onClose }) => {
     <>
       <div
         className="fixed inset-0 bg-black bg-opacity-50 z-[9998] sm:hidden"
+        role="presentation"
+        aria-hidden="true"
         onClick={onClose}
+        onKeyDown={(e) => e.key === "Escape" && onClose()}
       />
 
       <div className="fixed inset-0 bg-white z-[9999] overflow-y-auto sm:hidden shadow-2xl">

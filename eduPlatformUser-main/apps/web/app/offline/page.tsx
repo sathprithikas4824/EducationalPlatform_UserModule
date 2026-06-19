@@ -271,7 +271,7 @@ function ModuleCard({ group, onOpen, onRemove }: { group: ModuleGroup; onOpen: (
   }
 
   return (
-    <div onClick={onOpen} style={{ borderRadius: 16, border: "1px solid #e5e7eb", padding: 16, cursor: "pointer", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", transition: "border-color 0.2s" }}
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpen()} style={{ borderRadius: 16, border: "1px solid #e5e7eb", padding: 16, cursor: "pointer", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", transition: "border-color 0.2s" }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#a78bfa")}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#e5e7eb")}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
@@ -387,6 +387,7 @@ export default function OfflinePage() {
       <header style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(255,255,255,0.95)", backdropFilter: "blur(8px)", borderBottom: "1px solid #f3f4f6", padding: "12px 16px" }}>
         <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 12, border: "1px solid #e5e7eb" }}>
+            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
             <img src="/logo.svg" alt="Logo" style={{ width: 20, height: 20 }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
             <span style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>Logo</span>
           </div>

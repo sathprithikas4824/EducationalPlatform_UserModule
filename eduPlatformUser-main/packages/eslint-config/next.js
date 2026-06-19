@@ -6,6 +6,7 @@ import pluginReactHooks from "eslint-plugin-react-hooks";
 import pluginReact from "eslint-plugin-react";
 import globals from "globals";
 import pluginNext from "@next/eslint-plugin-next";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 import { config as baseConfig } from "./base.js";
 
 /**
@@ -52,6 +53,21 @@ export const nextJsConfig = [
       ...pluginReactHooks.configs.recommended.rules,
       // React scope no longer necessary with new JSX transform.
       "react/react-in-jsx-scope": "off",
+    },
+  },
+  // Accessibility rules — catches missing aria-labels, bad roles, missing alt text at lint time
+  {
+    ...jsxA11y.flatConfigs.recommended,
+    rules: {
+      ...jsxA11y.flatConfigs.recommended.rules,
+      "jsx-a11y/alt-text":                        "error",
+      "jsx-a11y/label-has-associated-control": "error",
+      "jsx-a11y/interactive-supports-focus":       "error",
+      "jsx-a11y/role-has-required-aria-props":     "error",
+      "jsx-a11y/no-autofocus":                     "warn",
+      "jsx-a11y/anchor-is-valid":                  "error",
+      "jsx-a11y/click-events-have-key-events":     "warn",
+      "jsx-a11y/no-noninteractive-element-interactions": "warn",
     },
   },
 ];
