@@ -68,6 +68,8 @@ function LoginForm() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
+          {/* TEST VIOLATION — intentional missing alt to verify CI catches it */}
+          <img src="/logo.svg" />
           <Link href="/" className="inline-flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}>
               <img src="/logo.svg" alt="Logo" className="w-5 h-5 brightness-0 invert" />
