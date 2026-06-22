@@ -3,6 +3,49 @@
 @tailwind utilities;
 
 /* ============================= */
+/* SKIP LINK (keyboard nav)      */
+/* ============================= */
+
+/* Hidden above the viewport by default.
+   Slides into view when a keyboard user presses Tab — first focusable element on every page. */
+.skip-link {
+  position: fixed;
+  top: -100%;
+  left: 1rem;
+  z-index: 9999;
+  padding: 0.75rem 1.25rem;
+  background: #7c3aed;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  text-decoration: none;
+  transition: top 0.15s ease;
+  outline: none;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* ============================= */
+/* GLOBAL KEYBOARD FOCUS RING    */
+/* ============================= */
+
+/* Only show for keyboard navigation — not on mouse click.
+   :focus-visible is supported in all modern browsers. */
+:focus-visible {
+  outline: 3px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Remove the default focus ring that browsers add for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ============================= */
 /* DARK / LIGHT MODE VARIABLES   */
 /* ============================= */
 :root {

@@ -53,11 +53,17 @@ export default function RootLayout({ children }: PropsWithChildren) {
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="jakarta-font bg-[var(--page-bg)] text-[var(--text-primary)] transition-colors duration-300">
+        {/* Skip link — first Tab keystroke on any page reveals this */}
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
         <AccessibilityProvider>
           <ThemeProvider>
             <AnnotationProvider>
               <OfflineProvider>
-                {children}
+                <div id="main-content" tabIndex={-1}>
+                  {children}
+                </div>
                 <GlobalOfflineGuard />
               </OfflineProvider>
             </AnnotationProvider>
