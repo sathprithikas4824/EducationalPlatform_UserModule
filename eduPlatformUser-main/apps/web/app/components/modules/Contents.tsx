@@ -2198,7 +2198,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                                 className={`${
                                   bookmarkedTopicIds.has(topicNumId) ? "flex" : "hidden group-hover:flex"
                                 } w-4 h-4 items-center justify-center transition-colors`}
-                                title={bookmarkedTopicIds.has(topicNumId) ? "Remove bookmark" : "Bookmark this topic"}
+                                aria-label={bookmarkedTopicIds.has(topicNumId) ? "Remove bookmark" : "Bookmark this topic"}
+                                aria-pressed={bookmarkedTopicIds.has(topicNumId)}
                               >
                                 <BookmarkHeart filled={bookmarkedTopicIds.has(topicNumId)} size={14} />
                               </button>
@@ -2208,7 +2209,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                               <button
                                 onClick={(e) => { e.stopPropagation(); setResetTopicId(topicNumId); }}
                                 className="hidden group-hover:flex w-4 h-4 items-center justify-center text-gray-400 hover:text-red-500 transition-colors"
-                                title="Reset topic progress"
+                                aria-label="Reset topic progress"
                               >
                                 <svg className="w-3 h-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5">
                                   <path d="M4 4l12 12M16 4L4 16" strokeLinecap="round" />
@@ -2329,7 +2330,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                         onClick={() => user && handleTopicLike(selectedTopic.topic_id)}
                         disabled={!user || likeLoading}
                         className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors disabled:opacity-100 ${user ? "hover:bg-red-50 cursor-pointer" : "cursor-default"}`}
-                        title={!user ? "Login to like this topic" : likedTopicIds.has(selectedTopic.topic_id) ? "Unlike this topic" : "Like this topic"}
+                        aria-label={!user ? "Login to like this topic" : likedTopicIds.has(selectedTopic.topic_id) ? "Unlike this topic" : "Like this topic"}
+                        aria-pressed={user ? likedTopicIds.has(selectedTopic.topic_id) : undefined}
                       >
                         <svg
                           className={`w-4 h-4 transition-colors ${likedTopicIds.has(selectedTopic.topic_id) ? "fill-red-500 stroke-red-500" : "fill-none stroke-gray-400"}`}
@@ -2357,7 +2359,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                             )
                           }
                           className="p-1 rounded-full hover:bg-purple-50 transition-colors"
-                          title={bookmarkedTopicIds.has(selectedTopic.topic_id) ? "Remove bookmark" : "Bookmark this topic"}
+                          aria-label={bookmarkedTopicIds.has(selectedTopic.topic_id) ? "Remove bookmark" : "Bookmark this topic"}
+                          aria-pressed={bookmarkedTopicIds.has(selectedTopic.topic_id)}
                         >
                           <BookmarkHeart filled={bookmarkedTopicIds.has(selectedTopic.topic_id)} size={18} />
                         </button>
@@ -2462,7 +2465,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                                   </button>
                                 </div>
                               )}
-                              <button onClick={() => setSummaryOpen(false)} className="text-purple-400 hover:text-purple-600 text-xs">✕</button>
+                              <button onClick={() => setSummaryOpen(false)} className="text-purple-400 hover:text-purple-600 text-xs" aria-label="Close summary">✕</button>
                             </div>
                           </div>
                         </div>
@@ -2517,14 +2520,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                                     <button
                                       onClick={() => setSummaryFeedback((prev) => ({ ...prev, [selectedTopic.topic_id]: "helpful" }))}
                                       className="text-sm text-purple-300 hover:text-green-500 transition-colors"
-                                      title="Yes, helpful"
+                                      aria-label="Mark summary as helpful"
                                     >
                                       👍
                                     </button>
                                     <button
                                       onClick={() => setSummaryFeedback((prev) => ({ ...prev, [selectedTopic.topic_id]: "not_helpful" }))}
                                       className="text-sm text-purple-300 hover:text-red-400 transition-colors"
-                                      title="Not helpful"
+                                      aria-label="Mark summary as not helpful"
                                     >
                                       👎
                                     </button>
@@ -2595,7 +2598,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                               ? "Saved"
                               : ""}
                           </span>
-                          <button onClick={() => setNotesOpen(false)} className="text-amber-400 hover:text-amber-600 text-xs">✕</button>
+                          <button onClick={() => setNotesOpen(false)} className="text-amber-400 hover:text-amber-600 text-xs" aria-label="Close notes">✕</button>
                         </div>
                       </div>
 
