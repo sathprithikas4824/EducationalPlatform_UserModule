@@ -514,7 +514,8 @@ export default function HeroSection() {
           >
             <img
               src={PenGif.src}
-              alt="Pen Animation"
+              alt=""
+              aria-hidden="true"
               width={240}
               height={240}
               style={{
@@ -542,7 +543,8 @@ export default function HeroSection() {
           >
             <img
               src={BookGif.src}
-              alt="Book Animation"
+              alt=""
+              aria-hidden="true"
               width={240}
               height={240}
               style={{

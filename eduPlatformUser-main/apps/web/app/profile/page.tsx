@@ -300,7 +300,7 @@ function AccountDetails({ onAvatarChange }: { onAvatarChange?: (url: string) => 
           title="Click to change profile photo"
         >
           {avatarUrl ? (
-            <Image src={avatarUrl} alt="Profile" fill className="rounded-full object-cover" />
+            <Image src={avatarUrl} alt={`${displayName || "User"}'s profile photo`} fill className="rounded-full object-cover" />
           ) : (
             <div
               className="w-full h-full rounded-full flex items-center justify-center text-white text-2xl sm:text-3xl font-bold"
