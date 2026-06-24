@@ -574,7 +574,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       .replace(/(<img[^>]+src=["'])([^"']+)(["'])/gi, fixSrc)
       .replace(/(<video[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc)
       .replace(/(<source[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc)
-      .replace(/(<iframe[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc);
+      .replace(/(<iframe[^>]*\ssrc=["'])([^"']+)(["'])/gi, fixSrc)
+      // Add alt="" to any <img> tag that has no alt attribute — fixes axe "Images must have alternative text"
+      .replace(/<img(?![^>]*\salt=)([^>]*)(\/?>)/gi, '<img alt=""$1$2');
   };
 
   // Fix <video> elements for immediate online playback.

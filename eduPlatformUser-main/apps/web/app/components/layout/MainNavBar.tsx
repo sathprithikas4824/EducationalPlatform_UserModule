@@ -169,7 +169,8 @@ export default function MainNavbar() {
                 <div className="w-5 h-5">
                   <img
                     src="/logo.svg"
-                    alt="Logo"
+                    alt=""
+                    aria-hidden="true"
                     className="w-full h-full object-contain"
                   />
                 </div>
@@ -286,7 +287,7 @@ export default function MainNavbar() {
             {/* Logo Pill */}
             <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: 'rgba(140, 140, 170, 0.4)', boxShadow: '0 2px 4px 0 rgba(124, 58, 237, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
               <Link href="/" className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-all duration-200">
-                <img src="/logo.svg" alt="Logo" className="w-5 h-5" />
+                <img src="/logo.svg" alt="" aria-hidden="true" className="w-5 h-5" />
                 <span className="text-gray-900">Logo</span>
               </Link>
             </div>
