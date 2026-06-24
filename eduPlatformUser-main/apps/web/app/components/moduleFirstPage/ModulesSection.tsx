@@ -419,10 +419,7 @@ const ModulesSection: React.FC = () => {
               {modules.map((module) => (
                 <div
                   key={module.id}
-                  role="button"
-                  tabIndex={0}
                   onClick={() => handleModuleClick(module.id)}
-                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleModuleClick(module.id)}
                   className="flex-shrink-0 group relative flex items-center gap-3 snap-start rounded-2xl border backdrop-blur-md cursor-pointer transition-all duration-300 hover:!border-[#7612fa66] p-2
                              w-full md:w-[calc((50%)-8px)] lg:w-[calc((33.333%)-10.6px)]"
                   style={{
@@ -439,7 +436,8 @@ const ModulesSection: React.FC = () => {
                           ? "opacity-100"
                           : "opacity-0 group-hover:opacity-100"
                       } hover:bg-purple-50`}
-                      title={bookmarkedModuleIds.has(module.submoduleId) ? "Remove bookmark" : "Bookmark this module"}
+                      aria-label={bookmarkedModuleIds.has(module.submoduleId) ? "Remove bookmark" : "Bookmark this module"}
+                      aria-pressed={bookmarkedModuleIds.has(module.submoduleId)}
                     >
                       <BookmarkHeart filled={bookmarkedModuleIds.has(module.submoduleId)} size={17} />
                     </button>
