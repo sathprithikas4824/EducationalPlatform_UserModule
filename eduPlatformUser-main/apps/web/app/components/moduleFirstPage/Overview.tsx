@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { cachedFetch } from "../../lib/apiCache";
+import { injectMissingAlt } from "../../lib/sanitizeHtml";
 
 // Import the fonts
 import localFont from "next/font/local";
@@ -87,21 +88,21 @@ const Overview: React.FC = () => {
             {moduleData.title && (
               <div
                 className="ai-content-wrapper"
-                dangerouslySetInnerHTML={{ __html: moduleData.title }}
+                dangerouslySetInnerHTML={{ __html: injectMissingAlt(moduleData.title) }}
               />
             )}
 
             {moduleData.description && (
               <div
                 className="ai-content-wrapper"
-                dangerouslySetInnerHTML={{ __html: moduleData.description }}
+                dangerouslySetInnerHTML={{ __html: injectMissingAlt(moduleData.description) }}
               />
             )}
 
             {moduleData.content && (
               <div
                 className="ai-content-wrapper"
-                dangerouslySetInnerHTML={{ __html: moduleData.content }}
+                dangerouslySetInnerHTML={{ __html: injectMissingAlt(moduleData.content) }}
               />
             )}
           </div>

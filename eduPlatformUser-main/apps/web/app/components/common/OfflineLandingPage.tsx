@@ -5,6 +5,7 @@ import Link from "next/link";
 import { loadDownloads, type DownloadRecord } from "../../lib/downloads";
 import { getLastUserId } from "../../lib/supabase";
 import { useAnnotation } from "./AnnotationProvider";
+import { injectMissingAlt } from "../../lib/sanitizeHtml";
 import ThemeToggle from "./ThemeToggle";
 import { useRouter } from "next/navigation";
 
@@ -337,7 +338,7 @@ function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => vo
                       </h2>
                       <div
                         className="ai-content-wrapper"
-                        dangerouslySetInnerHTML={{ __html: body }}
+                        dangerouslySetInnerHTML={{ __html: injectMissingAlt(body) }}
                       />
                     </div>
                   );

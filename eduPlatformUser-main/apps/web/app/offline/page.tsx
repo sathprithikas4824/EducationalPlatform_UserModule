@@ -6,6 +6,7 @@
 // read directly from localStorage / cookies here.
 
 import { useEffect, useState } from "react";
+import { injectMissingAlt } from "../lib/sanitizeHtml";
 
 interface DownloadRecord {
   id: string;
@@ -192,12 +193,12 @@ function Reader({ group, onBack }: { group: ModuleGroup; onBack: () => void }) {
               {isPlain && title ? (
                 <h2 style={{ fontSize: 22, fontWeight: 800, color: "#111827", marginBottom: 16 }}>{title}</h2>
               ) : title ? (
-                <div className="ai-content-wrapper" style={{ marginBottom: 16 }} dangerouslySetInnerHTML={{ __html: title }} />
+                <div className="ai-content-wrapper" style={{ marginBottom: 16 }} dangerouslySetInnerHTML={{ __html: injectMissingAlt(title) }} />
               ) : (
                 <h2 style={{ fontSize: 22, fontWeight: 800, color: "#111827", marginBottom: 16 }}>{topic.topicName}</h2>
               )}
               {html ? (
-                <div className="ai-content-wrapper" dangerouslySetInnerHTML={{ __html: html }} />
+                <div className="ai-content-wrapper" dangerouslySetInnerHTML={{ __html: injectMissingAlt(html) }} />
               ) : (
                 <p style={{ color: "#9ca3af", fontStyle: "italic", fontSize: 14 }}>No content available.</p>
               )}
