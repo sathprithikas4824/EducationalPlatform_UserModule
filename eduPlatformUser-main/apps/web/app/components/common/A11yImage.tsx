@@ -2,43 +2,47 @@
 
 import Image, { ImageProps } from "next/image";
 
-// TypeScript discriminated union — you MUST provide either:
-//   alt="description of the image"   (meaningful image)
-//   decorative={true}                (purely visual, screen reader skips it)
-// It is impossible to use this component without choosing one.
+// Use this component for every image. TypeScript forces a choice:
+//   alt="description"  → meaningful image (screen reader reads it)
+//   decorative={true}  → visual-only image (screen reader skips it)
 
-type MeaningfulImage = Omit<ImageProps, "alt"> & {
-  alt: string;
+export interface MeaningfulImageProps extends ImageProps {
   decorative?: false;
-};
-
-type DecorativeImage = Omit<ImageProps, "alt"> & {
-  decorative: true;
-  alt?: never;
-};
-
-type A11yImageProps = MeaningfulImage | DecorativeImage;
-
-export default function A11yImage(props: A11yImageProps) {
-  if (props.decorative) {
-    const { decorative: _d, ...rest } = props;
-    return <Image {...rest} alt="" aria-hidden="true" />;
-  }
-  return <Image {...props} />;
 }
 
-// Plain <img> version for cases where next/image cannot be used (dynamic backend URLs)
-type A11yImgProps = React.ImgHTMLAttributes<HTMLImageElement> & (
-  | { alt: string; decorative?: false }
-  | { decorative: true; alt?: never }
-);
+export interface DecorativeImageProps extends Omit<ImageProps, "alt"> {
+  decorative: true;
+  alt?: never;
+}
 
-export function A11yImg(props: A11yImgProps) {
-  if (props.decorative) {
-    const { decorative: _d, ...rest } = props;
+export type A11yImageProps = MeaningfulImageProps | DecorativeImageProps;
+
+export default function A11yImage(props: A11yImageProps) {
+  if (props.decorative === true) {
+    // Destructure to remove `decorative` before spreading onto <Image>
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { decorative, ...rest } = props as DecorativeImageProps;
+    return <Image {...(rest as ImageProps)} alt="" aria-hidden="true" />;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { decorative, ...rest } = props as MeaningfulImageProps;
+  return <Image {...(rest as ImageProps)} />;
+}
+
+// Plain <img> version for dynamic backend URLs where next/image cannot be used
+export function A11yImg(
+  props:
+    | (React.ImgHTMLAttributes<HTMLImageElement> & { decorative?: false })
+    | (Omit<React.ImgHTMLAttributes<HTMLImageElement>, "alt"> & { decorative: true; alt?: never })
+) {
+  if (props.decorative === true) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { decorative, ...rest } = props as { decorative: true } & React.ImgHTMLAttributes<HTMLImageElement>;
     // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
     return <img {...rest} alt="" aria-hidden="true" />;
   }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { decorative, ...rest } = props as { decorative?: false } & React.ImgHTMLAttributes<HTMLImageElement>;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img {...props} />;
+  return <img {...rest} />;
 }
