@@ -3,16 +3,22 @@
 import { usePathname } from "next/navigation";
 import OfflineLandingPage from "./OfflineLandingPage";
 import { useOfflineContext } from "./OfflineContext";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 
 // Routes that work fully offline (data is in localStorage) — skip the overlay
 const OFFLINE_ACCESSIBLE = ["/profile", "/offline"];
 
 // ── Single back-online popup — rendered once in the root layout ───────────────
 function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
+  const ref = useFocusTrap(true);
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998]" />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998]" aria-hidden="true" />
       <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="back-online-title"
         className="fixed z-[9999] bg-white dark:bg-[#16162a] rounded-2xl shadow-2xl p-6 text-center"
         style={{
           top: "50%",
@@ -33,8 +39,8 @@ function BackOnlinePopup({ onContinue }: { onContinue: () => void }) {
             <line x1="12" y1="20" x2="12.01" y2="20" />
           </svg>
         </div>
-        <h3 className="jakarta-font text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">
-          You're back online!
+        <h3 id="back-online-title" className="jakarta-font text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">
+          You&apos;re back online!
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
           Internet connection restored. Ready to load the full content?

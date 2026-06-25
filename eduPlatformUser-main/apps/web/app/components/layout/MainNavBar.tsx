@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAnnotation } from "../common/AnnotationProvider";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 
 const HamburgerIcon = () => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -18,6 +19,7 @@ const CloseIcon = () => (
 );
 
 const MobileMenu = ({ isOpen, onClose }) => {
+  const ref = useFocusTrap(isOpen, onClose);
   if (!isOpen) return null;
 
   return (
@@ -27,10 +29,9 @@ const MobileMenu = ({ isOpen, onClose }) => {
         role="presentation"
         aria-hidden="true"
         onClick={onClose}
-        onKeyDown={(e) => e.key === "Escape" && onClose()}
       />
 
-      <div className="fixed inset-0 bg-white z-[9999] overflow-y-auto sm:hidden shadow-2xl">
+      <div ref={ref} role="dialog" aria-modal="true" aria-label="Navigation menu" className="fixed inset-0 bg-white z-[9999] overflow-y-auto sm:hidden shadow-2xl">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2" onClick={onClose}>
             <img src="/logo.svg" alt="" aria-hidden="true" className="w-6 h-6" />

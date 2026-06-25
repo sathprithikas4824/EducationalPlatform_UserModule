@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 
 // Import icons
 import { SearchDuotoneIcon, PenEditIcon } from "../icons";
@@ -25,10 +26,15 @@ const CloseIcon = () => (
 // Popup shown when guest clicks the pencil/annotation button
 const LoginToAnnotateModal = ({ onClose }: { onClose: () => void }) => {
   const pathname = usePathname();
+  const ref = useFocusTrap(true, onClose);
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-40 z-[9998]" role="presentation" aria-hidden="true" onClick={onClose} onKeyDown={(e) => e.key === "Escape" && onClose()} />
+      <div className="fixed inset-0 bg-black bg-opacity-40 z-[9998]" role="presentation" aria-hidden="true" onClick={onClose} />
       <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="annotate-modal-title"
         className="fixed z-[9999] bg-white rounded-2xl shadow-2xl p-6 text-center"
         style={{
           top: "50%",
@@ -42,9 +48,9 @@ const LoginToAnnotateModal = ({ onClose }: { onClose: () => void }) => {
           className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4"
           style={{ background: "linear-gradient(135deg, #7a12fa, #b614ef)" }}
         >
-          <PenEditIcon size={22} className="text-white" />
+          <PenEditIcon size={22} className="text-white" aria-hidden="true" />
         </div>
-        <h3 className="text-base font-bold text-gray-900 mb-1">Log in to highlight</h3>
+        <h3 id="annotate-modal-title" className="text-base font-bold text-gray-900 mb-1">Log in to highlight</h3>
         <p className="text-sm text-gray-500 mb-5">
           Save highlights and annotations on any topic. Log in to get started.
         </p>
@@ -69,12 +75,13 @@ const LoginToAnnotateModal = ({ onClose }: { onClose: () => void }) => {
 };
 
 const MobileMenu = ({ isOpen, onClose, activeTab, setActiveTab }) => {
+  const ref = useFocusTrap(isOpen, onClose);
   if (!isOpen) return null;
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998] lg:hidden" role="presentation" aria-hidden="true" onClick={onClose} onKeyDown={(e) => e.key === "Escape" && onClose()} />
-      <div className="fixed inset-0 bg-white dark:bg-[#0d0d1a] z-[9999] overflow-y-auto lg:hidden shadow-2xl jakarta-font">
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998] lg:hidden" role="presentation" aria-hidden="true" onClick={onClose} />
+      <div ref={ref} role="dialog" aria-modal="true" aria-label="Navigation menu" className="fixed inset-0 bg-white dark:bg-[#0d0d1a] z-[9999] overflow-y-auto lg:hidden shadow-2xl jakarta-font">
         <div className="sticky top-0 bg-white dark:bg-[#0d0d1a] border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2" onClick={onClose}>
             <img src="/logo.svg" alt="Logo" className="w-6 h-6" />

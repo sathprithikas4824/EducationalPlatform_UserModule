@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
 import Link from "next/link";
 import { loadDownloads, type DownloadRecord } from "../../lib/downloads";
 import { getLastUserId } from "../../lib/supabase";
@@ -633,6 +634,7 @@ export default function OfflineLandingPage() {
 
 // ── Reconnect Popup ────────────────────────────────────────────────────────────
 function ReconnectPopup({ onConnect, onDismiss }: { onConnect: () => void; onDismiss: () => void }) {
+  const ref = useFocusTrap(true, onDismiss);
   return (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4"
@@ -640,17 +642,15 @@ function ReconnectPopup({ onConnect, onDismiss }: { onConnect: () => void; onDis
       role="presentation"
       aria-hidden="true"
       onClick={onDismiss}
-      onKeyDown={(e) => e.key === "Escape" && onDismiss()}
     >
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
+        ref={ref}
         role="dialog"
         aria-modal="true"
-        aria-label="You're back online"
+        aria-labelledby="reconnect-title"
         className="bg-white dark:bg-[#1a1a2e] rounded-2xl p-7 max-w-sm w-full shadow-2xl text-center"
         style={{ animation: "slideUp .25s ease" }}
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
       >
         {/* Icon */}
         <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
@@ -663,7 +663,7 @@ function ReconnectPopup({ onConnect, onDismiss }: { onConnect: () => void; onDis
           </svg>
         </div>
 
-        <h3 className="jakarta-font text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+        <h3 id="reconnect-title" className="jakarta-font text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           You&apos;re back online!
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 leading-relaxed">
