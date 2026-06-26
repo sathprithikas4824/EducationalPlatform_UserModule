@@ -162,7 +162,7 @@ export default function MainNavbar() {
       <MobileMenu isOpen={mobileMenuOpen} onClose={closeMobileMenu} />
 
       <header className="w-full sticky top-0 z-50 bg-transparent py-3">
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-50">
+        <nav aria-label="Main navigation" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-50">
           {/* Desktop Layout */}
           <div className="hidden lg:flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-0.5 px-2 py-2.5 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: 'rgba(140, 140, 170, 0.4)', boxShadow: '0 2px 4px 0 rgba(124, 58, 237, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
@@ -279,9 +279,11 @@ export default function MainNavbar() {
             <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: 'rgba(140, 140, 170, 0.4)', boxShadow: '0 2px 4px 0 rgba(124, 58, 237, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
               <button
                 onClick={toggleMobileMenu}
+                aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+                aria-expanded={mobileMenuOpen}
                 className="px-2 py-1.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
               >
-                <HamburgerIcon />
+                <HamburgerIcon aria-hidden="true" />
               </button>
             </div>
 

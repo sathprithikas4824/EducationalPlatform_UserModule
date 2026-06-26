@@ -61,7 +61,7 @@ export default function RootLayout({ children }: PropsWithChildren) {
           <ThemeProvider>
             <AnnotationProvider>
               <OfflineProvider>
-                <div id="main-content" tabIndex={-1}>
+                <div id="main-content" tabIndex={-1} role="main">
                   {children}
                 </div>
                 <GlobalOfflineGuard />

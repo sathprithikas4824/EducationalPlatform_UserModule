@@ -32,6 +32,8 @@ export default function TopBar() {
         backgroundColor: TOPBAR_COLORS.background,
         color: TOPBAR_COLORS.text,
       }}
+      role="region"
+      aria-label="Announcements"
     >
       {/* GRAIN */}
       <div
@@ -55,6 +57,8 @@ export default function TopBar() {
         {/* TEXT */}
         <div className="flex w-full h-full items-center justify-center px-12 md:px-14 overflow-hidden">
           <span
+            aria-live="polite"
+            aria-atomic="true"
             className={`
     transition-opacity duration-200
     text-[13px] md:text-[15px]

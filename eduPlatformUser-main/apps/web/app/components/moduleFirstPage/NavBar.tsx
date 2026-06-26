@@ -257,7 +257,7 @@ export default function NavBar() {
       />
 
       <header className="w-full sticky top-0 z-50 bg-transparent py-3 jakarta-font">
-        <nav className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <nav aria-label="Module navigation" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           {/* DESKTOP LAYOUT (1024px+) */}
           <div className="hidden lg:flex items-center justify-between gap-2.5">
             {/* Logo Pill */}
@@ -337,10 +337,10 @@ export default function NavBar() {
 
             {/* Center: Navigation Tabs */}
             <div className="flex items-center gap-0.5 px-2 py-2 rounded-2xl border relative overflow-hidden backdrop-blur-md" style={pillStyle}>
-              <button onClick={() => setActiveTab("topics")} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${activeTab === "topics" ? "text-gray-900 bg-white hover:bg-gray-100" : "text-gray-700 hover:bg-gray-100"}`}>
+              <button onClick={() => setActiveTab("topics")} aria-pressed={activeTab === "topics"} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${activeTab === "topics" ? "text-gray-900 bg-white hover:bg-gray-100" : "text-gray-700 hover:bg-gray-100"}`}>
                 Topics
               </button>
-              <button onClick={() => setActiveTab("pathways")} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${activeTab === "pathways" ? "text-gray-900 bg-gray-100" : "text-gray-700 hover:bg-gray-100"}`}>
+              <button onClick={() => setActiveTab("pathways")} aria-pressed={activeTab === "pathways"} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200 ${activeTab === "pathways" ? "text-gray-900 bg-gray-100" : "text-gray-700 hover:bg-gray-100"}`}>
                 Pathways
               </button>
             </div>
@@ -360,9 +360,10 @@ export default function NavBar() {
                 <button
                   onClick={handlePencilClick}
                   className={`p-1.5 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center ${highlightModeEnabled ? "text-purple-600 bg-purple-100" : "text-gray-700"}`}
-                  title={isLoggedIn ? (highlightModeEnabled ? "Disable highlighting" : "Enable highlighting") : "Log in to highlight"}
+                  aria-label={isLoggedIn ? (highlightModeEnabled ? "Disable highlighting" : "Enable highlighting") : "Log in to highlight"}
+                  aria-pressed={isLoggedIn ? highlightModeEnabled : undefined}
                 >
-                  <PenEditIcon size={20} />
+                  <PenEditIcon size={20} aria-hidden="true" />
                 </button>
               </div>
 
@@ -402,9 +403,10 @@ export default function NavBar() {
                 <button
                   onClick={handlePencilClick}
                   className={`p-1.5 rounded-lg transition-all duration-200 w-9 h-9 flex items-center justify-center ${highlightModeEnabled ? "text-purple-600 bg-purple-100" : "text-gray-700"}`}
-                  title={isLoggedIn ? (highlightModeEnabled ? "Disable highlighting" : "Enable highlighting") : "Log in to highlight"}
+                  aria-label={isLoggedIn ? (highlightModeEnabled ? "Disable highlighting" : "Enable highlighting") : "Log in to highlight"}
+                  aria-pressed={isLoggedIn ? highlightModeEnabled : undefined}
                 >
-                  <PenEditIcon size={20} />
+                  <PenEditIcon size={20} aria-hidden="true" />
                 </button>
               </div>
 
