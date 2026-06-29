@@ -87,9 +87,9 @@ export function AccessibilityProvider({ children }: { children: React.ReactNode 
     document.documentElement.style.fontSize = sizes[fontSize];
   }, [fontSize]);
 
-  // ── Apply high contrast class to <html> element ───────────────────────────
+  // ── Apply high contrast data attribute to <html> element ─────────────────
   useEffect(() => {
-    document.documentElement.classList.toggle("high-contrast", highContrast);
+    document.documentElement.setAttribute("data-high-contrast", String(highContrast));
   }, [highContrast]);
 
   // ── Setters with localStorage persistence ─────────────────────────────────
