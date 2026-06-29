@@ -180,6 +180,69 @@
   --circled-border: #ffff00;
 }
 
+/* ─── High contrast: force entire page (Tailwind overrides) ─────────────────
+   Most page components use hardcoded Tailwind classes (bg-white, text-gray-*)
+   instead of CSS variables, so we override them directly here.              */
+
+/* Page shell & all container backgrounds → black */
+[data-high-contrast="true"] body,
+[data-high-contrast="true"] html {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+[data-high-contrast="true"] *[class*="bg-white"],
+[data-high-contrast="true"] *[class*="bg-gray-50"],
+[data-high-contrast="true"] *[class*="bg-gray-100"],
+[data-high-contrast="true"] *[class*="bg-gray-200"],
+[data-high-contrast="true"] *[class*="bg-slate-"],
+[data-high-contrast="true"] *[class*="bg-zinc-"] {
+  background-color: #000000 !important;
+}
+
+/* Inline styles with white/light backgrounds */
+[data-high-contrast="true"] *[style*="background-color: white"],
+[data-high-contrast="true"] *[style*="background-color: #fff"],
+[data-high-contrast="true"] *[style*="background-color: rgb(255"] {
+  background-color: #000000 !important;
+}
+
+/* All gray/dark text → white */
+[data-high-contrast="true"] *[class*="text-gray-"],
+[data-high-contrast="true"] *[class*="text-black"],
+[data-high-contrast="true"] *[class*="text-slate-"],
+[data-high-contrast="true"] *[class*="text-zinc-"],
+[data-high-contrast="true"] *[class*="text-neutral-"] {
+  color: #ffffff !important;
+}
+
+/* Purple/violet/indigo brand colors → yellow */
+[data-high-contrast="true"] *[class*="text-purple-"],
+[data-high-contrast="true"] *[class*="text-violet-"],
+[data-high-contrast="true"] *[class*="text-indigo-"],
+[data-high-contrast="true"] *[class*="text-fuchsia-"] {
+  color: #ffff00 !important;
+}
+
+/* Borders → white */
+[data-high-contrast="true"] *[class*="border-gray-"],
+[data-high-contrast="true"] *[class*="border-slate-"] {
+  border-color: #ffffff !important;
+}
+
+/* Gradient text (clip gradients) → yellow */
+[data-high-contrast="true"] *[class*="bg-gradient-"],
+[data-high-contrast="true"] *[class*="bg-clip-text"] {
+  background-image: none !important;
+  color: #ffff00 !important;
+  -webkit-text-fill-color: #ffff00 !important;
+}
+
+/* Images: desaturate for less distraction */
+[data-high-contrast="true"] img {
+  filter: grayscale(100%) contrast(120%);
+}
+
 /* ============================= */
 /* PLUS JAKARTA SANS (ALL WEIGHTS) */
 /* ============================= */
