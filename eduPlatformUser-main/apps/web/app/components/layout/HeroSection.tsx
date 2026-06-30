@@ -178,22 +178,22 @@ export default function HeroSection() {
         /* MOBILE VIEW - DO NOT CHANGE */
         @media (max-width: 640px) {
           .heading-hello {
-            font-size: 32px !important;
+            font-size: 2rem !important;
             -webkit-text-stroke: 1px #111827 !important;
             margin-bottom: 0px !important;
           }
           .heading-new-way {
-            font-size: 32px !important;
+            font-size: 2rem !important;
             -webkit-text-stroke: 1px #111827 !important;
           }
           .heading-learning {
-            font-size: 30px !important;
+            font-size: 1.875rem !important;
             line-height: 1.2 !important;
             position: relative !important;
             padding: 0px !important;
           }
           .swash-underline {
-            font-size: 70px !important;
+            font-size: 4.375rem !important;
             position: absolute !important;
             left: 50% !important;
             transform: translateX(-50%) !important;
@@ -388,7 +388,7 @@ export default function HeroSection() {
               <span
                 className="block font-black heading-hello"
                 style={{
-                  fontSize: "50px",
+                  fontSize: "3.125rem",
                   lineHeight: "1",
                   fontWeight: "900",
                   WebkitTextStroke: "1.5px #111827",
@@ -413,7 +413,7 @@ export default function HeroSection() {
                 <span
                   className="font-black heading-new-way"
                   style={{
-                    fontSize: "50px",
+                    fontSize: "3.125rem",
                     lineHeight: "1.2",
                     fontWeight: "900",
                     WebkitTextStroke: "1.5px #111827",
@@ -425,7 +425,7 @@ export default function HeroSection() {
                   <span
                     className={`${fuzzyBubblesBoldFont.className} heading-learning`}
                     style={{
-                      fontSize: "48px",
+                      fontSize: "3rem",
                       lineHeight: "1.8",
                       background: "linear-gradient(90deg, #7a12fa, #b614ef)",
                       WebkitBackgroundClip: "text",
@@ -440,7 +440,7 @@ export default function HeroSection() {
                   <span
                     className={`${swashesFont.className} swash-underline`}
                     style={{
-                      fontSize: "120px",
+                      fontSize: "7.5rem",
                       position: "absolute",
                       left: "88%",
                       transform: "translateX(-50%)",

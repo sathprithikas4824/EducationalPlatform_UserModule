@@ -454,7 +454,7 @@ const ModulesSection: React.FC = () => {
                   )}
 
                   <div className="flex-1 flex flex-col justify-between h-16 md:h-20 py-0.5">
-                    <h3 className="jakarta-font text-[12px] md:text-[13px] font-bold text-gray-900 dark:text-gray-100 leading-tight pr-5">
+                    <h3 className="jakarta-font text-[0.75rem] md:text-[0.8125rem] font-bold text-gray-900 dark:text-gray-100 leading-tight pr-5">
                       {module.title}
                     </h3>
 
@@ -476,15 +476,15 @@ const ModulesSection: React.FC = () => {
                               />
                             </svg>
                           </div>
-                          <span className="text-[7px] font-bold text-gray-700 whitespace-nowrap">
+                          <span className="text-[0.4375rem] font-bold text-gray-700 whitespace-nowrap">
                             {module.completionPercentage}% Completed
                           </span>
                         </div>
                       ) : (
-                        <span className="text-[7px] text-gray-400 whitespace-nowrap">Log in to track</span>
+                        <span className="text-[0.4375rem] text-gray-400 whitespace-nowrap">Log in to track</span>
                       )}
 
-                      <button className="bg-black text-white text-[9px] font-bold px-3 py-1 rounded shadow-sm hover:bg-gray-800 transition-colors">
+                      <button className="bg-black text-white text-[0.5625rem] font-bold px-3 py-1 rounded shadow-sm hover:bg-gray-800 transition-colors">
                         View
                       </button>
                     </div>

@@ -228,7 +228,7 @@ export default function HeroSection() {
           }
           
           .heading-intro {
-            font-size: 20px;
+            font-size: 1.25rem;
           }
           
           .heading-ai-wrapper {
@@ -236,11 +236,11 @@ export default function HeroSection() {
           }
           
           .heading-ai {
-            font-size: 20px;
+            font-size: 1.25rem;
           }
           
           .swash-underline {
-            font-size: 60px;
+            font-size: 3.75rem;
             bottom: -40px;
             transform: translateX(-50%) scaleX(2.8);
           }
@@ -366,7 +366,7 @@ export default function HeroSection() {
           }
           
           .heading-intro {
-            font-size: 28px;
+            font-size: 1.75rem;
           }
           
           .heading-ai-wrapper {
@@ -374,11 +374,11 @@ export default function HeroSection() {
           }
           
           .heading-ai {
-            font-size: 32px;
+            font-size: 2rem;
           }
           
           .swash-underline {
-            font-size: 110px;
+            font-size: 6.875rem;
             bottom: -80px;
             transform: translateX(-50%) scaleX(2.6);
           }
@@ -431,7 +431,7 @@ export default function HeroSection() {
           }
           
           .heading-intro {
-            font-size: 48px;
+            font-size: 3rem;
           }
           
           .heading-ai-wrapper {
@@ -439,11 +439,11 @@ export default function HeroSection() {
           }
         
           .heading-ai {
-            font-size: 54px;
+            font-size: 3.375rem;
           }
           
           .swash-underline {
-            font-size: 200px;
+            font-size: 12.5rem;
             bottom: -130px;
             transform: translateX(-50%) scaleX(2.5);
           }

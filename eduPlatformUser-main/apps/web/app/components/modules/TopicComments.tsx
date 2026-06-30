@@ -234,7 +234,7 @@ export default function TopicComments({ topicId, currentUserId, currentUserName 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                   <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{comment.userName}</span>
-                  <span className="text-[10px] text-gray-400">{timeAgo(comment.createdAt)}</span>
+                  <span className="text-[0.625rem] text-gray-400">{timeAgo(comment.createdAt)}</span>
                 </div>
                 <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed break-words whitespace-pre-wrap">
                   {comment.content}
@@ -270,7 +270,7 @@ export default function TopicComments({ topicId, currentUserId, currentUserName 
                   {currentUserId === comment.userId && (
                     <button
                       onClick={() => handleDelete(comment.id)}
-                      className="text-[10px] text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                      className="text-[0.625rem] text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                     >
                       Delete
                     </button>

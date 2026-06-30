@@ -61,7 +61,7 @@ export default function TopBar() {
             aria-atomic="true"
             className={`
     transition-opacity duration-200
-    text-[13px] md:text-[15px]
+    text-[0.8125rem] md:text-[0.9375rem]
     leading-[17px] md:leading-[28px]
     tracking-tight
     text-center

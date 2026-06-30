@@ -297,7 +297,7 @@ function OfflineReader({ group, onBack }: { group: ModuleGroup; onBack: () => vo
           lg:border-r border-gray-200 dark:border-gray-800
         `}>
           <div className="bg-[#d4d4d4] dark:bg-gray-800 rounded-2xl p-3 space-y-1.5">
-            <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 pb-1">
+            <p className="text-[0.625rem] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2 pb-1">
               Topics
             </p>
             {topics.map((topic, i) => (
@@ -732,7 +732,7 @@ function ModuleGroupCard({ group, onOpen }: { group: ModuleGroup; onOpen: () => 
           </div>
 
           <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+            <span className={`text-[0.625rem] font-semibold px-1.5 py-0.5 rounded-full ${
               hasHtmlRecords
                 ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
                 : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
@@ -751,7 +751,7 @@ function ModuleGroupCard({ group, onOpen }: { group: ModuleGroup; onOpen: () => 
             <div key={topic.topicId} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg">
               <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-purple-400" />
               <span className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1">{topic.topicName}</span>
-              <span className="text-[10px] text-gray-400 uppercase tracking-wide flex-shrink-0">{topic.fileType}</span>
+              <span className="text-[0.625rem] text-gray-400 uppercase tracking-wide flex-shrink-0">{topic.fileType}</span>
             </div>
           ))}
         </div>
@@ -771,12 +771,12 @@ function ModuleGroupCard({ group, onOpen }: { group: ModuleGroup; onOpen: () => 
         className="px-4 py-2.5 border-t flex items-center justify-between"
         style={{ borderColor: "var(--card-border)", backgroundColor: "var(--pill-bg)" }}
       >
-        <span className="text-[10px] text-gray-400 dark:text-gray-500">
+        <span className="text-[0.625rem] text-gray-400 dark:text-gray-500">
           Last saved: {new Date(group.topics[0].downloadedAt).toLocaleDateString()}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); onOpen(); }}
-          className="text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 text-white"
+          className="text-[0.625rem] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 text-white"
           style={{ background: "linear-gradient(90deg, #7a12fa, #b614ef)" }}
         >
           Open module

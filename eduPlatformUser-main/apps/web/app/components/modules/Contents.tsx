@@ -2120,7 +2120,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                       : "bg-white dark:bg-gray-900"
                   }`}
                 >
-                  <span className="text-[11px] sm:text-xs font-semibold leading-tight text-gray-800 dark:text-gray-200 dark:text-gray-200">
+                  <span className="text-[0.6875rem] sm:text-xs font-semibold leading-tight text-gray-800 dark:text-gray-200 dark:text-gray-200">
                     {mod.title}
                   </span>
                   <span className="w-3.5 h-3.5 text-gray-400 flex-shrink-0">
@@ -2145,19 +2145,19 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                               index !== mod.topics.length - 1 ? "border-b border-gray-100 dark:border-gray-700 dark:border-gray-700" : ""
                             }`}
                           >
-                            <p className="text-[10px] text-gray-600 text-center mb-1.5 font-medium">
+                            <p className="text-[0.625rem] text-gray-600 text-center mb-1.5 font-medium">
                               Reset this topic?
                             </p>
                             <div className="flex gap-1.5">
                               <button
                                 onClick={(e) => { e.stopPropagation(); setResetTopicId(null); }}
-                                className="flex-1 px-2 py-1 text-[10px] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+                                className="flex-1 px-2 py-1 text-[0.625rem] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
                               >
                                 Cancel
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleResetTopicProgress(topicNumId); }}
-                                className="flex-1 px-2 py-1 text-[10px] font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors"
+                                className="flex-1 px-2 py-1 text-[0.625rem] font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors"
                               >
                                 Reset
                               </button>
@@ -2178,7 +2178,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                           }`}
                         >
                           <span
-                            className={`text-[11px] sm:text-xs font-medium ${
+                            className={`text-[0.6875rem] sm:text-xs font-medium ${
                               topic.status === "current"
                                 ? "text-blue-500"
                                 : topic.status === "completed"
@@ -2268,7 +2268,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                 {/* Empty state for modules with no topics */}
                 {mod.expanded && mod.topicsLoaded && mod.topics.length === 0 && (
                   <div className="mt-2 bg-white dark:bg-gray-900 rounded-xl lg:rounded-2xl shadow-sm p-3">
-                    <p className="text-[10px] text-gray-400 text-center italic">No topics yet</p>
+                    <p className="text-[0.625rem] text-gray-400 text-center italic">No topics yet</p>
                   </div>
                 )}
               </div>
@@ -2280,7 +2280,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                 {!showResetConfirm ? (
                   <button
                     onClick={() => setShowResetConfirm(true)}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] sm:text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 bg-white dark:bg-gray-900 rounded-xl lg:rounded-2xl shadow-sm hover:bg-red-50 transition-all duration-200"
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-[0.6875rem] sm:text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 bg-white dark:bg-gray-900 rounded-xl lg:rounded-2xl shadow-sm hover:bg-red-50 transition-all duration-200"
                   >
                     <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M4 7l1.5 9.5a1 1 0 001 .5h7a1 1 0 001-.5L16 7" strokeLinecap="round" strokeLinejoin="round" />
@@ -2291,19 +2291,19 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                   </button>
                 ) : (
                   <div className="bg-white dark:bg-gray-900 rounded-xl lg:rounded-2xl shadow-sm p-3 space-y-2">
-                    <p className="text-[11px] text-gray-600 text-center font-medium">
+                    <p className="text-[0.6875rem] text-gray-600 text-center font-medium">
                       Reset all progress for this module?
                     </p>
                     <div className="flex gap-2">
                       <button
                         onClick={() => setShowResetConfirm(false)}
-                        className="flex-1 px-2 py-1.5 text-[11px] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                        className="flex-1 px-2 py-1.5 text-[0.6875rem] font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleResetProgress}
-                        className="flex-1 px-2 py-1.5 text-[11px] font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                        className="flex-1 px-2 py-1.5 text-[0.6875rem] font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                       >
                         Reset
                       </button>
@@ -2405,7 +2405,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
                       {/* Max reached label */}
                       {summaries[selectedTopic.topic_id] && !summaryLoading && (summaryCurrentLevel[selectedTopic.topic_id] ?? 0) >= SUMMARY_LEVELS.length - 1 && (
-                        <span className="text-[10px] text-gray-400 italic">All versions generated</span>
+                        <span className="text-[0.625rem] text-gray-400 italic">All versions generated</span>
                       )}
 
                       {/* Notes button */}
@@ -2436,14 +2436,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                               <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">AI Summary</span>
                               {/* Level badge */}
                               {!summaryLoading && summaries[selectedTopic.topic_id] && (
-                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${SUMMARY_LEVEL_COLORS[summaryCurrentLevel[selectedTopic.topic_id] ?? 0]}`}>
+                                <span className={`text-[0.625rem] font-semibold px-1.5 py-0.5 rounded border ${SUMMARY_LEVEL_COLORS[summaryCurrentLevel[selectedTopic.topic_id] ?? 0]}`}>
                                   {SUMMARY_LEVEL_NAMES[summaryCurrentLevel[selectedTopic.topic_id] ?? 0]}
                                 </span>
                               )}
-                              <span className="text-[10px] text-purple-400 dark:text-purple-500">· Based on this topic&apos;s content</span>
+                              <span className="text-[0.625rem] text-purple-400 dark:text-purple-500">· Based on this topic&apos;s content</span>
                               {/* Version counter */}
                               {!summaryLoading && summaries[selectedTopic.topic_id] && (
-                                <span className="text-[10px] text-purple-400">
+                                <span className="text-[0.625rem] text-purple-400">
                                   ({(summaryCurrentLevel[selectedTopic.topic_id] ?? 0) + 1} of {SUMMARY_LEVELS.length})
                                 </span>
                               )}
@@ -2454,14 +2454,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                                 <div className="flex bg-purple-200 dark:bg-purple-800 rounded-md p-0.5 gap-0.5">
                                   <button
                                     onClick={() => setSummaryFormat("bullets")}
-                                    className={`text-[10px] px-2 py-0.5 rounded transition-colors ${summaryFormat === "bullets" ? "bg-white dark:bg-purple-600 text-purple-700 dark:text-white shadow-sm font-semibold" : "text-purple-500 dark:text-purple-300 hover:text-purple-700"}`}
+                                    className={`text-[0.625rem] px-2 py-0.5 rounded transition-colors ${summaryFormat === "bullets" ? "bg-white dark:bg-purple-600 text-purple-700 dark:text-white shadow-sm font-semibold" : "text-purple-500 dark:text-purple-300 hover:text-purple-700"}`}
                                   >
                                     Bullets
                                   </button>
                                   <button
                                     onClick={() => handleGetParagraphSummary(selectedTopic)}
                                     disabled={summaryParagraphLoading}
-                                    className={`text-[10px] px-2 py-0.5 rounded transition-colors disabled:opacity-50 ${summaryFormat === "paragraph" ? "bg-white dark:bg-purple-600 text-purple-700 dark:text-white shadow-sm font-semibold" : "text-purple-500 dark:text-purple-300 hover:text-purple-700"}`}
+                                    className={`text-[0.625rem] px-2 py-0.5 rounded transition-colors disabled:opacity-50 ${summaryFormat === "paragraph" ? "bg-white dark:bg-purple-600 text-purple-700 dark:text-white shadow-sm font-semibold" : "text-purple-500 dark:text-purple-300 hover:text-purple-700"}`}
                                   >
                                     {summaryParagraphLoading ? "..." : "Paragraph"}
                                   </button>
@@ -2509,16 +2509,16 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
                         {/* Footer: accuracy note + feedback + Save to Notion */}
                         <div className="px-4 py-2.5 border-t border-purple-200 dark:border-purple-800 flex items-center justify-between flex-wrap gap-2">
-                          <span className="text-[10px] text-purple-400">Generated by AI · may not be 100% accurate</span>
+                          <span className="text-[0.625rem] text-purple-400">Generated by AI · may not be 100% accurate</span>
                           {!summaryLoading && summaries[selectedTopic.topic_id] && (
                             <div className="flex items-center gap-3 flex-wrap">
                               {/* Thumbs feedback */}
                               <div className="flex items-center gap-1.5">
                                 {summaryFeedback[selectedTopic.topic_id] ? (
-                                  <span className="text-[10px] text-purple-500">Thanks for your feedback!</span>
+                                  <span className="text-[0.625rem] text-purple-500">Thanks for your feedback!</span>
                                 ) : (
                                   <>
-                                    <span className="text-[10px] text-purple-400">Helpful?</span>
+                                    <span className="text-[0.625rem] text-purple-400">Helpful?</span>
                                     <button
                                       onClick={() => setSummaryFeedback((prev) => ({ ...prev, [selectedTopic.topic_id]: "helpful" }))}
                                       className="text-sm text-purple-300 hover:text-green-500 transition-colors"
@@ -2540,7 +2540,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                               <button
                                 onClick={() => handleSummarySyncToNotion(selectedTopic.topic_id)}
                                 disabled={summaryNotionStatus[selectedTopic.topic_id] === "syncing"}
-                                className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border transition-colors disabled:opacity-50 ${
+                                className={`flex items-center gap-1 text-[0.625rem] px-2 py-0.5 rounded border transition-colors disabled:opacity-50 ${
                                   summaryNotionStatus[selectedTopic.topic_id] === "synced"
                                     ? "border-green-300 text-green-600 bg-green-50"
                                     : summaryNotionStatus[selectedTopic.topic_id] === "error"
@@ -2577,11 +2577,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                           <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">My Notes</span>
-                          <span className="text-[10px] text-amber-400">· {selectedTopic.name}</span>
+                          <span className="text-[0.625rem] text-amber-400">· {selectedTopic.name}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           {/* Auto-save status */}
-                          <span className={`text-[10px] ${
+                          <span className={`text-[0.625rem] ${
                             notesSaveStatus[selectedTopic.topic_id] === "saving"
                               ? "text-amber-400"
                               : notesSaveStatus[selectedTopic.topic_id] === "saved"
@@ -2606,7 +2606,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
                       {/* Textarea — Notion-friendly formatting hint */}
                       <div className="px-4 py-3">
-                        <p className="text-[10px] text-amber-400 mb-1.5">
+                        <p className="text-[0.625rem] text-amber-400 mb-1.5">
                           Tip: Use <code className="bg-amber-100 px-0.5 rounded"># Heading</code> and <code className="bg-amber-100 px-0.5 rounded">- bullet</code> for Notion-formatted blocks
                         </p>
                         <textarea
@@ -2620,14 +2620,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
                       {/* Footer: Notion sync */}
                       <div className="px-4 py-2.5 border-t border-amber-200 dark:border-amber-800 flex items-center justify-between flex-wrap gap-2">
-                        <span className="text-[10px] text-amber-400">Notes are saved automatically to your account</span>
+                        <span className="text-[0.625rem] text-amber-400">Notes are saved automatically to your account</span>
                         <button
                           onClick={() => handleNoteSyncToNotion(selectedTopic.topic_id)}
                           disabled={
                             !notesContent[selectedTopic.topic_id]?.trim() ||
                             notesNotionStatus[selectedTopic.topic_id] === "syncing"
                           }
-                          className={`flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded border font-semibold transition-colors disabled:opacity-40 ${
+                          className={`flex items-center gap-1.5 text-[0.625rem] px-2.5 py-1 rounded border font-semibold transition-colors disabled:opacity-40 ${
                             notesNotionStatus[selectedTopic.topic_id] === "synced"
                               ? "border-green-300 text-green-600 bg-green-50"
                               : notesNotionStatus[selectedTopic.topic_id] === "error"

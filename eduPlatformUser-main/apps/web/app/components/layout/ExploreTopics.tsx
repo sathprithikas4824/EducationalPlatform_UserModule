@@ -149,7 +149,7 @@ const ExploreTopics = () => {
             key={tag.id}
             className={`${tag.className} floating-pill absolute rounded-full font-semibold cursor-pointer z-20
                        transition-all duration-300
-                       px-2.5 py-1 text-[10px]
+                       px-2.5 py-1 text-[0.625rem]
                        xs:px-3 xs:py-1.5 xs:text-xs
                        sm:px-3.5 sm:py-1.5 sm:text-xs
                        md:px-4 md:py-2 md:text-sm
@@ -200,7 +200,7 @@ const ExploreTopics = () => {
 
           <h2
             className="font-black text-gray-900 mb-1 md:mb-2 lg:mb-2 px-4"
-            style={{ fontSize: "34px" }}
+            style={{ fontSize: "2.125rem" }}
           >
             Explore <span className="text-purple-600">Topics</span>
           </h2>
