@@ -325,6 +325,50 @@ export async function uploadAvatar(userId: string, file: File): Promise<string |
 }
 
 // =============================================
+// ACCESSIBILITY PREFERENCES (synced across devices)
+// =============================================
+
+export interface AccessibilityPreferences {
+  highContrast: boolean;
+  reducedMotion: boolean;
+  fontSize: "normal" | "large" | "xl";
+}
+
+// Get the logged-in user's saved accessibility preferences
+export async function getAccessibilityPreferences(): Promise<AccessibilityPreferences | null> {
+  if (!supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("accessibility_preferences")
+    .eq("id", user.id)
+    .single();
+
+  if (error || !data?.accessibility_preferences) return null;
+  return data.accessibility_preferences as AccessibilityPreferences;
+}
+
+// Save accessibility preferences for the logged-in user
+export async function updateAccessibilityPreferences(prefs: AccessibilityPreferences): Promise<boolean> {
+  if (!supabase) return false;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ accessibility_preferences: prefs })
+    .eq("id", user.id);
+
+  if (error) {
+    console.error("Error updating accessibility preferences:", error);
+    return false;
+  }
+  return true;
+}
+
+// =============================================
 // MODULE PROGRESS FUNCTIONS (Supabase + Cookie fallback)
 // =============================================
 

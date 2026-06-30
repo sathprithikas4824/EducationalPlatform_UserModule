@@ -502,6 +502,20 @@ a, button, input, select, textarea, [role="button"], label {
   }
 }
 
+/* ============================= */
+/* REDUCE ANIMATIONS (user toggle) */
+/* Set data-reduce-motion="true" on <html> — fires when the OS prefers
+   reduced motion OR the user enabled "Reduce Animations" in Settings */
+/* ============================= */
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before,
+[data-reduce-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 /* ========================= */
 /* GRADIENT WAVE ANIMATION */
 /* ========================= */

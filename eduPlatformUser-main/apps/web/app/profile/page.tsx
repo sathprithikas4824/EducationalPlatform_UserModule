@@ -13,11 +13,12 @@ import { loadBookmarks, removeBookmark, type BookmarkRecord } from "../lib/bookm
 import { getAllNotes, getNotesPaginated, deleteNote, restoreNote, getDeletedNotes, type NoteRecord } from "../lib/notes";
 import { getSummariesPaginated, deleteSummary, restoreSummary, getDeletedSummaries, type SummaryRecord } from "../lib/summaries";
 import { BookmarkHeart } from "../components/common/icons/BookmarkHeart";
+import AccessibilitySettings from "../components/common/AccessibilitySettings";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 
-type Tab = "account" | "highlights" | "progress" | "projects" | "downloads" | "survey" | "bookmarks" | "notes";
+type Tab = "account" | "highlights" | "progress" | "projects" | "downloads" | "survey" | "bookmarks" | "notes" | "accessibility";
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   {
@@ -76,6 +77,15 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    ),
+  },
+  {
+    id: "accessibility",
+    label: "Accessibility",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4a2 2 0 100 4 2 2 0 000-4zM4 9h16M6 9l1.5 11h9L18 9M9 13h6" />
       </svg>
     ),
   },
@@ -1785,6 +1795,7 @@ function ProfilePageInner() {
       case "survey":     return <MySurvey />;
       case "bookmarks":  return <MyBookmarks userId={user?.id} />;
       case "notes":      return <MyNotes userId={user?.id} />;
+      case "accessibility": return <AccessibilitySettings />;
       default:           return <AccountDetails />;
     }
   };
