@@ -149,6 +149,11 @@ export default function SurveyPage() {
           </div>
           <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
+              role="progressbar"
+              aria-valuenow={Math.round((step / totalSteps) * 100)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Survey progress: step ${step} of ${totalSteps}`}
               className="h-full rounded-full transition-all duration-500"
               style={{
                 width: `${(step / totalSteps) * 100}%`,

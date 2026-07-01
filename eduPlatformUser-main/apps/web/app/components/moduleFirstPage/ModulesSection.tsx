@@ -460,8 +460,15 @@ const ModulesSection: React.FC = () => {
 
                     <div className="flex items-center justify-between mt-auto">
                       {(user || guestUserId) ? (
-                        <div className="flex items-center gap-1">
-                          <div className="relative w-3 h-3">
+                        <div
+                          className="flex items-center gap-1"
+                          role="progressbar"
+                          aria-valuenow={module.completionPercentage}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`${module.title}: ${module.completionPercentage}% completed`}
+                        >
+                          <div className="relative w-3 h-3" aria-hidden="true">
                             <svg className="w-3 h-3 transform -rotate-90">
                               <circle cx="6" cy="6" r="5" stroke="#9CA3AF" strokeWidth="1.5" fill="none" />
                               <circle

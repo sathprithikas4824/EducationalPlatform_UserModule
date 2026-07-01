@@ -632,9 +632,9 @@ function MyHighlights({ topicMap, dataLoaded }: { topicMap: TopicMap; dataLoaded
                         <button
                           onClick={() => removeHighlight(h.id)}
                           className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                          title="Remove"
+                          aria-label="Remove highlight"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
@@ -1186,9 +1186,9 @@ function MyDownloads() {
                           <button
                             onClick={() => handleRemoveFile(d.id)}
                             className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                            title="Remove this file"
+                            aria-label="Remove this file"
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
@@ -1306,9 +1306,9 @@ function MyBookmarks({ userId }: { userId: string | undefined }) {
                 <button
                   onClick={() => handleRemove(b.id)}
                   className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Remove bookmark"
+                  aria-label="Remove bookmark"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -1358,9 +1358,9 @@ function MyBookmarks({ userId }: { userId: string | undefined }) {
                 <button
                   onClick={() => handleRemove(b.id)}
                   className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Remove bookmark"
+                  aria-label="Remove bookmark"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -1578,7 +1578,7 @@ function MyNotes({ userId }: { userId: string | undefined }) {
                     onClick={() => handleDeleteNote(note.topicId)}
                     disabled={deletingNoteId === note.topicId}
                     className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                    title="Delete note"
+                    aria-label="Delete note"
                   >
                     {deletingNoteId === note.topicId ? (
                       <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
@@ -1665,7 +1665,7 @@ function MyNotes({ userId }: { userId: string | undefined }) {
                       onClick={() => handleDeleteSummary(s.topicId, s.level)}
                       disabled={deletingSummaryKey === key}
                       className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                      title="Delete summary"
+                      aria-label="Delete summary"
                     >
                       {deletingSummaryKey === key ? (
                         <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
