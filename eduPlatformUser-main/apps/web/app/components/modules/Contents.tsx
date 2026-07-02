@@ -15,6 +15,7 @@ import { upsertSummary, markSummaryNotion } from "../../lib/summaries";
 import { logAudit } from "../../lib/audit";
 import { BookmarkHeart } from "../common/icons/BookmarkHeart";
 import TopicComments from "./TopicComments";
+import { useAccessibility } from "../../context/AccessibilityContext";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 
@@ -119,6 +120,8 @@ const HeroSkeleton: React.FC = () => (
 
 const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const { user, getHighlightsForPage } = useAnnotation();
+  const { announce } = useAccessibility();
+  const summaryRef = useRef<HTMLDivElement>(null);
   const [sidebarModules, setSidebarModules] = useState<SidebarModule[]>([]);
   const [currentSubmodule, setCurrentSubmodule] = useState<SubModuleData | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -174,6 +177,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
 
   // Close summary panel when topic changes
   useEffect(() => { setSummaryOpen(false); }, [selectedTopic?.topic_id]);
+
+  // Move focus to summary box when loading finishes so NVDA reads it automatically
+  useEffect(() => {
+    if (!summaryLoading && !summaryParagraphLoading && summaryOpen) {
+      summaryRef.current?.focus();
+    }
+  }, [summaryLoading, summaryParagraphLoading, summaryOpen]);
 
   // Close notes panel when topic changes; load saved note if user is logged in
   useEffect(() => {
@@ -396,11 +406,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       setSummaries((prev) => ({ ...prev, [id]: summaryAllVersions[id][requestedLevel] }));
       setSummaryCurrentLevel((prev) => ({ ...prev, [id]: requestedLevel }));
       setSummaryOpen(true);
+      announce("AI summary is ready.");
       return;
     }
 
     setSummaryLoading(true);
     setSummaryOpen(true);
+    announce("Generating AI summary, please wait.");
 
     // Build plain text from all content fields
     const rawText = [topic.title, topic.description, topic.content]
@@ -454,10 +466,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       }
     } catch {
       setSummaries((prev) => ({ ...prev, [id]: "⚠ Network error. Please try again." }));
+      announce("Could not generate summary. Please try again.", "assertive");
     } finally {
       setSummaryLoading(false);
+      announce("AI summary is ready.");
     }
-  }, [summaryAllVersions, SUMMARY_LEVELS, user, currentSubmodule, SUMMARY_LEVEL_NAMES]);
+  }, [summaryAllVersions, SUMMARY_LEVELS, user, currentSubmodule, SUMMARY_LEVEL_NAMES, announce]);
 
   const handleGetParagraphSummary = useCallback(async (topic: Topic) => {
     const id = topic.topic_id;
@@ -466,11 +480,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     // Already cached in session — show instantly
     if (summaryParagraphVersions[id]?.[level]) {
       setSummaryFormat("paragraph");
+      announce("AI summary is ready.");
       return;
     }
 
     setSummaryParagraphLoading(true);
     setSummaryFormat("paragraph");
+    announce("Generating AI summary, please wait.");
 
     const rawText = [topic.title, topic.description, topic.content]
       .filter(Boolean)
@@ -526,10 +542,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         versions[level] = "⚠ Network error. Please try again.";
         return { ...prev, [id]: versions };
       });
+      announce("Could not generate summary. Please try again.", "assertive");
     } finally {
       setSummaryParagraphLoading(false);
+      announce("AI summary is ready.");
     }
-  }, [summaryCurrentLevel, summaryParagraphVersions, SUMMARY_LEVELS, user, currentSubmodule, SUMMARY_LEVEL_NAMES]);
+  }, [summaryCurrentLevel, summaryParagraphVersions, SUMMARY_LEVELS, user, currentSubmodule, SUMMARY_LEVEL_NAMES, announce]);
 
   // Strip HTML tags AND decode entities, preserving paragraph/block-level whitespace
   const stripHtml = (html: string): string => {
@@ -2477,8 +2495,13 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                           </div>
                         </div>
 
-                        {/* Content area */}
-                        <div className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                        {/* Content area — receives focus when summary loads so NVDA reads it */}
+                        <div
+                          ref={summaryRef}
+                          tabIndex={-1}
+                          aria-label="AI summary content"
+                          className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed outline-none"
+                        >
                           {summaryLoading ? (
                             <div className="space-y-2 animate-pulse">
                               {[90, 75, 85, 70, 80].map((w, i) => (

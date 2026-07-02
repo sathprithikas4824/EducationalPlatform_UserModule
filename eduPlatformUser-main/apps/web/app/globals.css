@@ -493,12 +493,15 @@ a, button, input, select, textarea, [role="button"], label {
   }
 }
 
-/* Respect reduced-motion: stop continuous float animations */
+/* Respect OS reduced-motion preference: stop ALL animations sitewide */
 @media (prefers-reduced-motion: reduce) {
-  .float-animation,
-  .float-animation-delayed,
-  .animate-fadeInUp {
-    animation: none !important;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
