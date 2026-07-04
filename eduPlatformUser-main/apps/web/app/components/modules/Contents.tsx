@@ -16,6 +16,8 @@ import { logAudit } from "../../lib/audit";
 import { BookmarkHeart } from "../common/icons/BookmarkHeart";
 import TopicComments from "./TopicComments";
 import { useAccessibility } from "../../context/AccessibilityContext";
+import Toast, { type ToastType } from "../common/Toast";
+import ProgressBar from "../common/ProgressBar";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 
@@ -122,6 +124,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const { user, getHighlightsForPage } = useAnnotation();
   const { announce } = useAccessibility();
   const summaryRef = useRef<HTMLDivElement>(null);
+  const [toast, setToast] = React.useState<{ message: string; type: ToastType } | null>(null);
   const [sidebarModules, setSidebarModules] = useState<SidebarModule[]>([]);
   const [currentSubmodule, setCurrentSubmodule] = useState<SubModuleData | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -350,6 +353,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       if (!result.success) throw new Error(result.message ?? "Notion sync failed");
 
       setNotesNotionStatus((prev) => ({ ...prev, [topicId]: "synced" }));
+      setToast({ message: "Note saved to Notion", type: "success" });
       if (user?.id && result.data?.pageId) {
         setNotesNotionPageId((prev) => ({ ...prev, [topicId]: result.data!.pageId! }));
         await upsertNote(user.id, topicId, selectedTopic.name, content, {
@@ -360,6 +364,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
     } catch (err) {
       console.error("Notion note sync failed:", err);
       setNotesNotionStatus((prev) => ({ ...prev, [topicId]: "error" }));
+      setToast({ message: "Notion sync failed. Please try again.", type: "error" });
     }
   }, [notesContent, notesNotionPageId, selectedTopic, currentSubmodule, user]);
 
@@ -389,12 +394,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       const result = await res.json() as { success: boolean; message: string; data: { pageId?: string; source?: string } | null };
       if (!result.success) throw new Error(result.message ?? "Notion sync failed");
       setSummaryNotionStatus((prev) => ({ ...prev, [topicId]: "synced" }));
+      setToast({ message: "Summary saved to Notion", type: "success" });
       if (user?.id) {
         markSummaryNotion(user.id, topicId, SUMMARY_LEVEL_NAMES[level], true);
       }
     } catch (err) {
       console.error("Notion summary sync failed:", err);
       setSummaryNotionStatus((prev) => ({ ...prev, [topicId]: "error" }));
+      setToast({ message: "Notion sync failed. Please try again.", type: "error" });
     }
   }, [selectedTopic, currentSubmodule, user, summaryFormat, summaries, summaryParagraphVersions, summaryCurrentLevel, SUMMARY_LEVEL_NAMES]);
 
@@ -2078,7 +2085,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                     <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    Saving {moduleDownloadProgress.current}/{moduleDownloadProgress.total} topics...
+                    Downloading topics…
                   </>
                 ) : moduleDownloadState === "needs-login" ? (
                   <>
@@ -2096,6 +2103,17 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                   </>
                 )}
               </button>
+            )}
+
+            {/* Progress bar shown while downloading */}
+            {moduleDownloadState === "downloading" && (
+              <ProgressBar
+                value={moduleDownloadProgress.current}
+                max={moduleDownloadProgress.total || 1}
+                label={`Saving topic ${moduleDownloadProgress.current} of ${moduleDownloadProgress.total}`}
+                className="mt-2 max-w-xs"
+                color="bg-purple-500"
+              />
             )}
           </div>
         </div>
@@ -2609,7 +2627,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                         </div>
                         <div className="flex items-center gap-2">
                           {/* Auto-save status */}
-                          <span className={`text-[0.625rem] ${
+                          <span
+                            role={notesSaveStatus[selectedTopic.topic_id] === "error" ? "alert" : "status"}
+                            aria-live={notesSaveStatus[selectedTopic.topic_id] === "error" ? "assertive" : "polite"}
+                            aria-atomic="true"
+                            className={`text-[0.625rem] ${
                             notesSaveStatus[selectedTopic.topic_id] === "saving"
                               ? "text-amber-400"
                               : notesSaveStatus[selectedTopic.topic_id] === "saved"
@@ -3141,6 +3163,16 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           }
         }
       `}</style>
+
+      {/* Toast notification — NVDA reads it via role="alert"/"status" */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onDismiss={() => setToast(null)}
+          duration={5000}
+        />
+      )}
     </div>
   );
 };
