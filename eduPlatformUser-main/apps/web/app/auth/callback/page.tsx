@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase, updateUserProviders, checkSurveyCompleted } from "../../lib/supabase";
 import { logAudit } from "../../lib/audit";
+import { useAccessibility } from "../../context/AccessibilityContext";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
+  const { announce } = useAccessibility();
   const [showPasswordSetup, setShowPasswordSetup] = useState(false);
   const [isRecovery, setIsRecovery] = useState(false);
   const [recoveryUserId, setRecoveryUserId] = useState<string | null>(null);
@@ -75,6 +77,7 @@ export default function AuthCallbackPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) logAudit({ action: "email_verified", category: "auth" });
         if (user) updateUserProviders(user.id);
+        announce("Email confirmed. You are now signed in.", "assertive");
 
         const storedDest =
           typeof sessionStorage !== "undefined"
@@ -96,6 +99,7 @@ export default function AuthCallbackPage() {
         }
         const { data: { user } } = await supabase.auth.getUser();
         if (user) { updateUserProviders(user.id); logAudit({ action: "user_logged_in", category: "auth", metadata: { method: "email" } }); }
+        announce("Email confirmed. You are now signed in.", "assertive");
 
         const dest2 =
           typeof sessionStorage !== "undefined"
@@ -160,7 +164,7 @@ export default function AuthCallbackPage() {
     };
 
     handleCallback();
-  }, [router]);
+  }, [router, announce]);
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
