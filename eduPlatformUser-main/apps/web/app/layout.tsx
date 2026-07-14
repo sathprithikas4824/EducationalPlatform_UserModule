@@ -7,6 +7,7 @@ import { ThemeProvider } from "./components/common/ThemeProvider";
 import GlobalOfflineGuard from "./components/common/GlobalOfflineGuard";
 import { OfflineProvider } from "./components/common/OfflineContext";
 import { AccessibilityProvider } from "./context/AccessibilityContext";
+import RouteAnnouncer from "./components/common/RouteAnnouncer";
 
 export const metadata: Metadata = {
   title: "Educational Platform",
@@ -58,6 +59,7 @@ export default function RootLayout({ children }: PropsWithChildren) {
           Skip to main content
         </a>
         <AccessibilityProvider>
+          <RouteAnnouncer />
           <ThemeProvider>
             <AnnotationProvider>
               <OfflineProvider>

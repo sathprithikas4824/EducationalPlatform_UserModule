@@ -124,6 +124,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   const { user, getHighlightsForPage } = useAnnotation();
   const { announce } = useAccessibility();
   const summaryRef = useRef<HTMLDivElement>(null);
+  const notesTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [toast, setToast] = React.useState<{ message: string; type: ToastType } | null>(null);
   const [sidebarModules, setSidebarModules] = useState<SidebarModule[]>([]);
   const [currentSubmodule, setCurrentSubmodule] = useState<SubModuleData | null>(null);
@@ -187,6 +188,14 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       summaryRef.current?.focus();
     }
   }, [summaryLoading, summaryParagraphLoading, summaryOpen]);
+
+  // Move focus into the notes textarea when the panel opens, so keyboard/screen
+  // reader users don't have to hunt for it — matches the summary panel's pattern above.
+  useEffect(() => {
+    if (notesOpen) {
+      notesTextareaRef.current?.focus();
+    }
+  }, [notesOpen]);
 
   // Close notes panel when topic changes; load saved note if user is logged in
   useEffect(() => {
@@ -274,8 +283,9 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       else next.delete(topicId);
       return next;
     });
+    announce(nowBookmarked ? "Bookmarked." : "Bookmark removed.");
     logAudit({ action: nowBookmarked ? "bookmark_added" : "bookmark_removed", category: "bookmark", entity_id: String(topicId), metadata: { topicName } });
-  }, [user?.id]);
+  }, [user?.id, announce]);
 
   const handleTopicLike = useCallback(async (topicId: number) => {
     if (!user?.id || likeLoading) return;
@@ -299,11 +309,12 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
         return next;
       });
       setTopicLikeCounts((prev) => ({ ...prev, [topicId]: count }));
+      announce(`${liked ? "Liked" : "Unliked"}. ${count} ${count === 1 ? "like" : "likes"}.`);
       logAudit({ action: liked ? "topic_liked" : "topic_unliked", category: "content", entity_id: String(topicId) });
     } finally {
       setLikeLoading(false);
     }
-  }, [user?.id, likedTopicIds, likeLoading]);
+  }, [user?.id, likedTopicIds, likeLoading, announce]);
 
   // ── Notes handlers ──────────────────────────────────────────────────────────
 
@@ -470,13 +481,17 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           moduleName: currentSubmodule?.name,
         });
         logAudit({ action: "summary_generated", category: "summary", entity_id: String(id), metadata: { level: SUMMARY_LEVEL_NAMES[requestedLevel], format: "bullets" } });
+        announce("AI summary is ready.");
+      } else {
+        // Soft failure — API responded but couldn't produce a summary. Announce
+        // the real outcome instead of a false "ready", so it can't be overwritten below.
+        announce(text.replace(/^⚠\s*/, ""), "assertive");
       }
     } catch {
       setSummaries((prev) => ({ ...prev, [id]: "⚠ Network error. Please try again." }));
       announce("Could not generate summary. Please try again.", "assertive");
     } finally {
       setSummaryLoading(false);
-      announce("AI summary is ready.");
     }
   }, [summaryAllVersions, SUMMARY_LEVELS, user, currentSubmodule, SUMMARY_LEVEL_NAMES, announce]);
 
@@ -542,6 +557,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
           moduleName: currentSubmodule?.name,
         });
         logAudit({ action: "summary_generated", category: "summary", entity_id: String(id), metadata: { level: SUMMARY_LEVEL_NAMES[level], format: "paragraph" } });
+        announce("AI summary is ready.");
+      } else {
+        // Soft failure — API responded but couldn't produce a summary. Announce
+        // the real outcome instead of a false "ready", so it can't be overwritten below.
+        announce(text.replace(/^⚠\s*/, ""), "assertive");
       }
     } catch {
       setSummaryParagraphVersions((prev) => {
@@ -552,7 +572,6 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
       announce("Could not generate summary. Please try again.", "assertive");
     } finally {
       setSummaryParagraphLoading(false);
-      announce("AI summary is ready.");
     }
   }, [summaryCurrentLevel, summaryParagraphVersions, SUMMARY_LEVELS, user, currentSubmodule, SUMMARY_LEVEL_NAMES, announce]);
 
@@ -2373,7 +2392,11 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                         onClick={() => user && handleTopicLike(selectedTopic.topic_id)}
                         disabled={!user || likeLoading}
                         className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors disabled:opacity-100 ${user ? "hover:bg-red-50 cursor-pointer" : "cursor-default"}`}
-                        aria-label={!user ? "Login to like this topic" : likedTopicIds.has(selectedTopic.topic_id) ? "Unlike this topic" : "Like this topic"}
+                        aria-label={
+                          !user
+                            ? "Login to like this topic"
+                            : `${likedTopicIds.has(selectedTopic.topic_id) ? "Unlike" : "Like"} this topic. ${topicLikeCounts[selectedTopic.topic_id] ?? 0} ${(topicLikeCounts[selectedTopic.topic_id] ?? 0) === 1 ? "like" : "likes"}.`
+                        }
                         aria-pressed={user ? likedTopicIds.has(selectedTopic.topic_id) : undefined}
                       >
                         <svg
@@ -2660,6 +2683,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                           Tip: Use <code className="bg-amber-100 px-0.5 rounded"># Heading</code> and <code className="bg-amber-100 px-0.5 rounded">- bullet</code> for Notion-formatted blocks
                         </p>
                         <textarea
+                          ref={notesTextareaRef}
                           value={notesContent[selectedTopic.topic_id] ?? ""}
                           onChange={(e) => handleNoteChange(selectedTopic.topic_id, e.target.value)}
                           placeholder={`Take notes on "${selectedTopic.name}"...\n\n# Key Concepts\n- Point one\n- Point two\n\n# My Questions\n- `}

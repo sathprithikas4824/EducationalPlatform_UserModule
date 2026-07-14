@@ -27,6 +27,8 @@ jest.mock('../app/lib/supabase', () => ({
   signIn: jest.fn(),
   signUp: jest.fn(),
   signInWithOAuth: jest.fn(),
+  getAccessibilityPreferences: jest.fn().mockResolvedValue(null),
+  updateAccessibilityPreferences: jest.fn().mockResolvedValue(undefined),
 }))
 
 jest.mock('next/navigation', () => ({
@@ -70,33 +72,42 @@ async function runA11yCheck(ui: React.ReactElement) {
 describe('Login Page', () => {
   it('has no WCAG 2.1 AA violations', async () => {
     const { default: LoginPage } = await import('../app/login/page')
-    const results = await runA11yCheck(<LoginPage />)
+    const { AccessibilityProvider } = await import('../app/context/AccessibilityContext')
+    const results = await runA11yCheck(
+      <AccessibilityProvider>
+        <LoginPage />
+      </AccessibilityProvider>
+    )
     expect(results).toHaveNoViolations()
   })
 
   it('all text inputs have associated labels (htmlFor + id)', async () => {
-    // DAY 2 FIX NEEDED: Login page uses <label> without htmlFor/id.
-    // Inputs have no programmatically-associated label — screen readers can't announce the field name.
-    // Fix: add id="email" to the email input and htmlFor="email" to its label (same for password).
     const { default: LoginPage } = await import('../app/login/page')
-    const { container } = render(<LoginPage />)
+    const { AccessibilityProvider } = await import('../app/context/AccessibilityContext')
+    const { container } = render(
+      <AccessibilityProvider>
+        <LoginPage />
+      </AccessibilityProvider>
+    )
     const unlinkedLabels = Array.from(container.querySelectorAll('label')).filter(
       label => !label.htmlFor && !label.getAttribute('aria-label')
     )
-    if (unlinkedLabels.length > 0) {
-      console.warn(
-        `[A11Y VIOLATION] Login page has ${unlinkedLabels.length} <label> element(s) not associated via htmlFor. Fix in Day 2.`
-      )
-    }
-    // Soft assertion — logs violation but doesn't block audit run
-    expect(unlinkedLabels.length).toBeGreaterThanOrEqual(0)
+    // All labels are now correctly linked via htmlFor/id — hard assertion.
+    expect(unlinkedLabels.length).toBe(0)
   })
 
   it('submit button has accessible name', async () => {
     const { default: LoginPage } = await import('../app/login/page')
-    const { getByRole } = render(<LoginPage />)
-    // getByRole throws if not found — acts as assertion
-    getByRole('button', { name: /sign in/i })
+    const { AccessibilityProvider } = await import('../app/context/AccessibilityContext')
+    const { getByRole } = render(
+      <AccessibilityProvider>
+        <LoginPage />
+      </AccessibilityProvider>
+    )
+    // Exact match — "Sign in" (submit) vs "Sign in with Google" (OAuth) both
+    // matched the old loose /sign in/i regex once the Google button gained a
+    // real aria-label; getByRole throws if not found — acts as assertion.
+    getByRole('button', { name: 'Sign in' })
   })
 })
 
@@ -105,7 +116,12 @@ describe('Login Page', () => {
 describe('Signup Page', () => {
   it('has no WCAG 2.1 AA violations', async () => {
     const { default: SignupPage } = await import('../app/signup/page')
-    const results = await runA11yCheck(<SignupPage />)
+    const { AccessibilityProvider } = await import('../app/context/AccessibilityContext')
+    const results = await runA11yCheck(
+      <AccessibilityProvider>
+        <SignupPage />
+      </AccessibilityProvider>
+    )
     expect(results).toHaveNoViolations()
   })
 })
@@ -117,12 +133,15 @@ describe('Home Page', () => {
     const { default: HomePage } = await import('../app/page')
     const { OfflineProvider } = await import('../app/components/common/OfflineContext')
     const { AnnotationProvider } = await import('../app/components/common/AnnotationProvider')
+    const { AccessibilityProvider } = await import('../app/context/AccessibilityContext')
     const results = await runA11yCheck(
-      <OfflineProvider>
-        <AnnotationProvider>
-          <HomePage />
-        </AnnotationProvider>
-      </OfflineProvider>
+      <AccessibilityProvider>
+        <OfflineProvider>
+          <AnnotationProvider>
+            <HomePage />
+          </AnnotationProvider>
+        </OfflineProvider>
+      </AccessibilityProvider>
     )
     expect(results).toHaveNoViolations()
   })

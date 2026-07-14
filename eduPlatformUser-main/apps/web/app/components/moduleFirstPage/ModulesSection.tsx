@@ -8,6 +8,7 @@ import { getAllModulesProgress, getLastUserId, PROGRESS_UPDATED_EVENT, type Topi
 import { cachedFetch, prefetchAll, getCachedSync } from "../../lib/apiCache";
 import { loadBookmarks, toggleBookmark } from "../../lib/bookmarks";
 import { BookmarkHeart } from "../common/icons/BookmarkHeart";
+import { useAccessibility } from "../../context/AccessibilityContext";
 
 const BACKEND_URL = "https://educationalplatform-usermodule-2.onrender.com";
 const CATEGORY_ID = 185; // AI course category
@@ -106,6 +107,7 @@ const SkeletonCard: React.FC = () => (
 const ModulesSection: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { announce } = useAccessibility();
   const { user } = useAnnotation();
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
@@ -300,7 +302,8 @@ const ModulesSection: React.FC = () => {
       else next.delete(module.submoduleId);
       return next;
     });
-  }, [user?.id]);
+    announce(nowBookmarked ? "Bookmarked." : "Bookmark removed.");
+  }, [user?.id, announce]);
 
   // Listen for realtime progress updates from Contents component
   useEffect(() => {
@@ -491,7 +494,11 @@ const ModulesSection: React.FC = () => {
                         <span className="text-[0.4375rem] text-gray-400 whitespace-nowrap">Log in to track</span>
                       )}
 
-                      <button className="bg-black text-white text-[0.5625rem] font-bold px-3 py-1 rounded shadow-sm hover:bg-gray-800 transition-colors">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleModuleClick(module.id); }}
+                        aria-label={`View ${module.title}`}
+                        className="bg-black text-white text-[0.5625rem] font-bold px-3 py-1 rounded shadow-sm hover:bg-gray-800 transition-colors"
+                      >
                         View
                       </button>
                     </div>
