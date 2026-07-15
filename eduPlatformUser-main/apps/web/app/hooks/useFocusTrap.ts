@@ -26,11 +26,17 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
 
     previousFocusRef.current = document.activeElement as HTMLElement;
 
-    const container = containerRef.current;
-    if (container) {
-      const focusables = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE));
-      focusables[0]?.focus();
-    }
+    // requestAnimationFrame defers past the current paint — Safari/VoiceOver's
+    // accessibility tree can lag a frame behind the modal just mounting, and
+    // focusing too early sometimes leaves VoiceOver silent despite DOM focus
+    // having moved correctly (NVDA/Chrome are more forgiving of this).
+    const raf = requestAnimationFrame(() => {
+      const container = containerRef.current;
+      if (container) {
+        const focusables = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE));
+        focusables[0]?.focus();
+      }
+    });
 
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -64,6 +70,7 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener("keydown", handleKeyDown);
       previousFocusRef.current?.focus();
     };

@@ -182,10 +182,15 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   // Close summary panel when topic changes
   useEffect(() => { setSummaryOpen(false); }, [selectedTopic?.topic_id]);
 
-  // Move focus to summary box when loading finishes so NVDA reads it automatically
+  // Move focus to summary box when loading finishes so screen readers read it
+  // automatically. requestAnimationFrame defers past the current paint — Safari/
+  // VoiceOver's accessibility tree can lag a frame behind newly-shown content,
+  // and focusing before it catches up sometimes causes VoiceOver to stay silent
+  // even though DOM focus did move (NVDA/Chrome are more forgiving of this).
   useEffect(() => {
     if (!summaryLoading && !summaryParagraphLoading && summaryOpen) {
-      summaryRef.current?.focus();
+      const raf = requestAnimationFrame(() => summaryRef.current?.focus());
+      return () => cancelAnimationFrame(raf);
     }
   }, [summaryLoading, summaryParagraphLoading, summaryOpen]);
 
@@ -193,7 +198,8 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
   // reader users don't have to hunt for it — matches the summary panel's pattern above.
   useEffect(() => {
     if (notesOpen) {
-      notesTextareaRef.current?.focus();
+      const raf = requestAnimationFrame(() => notesTextareaRef.current?.focus());
+      return () => cancelAnimationFrame(raf);
     }
   }, [notesOpen]);
 
@@ -2684,6 +2690,7 @@ const Contents: React.FC<ContentsProps> = ({ submoduleId }) => {
                         </p>
                         <textarea
                           ref={notesTextareaRef}
+                          aria-label={`Notes for ${selectedTopic.name}`}
                           value={notesContent[selectedTopic.topic_id] ?? ""}
                           onChange={(e) => handleNoteChange(selectedTopic.topic_id, e.target.value)}
                           placeholder={`Take notes on "${selectedTopic.name}"...\n\n# Key Concepts\n- Point one\n- Point two\n\n# My Questions\n- `}
