@@ -155,7 +155,7 @@ export default function SignupPage() {
 
             <div className="relative mb-4">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100" /></div>
-              <div className="relative flex justify-center text-xs"><span className="bg-white px-3 text-gray-400">or skip email — use Google</span></div>
+              <div className="relative flex justify-center text-xs"><span className="bg-white px-3 text-gray-600">or skip email — use Google</span></div>
             </div>
 
             <button
@@ -243,7 +243,7 @@ export default function SignupPage() {
               <div className="w-full border-t border-gray-100" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-white px-3 text-gray-400">or sign up with email</span>
+              <span className="bg-white px-3 text-gray-600">or sign up with email</span>
             </div>
           </div>
 
@@ -325,7 +325,7 @@ export default function SignupPage() {
             </button>
           </form>
 
-          <p className="text-center text-xs text-gray-400 mt-4">
+          <p className="text-center text-xs text-gray-600 mt-4">
             By signing up, you agree to our{" "}
             <Link href="/terms" className="underline hover:text-gray-600">Terms</Link>{" "}
             and{" "}

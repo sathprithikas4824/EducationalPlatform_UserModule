@@ -1774,7 +1774,7 @@ function ProfilePageInner() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
-          <p className="text-gray-500 mb-4">You need to be logged in to view your profile.</p>
+          <h1 className="text-gray-500 mb-4">You need to be logged in to view your profile.</h1>
           <Link href="/login" className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition-colors">
             Log in
           </Link>
@@ -1818,7 +1818,7 @@ function ProfilePageInner() {
             <span className="text-sm font-semibold sm:hidden">Back</span>
           </Link>
 
-          <span className="text-sm font-semibold text-gray-900">My Profile</span>
+          <h1 className="text-sm font-semibold text-gray-900">My Profile</h1>
 
           {/* Desktop: invisible spacer | Mobile: logout button */}
           <div className="flex justify-end w-20 sm:w-28">

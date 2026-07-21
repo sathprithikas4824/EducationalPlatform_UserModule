@@ -8,6 +8,7 @@ import GlobalOfflineGuard from "./components/common/GlobalOfflineGuard";
 import { OfflineProvider } from "./components/common/OfflineContext";
 import { AccessibilityProvider } from "./context/AccessibilityContext";
 import RouteAnnouncer from "./components/common/RouteAnnouncer";
+import KeyboardShortcuts from "./components/common/KeyboardShortcuts";
 
 export const metadata: Metadata = {
   title: "Educational Platform",
@@ -60,12 +61,13 @@ export default function RootLayout({ children }: PropsWithChildren) {
         </a>
         <AccessibilityProvider>
           <RouteAnnouncer />
+          <KeyboardShortcuts />
           <ThemeProvider>
             <AnnotationProvider>
               <OfflineProvider>
-                <div id="main-content" tabIndex={-1} role="main">
+                <main id="main-content" tabIndex={-1}>
                   {children}
-                </div>
+                </main>
                 <GlobalOfflineGuard />
               </OfflineProvider>
             </AnnotationProvider>

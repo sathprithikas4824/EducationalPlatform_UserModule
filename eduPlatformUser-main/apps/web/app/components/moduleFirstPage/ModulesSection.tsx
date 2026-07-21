@@ -365,7 +365,7 @@ const ModulesSection: React.FC = () => {
         {loading ? (
           <div className="flex flex-col items-center gap-4">
             {wakingUp && (
-              <p className="text-sm text-gray-400 animate-pulse">
+              <p className="text-sm text-gray-700 dark:text-gray-300 animate-pulse">
                 Waking up the server, this may take a moment…
               </p>
             )}

@@ -10,7 +10,8 @@
     "lint": "eslint --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit",
     "test": "jest",
-    "test:a11y": "jest --testPathPatterns=a11y"
+    "test:a11y": "jest --testPathPatterns=a11y",
+    "test:e2e:a11y": "playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",
@@ -26,7 +27,9 @@
     "resend": "^6.9.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@axe-core/react": "^4.11.3",
+    "@playwright/test": "^1.61.1",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@testing-library/jest-dom": "^6.9.1",
